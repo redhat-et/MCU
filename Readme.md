@@ -11,11 +11,13 @@ securely, TKDK has you covered.
 ##  Features
 
 ###  Triton Cache Manager
+
 Organize, index, and monitor your Triton kernel caches. This tool
 provides detailed reports on cache usage, offering data-driven
 insights into compilation performance and cache effectiveness.
 
 ### CargoHold
+
 Package Triton kernel caches into **OCI-compliant container images**.
 Secure your caches with cryptographic signing, enabling safe and
 efficient cache distribution and reuse across environments and teams.
@@ -23,16 +25,17 @@ efficient cache distribution and reuse across environments and teams.
 ## Getting Started
 
 1. Clone this repository:
-   ```bash
-   git clone https://github.com/your-org/tkdk.git
-   cd tkdk
-   ```
+
+ ```bash
+ git clone https://github.com/your-org/tkdk.git
+ cd tkdk
+ ```
 
 2. Follow setup instructions for each tool in its respective directory.
 
 ## Project Structure
 
-```
+```bash
 tkdk/
 ├── cache-manager/         # Triton Cache Manager
 ├── cargohold/             # OCI packaging and signing tool
@@ -50,6 +53,7 @@ CargoHold ensures that your cache packages are:
 
 - Improve Triton kernel cache management
 - Package and share caches across machines or Kubernetes environments.
+
 ## Contributing
 
 We welcome contributions! If you find bugs, have feature
