@@ -27,7 +27,7 @@ efficient cache distribution and reuse across environments and teams.
 1. Clone this repository:
 
  ```bash
- git clone https://github.com/your-org/tkdk.git
+ git clone https://github.com/redhat-et/tkdk.git
  cd tkdk
  ```
 
