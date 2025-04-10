@@ -1,6 +1,6 @@
 # Triton Kernel Development Kit (TKDK)
 
-<img src="logos/TKDK-logo.png" alt="TKDK" width="20%" height="auto">
+<img src="logo/TKDK-logo.png" alt="TKDK" width="20%" height="auto">
 
 The **Triton Kernel Development Kit (TKDK)** is a suite of tools
 designed to streamline and enhance the development workflow for
