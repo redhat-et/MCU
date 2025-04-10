@@ -8,9 +8,9 @@ Triton Kernel developers. Whether you're optimizing cache usage,
 monitoring kernel performance, or distributing your builds
 securely, TKDK has you covered.
 
-##  Features
+## Features
 
-###  Triton Cache Manager
+### Triton Cache Manager
 
 Organize, index, and monitor your Triton kernel caches. This tool
 provides detailed reports on cache usage, offering data-driven
@@ -31,7 +31,7 @@ efficient cache distribution and reuse across environments and teams.
  cd tkdk
  ```
 
-2. Follow setup instructions for each tool in its respective directory.
+1. Follow setup instructions for each tool in its respective directory.
 
 ## Project Structure
 
@@ -45,6 +45,7 @@ tkdk/
 ## Security & Distribution
 
 CargoHold ensures that your cache packages are:
+
 - Packaged using OCI standards
 - Signed cryptographically for tamper-proof integrity
 - Easily distributable across environments and pipelines
