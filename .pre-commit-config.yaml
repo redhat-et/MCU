@@ -24,12 +24,4 @@ repos:
       - id: commitlint
         stages: [commit-msg]
         additional_dependencies: ['@commitlint/config-conventional']  # yamllint disable-line rule:quoted-strings
-  - repo: local
-    hooks:
-      - id: golangci-lint-cargohold
-        name: golangci-lint (in cargohold/)
-        entry: ./scripts/lint-cargohold.sh
-        language: script
-        pass_filenames: false
-        files: ^cargohold/
 exclude: ^cargohold/vendor/.*|^cargohold/_output/.*|^venv/.*

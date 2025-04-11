@@ -1,6 +1,6 @@
 name: Build Cargohold
 
-on: # yamllint disable-line rule:truthy
+on:
   push:
     paths:
       - 'cargohold/**'
@@ -28,6 +28,22 @@ jobs:
           sudo apt-get install -y \
             libgpgme-dev \
             libbtrfs-dev
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+            | sh -s -- -b /usr/local/bin v2.0.2
+
+      - name: Prepare vendored dependencies
+        working-directory: cargohold
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Run golangci-lint
+        working-directory: cargohold
+        run: |
+          GOFLAGS=-mod=vendor golangci-lint run --timeout=5m --modules-download-mode=vendor ./...
 
       - name: Build with Makefile
         run: make cargohold
