@@ -1,12 +1,12 @@
 name: Build Cargohold
 
-on:
+on: # yamllint disable-line rule:truthy
   push:
     paths:
-      - 'cargohold/**'
+      - cargohold/**
   pull_request:
     paths:
-      - 'cargohold/**'
+      - cargohold/**
 
 jobs:
   build:
@@ -20,7 +20,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: 1.24
 
       - name: Install required packages
         run: |
