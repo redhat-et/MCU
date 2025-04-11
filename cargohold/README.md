@@ -197,7 +197,7 @@ skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest
 
 To inspect the image labels specifically run:
 
-```json
+```bash
 skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest \
   | jq -r '.Labels["cache.triton.image/metadata"]' \
   | jq .
