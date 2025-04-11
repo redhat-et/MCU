@@ -2,7 +2,7 @@
 
 <img src="logo/cargo-hold.png" alt="cargohold" width="20%" height="auto">
 
-A GPU Kernel runtime container packaging utility inspired by
+A Triton kernel cache container packaging utility inspired by
 [WASM](https://github.com/solo-io/wasm/blob/master/spec/README.md).
 
 ## Build
@@ -119,6 +119,7 @@ quay.io/mtahhan/01-vector-add-cache                                             
 To inspect the docker image with Skopeo
 
 ```bash
+skopeo inspect docker://quay.io/mtahhan/01-vector-add-cache
 {
     "Name": "quay.io/mtahhan/01-vector-add-cache",
     "Digest": "sha256:9e64f49656f89d5d68a739dad2d8b333ab258a77f70efe2f8961b8752f0ef0fd",
@@ -196,7 +197,7 @@ skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest
 
 To inspect the image labels specifically run:
 
-```bash
+```json
 skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest \
   | jq -r '.Labels["cache.triton.image/metadata"]' \
   | jq .
