@@ -21,6 +21,7 @@ insights into compilation performance and cache effectiveness.
 Package Triton kernel caches into **OCI-compliant container images**.
 Secure your caches with cryptographic signing, enabling safe and
 efficient cache distribution and reuse across environments and teams.
+For more information please see the CargoHold [readme](./cargohold/README.md).
 
 ## Getting Started
 
