@@ -1,11 +1,15 @@
 version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: vendor
+
 linters:
   default: none
   enable:
     - asciicheck
     - bodyclose
     - dupl
-    - errcheck
     - goconst
     - gocritic
     - gocyclo
@@ -20,12 +24,15 @@ linters:
     - unconvert
     - unparam
     - whitespace
+
   settings:
     dupl:
       threshold: 150
+
     goconst:
       min-len: 2
       min-occurrences: 3
+
     gocritic:
       disabled-checks:
         - dupImport
@@ -37,6 +44,7 @@ linters:
         - opinionated
         - performance
         - style
+
     govet:
       enable:
         - shadow
@@ -47,21 +55,26 @@ linters:
             - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
             - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
             - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
+
     lll:
       line-length: 140
+
     misspell:
       locale: US
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
+exclusions:
+  generated: lax
+  presets:
+    - comments
+    - common-false-positives
+    - legacy
+    - std-error-handling
+  paths:
+    - ^third_party/
+    - ^builtin/
+    - ^examples/
+    - ^vendor/
+
 formatters:
   enable:
     - gofmt
@@ -73,7 +86,7 @@ formatters:
   exclusions:
     generated: lax
     paths:
-      - third_party$
-      - builtin$
-      - examples$
-      - vendor/
+      - ^third_party/
+      - ^builtin/
+      - ^examples/
+      - ^vendor/
