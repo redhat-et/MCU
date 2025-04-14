@@ -155,7 +155,7 @@ func (e *tritonCacheExtractor) ExtractCache(img v1.Image) error {
 	}
 
 	if ret := preflightcheck.CompareTritonCacheImageToGPU(img, e.acc); ret != nil {
-		return fmt.Errorf("***** the gpu and triton cache are incompatible ****")
+		return fmt.Errorf("***** the gpu and triton cache are incompatible: %v **** ", ret)
 	}
 
 	if manifest.MediaType == types.DockerManifestSchema2 {

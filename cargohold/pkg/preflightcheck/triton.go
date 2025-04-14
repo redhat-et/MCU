@@ -47,6 +47,9 @@ type TritonImageData struct {
 	Hash       string `json:"hash"`
 	DummyKey   string `json:"dummy_key"`
 	PtxVersion int    `json:"ptx_version,omitempty"`
+	NumStages  int    `json:"num_stages,omitempty"`
+	NumWarps   int    `json:"num_warps,omitempty"`
+	Debug      bool   `json:"debug,omitempty"`
 	Target
 }
 
@@ -161,10 +164,11 @@ func CompareTritonCacheImageToGPU(img v1.Image, acc accelerator.Accelerator) err
 	if labels == nil {
 		return errors.New("image has no labels")
 	}
+	logging.Debugf("Image Labels: %+v", labels)
 
 	metadata, ok := labels["cache.triton.image/metadata"]
 	if !ok {
-		return errors.New("missing cache metadata label")
+		return errors.New("image missing cache metadata label")
 	}
 	logging.Debugf("Raw metadata label: %s", metadata)
 
@@ -204,6 +208,9 @@ func CompareTritonCacheImageToGPU(img v1.Image, acc accelerator.Accelerator) err
 					WarpSize: entry.WarpSize,
 				},
 				PtxVersion: &entry.PtxVersion,
+				NumStages:  entry.NumStages,
+				NumWarps:   entry.NumWarps,
+				Debug:      entry.Debug,
 			}
 
 			expectedDummyKey, err := ComputeDummyTritonKey(cacheData)
