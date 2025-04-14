@@ -56,6 +56,9 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 			WarpSize:   data.Target.WarpSize,
 			PTXVersion: data.PtxVersion,
 			DummyKey:   dummyKey,
+			NumStages:  data.NumStages,
+			NumWarps:   data.NumWarps,
+			Debug:      data.Debug,
 		})
 	}
 

@@ -76,6 +76,9 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 			Arch:       preflightcheck.ConvertArchToString(data.Target.Arch),
 			WarpSize:   data.Target.WarpSize,
 			PTXVersion: data.PtxVersion,
+			NumStages:  data.NumStages,
+			NumWarps:   data.NumWarps,
+			Debug:      data.Debug,
 			DummyKey:   dummyKey,
 		})
 	}

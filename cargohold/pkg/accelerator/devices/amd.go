@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	logging "github.com/sirupsen/logrus"
 	"github.com/tkdk/cargohold/pkg/config"
@@ -46,17 +47,17 @@ type AMDCardInfo struct {
 }
 
 type AMDASIC struct {
-	MarketName            string `json:"market_name"`
-	VendorID              string `json:"vendor_id"`
-	VendorName            string `json:"vendor_name"`
-	SubvendorID           string `json:"subvendor_id"`
-	DeviceID              string `json:"device_id"`
-	SubsystemID           string `json:"subsystem_id"`
-	RevID                 string `json:"rev_id"`
-	ASICSerial            string `json:"asic_serial"`
-	OAMID                 string `json:"oam_id"`
-	NumComputeUnits       int    `json:"num_compute_units"`
-	TargetGraphicsVersion string `json:"target_graphics_version"`
+	MarketName            string      `json:"market_name"`
+	VendorID              string      `json:"vendor_id"`
+	VendorName            string      `json:"vendor_name"`
+	SubvendorID           string      `json:"subvendor_id"`
+	DeviceID              string      `json:"device_id"`
+	SubsystemID           string      `json:"subsystem_id"`
+	RevID                 string      `json:"rev_id"`
+	ASICSerial            string      `json:"asic_serial"`
+	OAMID                 interface{} `json:"oam_id"`
+	NumComputeUnits       int         `json:"num_compute_units"`
+	TargetGraphicsVersion string      `json:"target_graphics_version"`
 }
 
 type AMDBus struct {
@@ -152,6 +153,50 @@ type AMDListInfo struct {
 	PartitionID int    `json:"partition_id"`
 }
 
+var gpuToGFXMap = map[string]string{
+	"Instinct MI210":                                 "gfx90a", // Aldebaran/MI200 [Instinct MI210]
+	"Instinct MI300":                                 "gfx90c", // MI300 series
+	"Polaris 10 (RX 400 series)":                     "gfx803",
+	"Polaris 11 (RX 500 series)":                     "gfx804",
+	"Polaris 30 (RX Vega series)":                    "gfx810",
+	"Vega 10 (Radeon VII)":                           "gfx900",
+	"Vega 20 (Vega Frontier Edition, Radeon Pro WX)": "gfx906",
+	"Navi 10 (RX 5000 series)":                       "gfx908",
+	"RDNA (Radeon RX 6000 series)":                   "gfx1010",
+	"RDNA 2 (Radeon RX 6000 series)":                 "gfx1030",
+	"RDNA 3 (future models)":                         "gfx1100",
+}
+
+// Translate product name to GFX architecture
+func TranslateGPUToArch(productName string) string {
+	switch {
+	case strings.Contains(productName, "Instinct MI210"):
+		return "gfx90a" // Aldebaran/MI200 [Instinct MI210]
+	case strings.Contains(productName, "Instinct MI300"):
+		return "gfx90c" // MI300 series
+	case strings.Contains(productName, "Polaris 10"):
+		return "gfx803" // Polaris 10 (RX 400 series)
+	case strings.Contains(productName, "Polaris 11"):
+		return "gfx804" // Polaris 11 (RX 500 series)
+	case strings.Contains(productName, "Polaris 30"):
+		return "gfx810" // Polaris 30 (RX Vega series)
+	case strings.Contains(productName, "Vega 10"):
+		return "gfx900" // Vega 10 (Radeon VII)
+	case strings.Contains(productName, "Vega 20"):
+		return "gfx906" // Vega 20 (Vega Frontier Edition, Radeon Pro WX)
+	case strings.Contains(productName, "Navi 10"):
+		return "gfx908" // Navi 10 (RX 5000 series)
+	case strings.Contains(productName, "RDNA"):
+		return "gfx1010" // RDNA (Radeon RX 6000 series)
+	case strings.Contains(productName, "RDNA 2"):
+		return "gfx1030" // RDNA 2 (Radeon RX 6000 series)
+	case strings.Contains(productName, "RDNA 3"):
+		return "gfx1100" // RDNA 3 (future models)
+	default:
+		return "Unknown architecture for this GPU"
+	}
+}
+
 func amdCheck(r *Registry) {
 	if err := initAMDLib(); err != nil {
 		logging.Debugf("Error initializing AMD SMI: %v", err)
@@ -218,7 +263,7 @@ func (r *gpuAMD) Init() error {
 				Name:              name,
 				UUID:              gpuInfoList.ListInfo[gpuID].UniqueID,
 				ComputeCapability: "",
-				Arch:              info.ASIC.TargetGraphicsVersion,
+				Arch:              TranslateGPUToArch(info.Board.ProductName),
 				WarpSize:          64,
 				MemoryTotalMB:     memTotal,
 				Backend:           "hip",

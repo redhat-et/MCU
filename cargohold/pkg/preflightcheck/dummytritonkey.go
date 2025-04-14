@@ -146,6 +146,8 @@ func generateTritonCacheKey(sourceHash string, data *TritonCacheData) (string, C
 
 		if data.PtxVersion != nil {
 			options["ptx"] = *data.PtxVersion
+		} else {
+			options["ptx"] = 0
 		}
 	} else {
 		options = map[string]interface{}{
