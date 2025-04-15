@@ -97,3 +97,10 @@ format:
 	go fmt github.com/tkdk/cargohold/...
 	@echo
 	@echo
+
+lint:
+	@echo "******     golangci-lint     ******"
+	@echo
+	golangci-lint run ./...
+	@echo
+	@echo

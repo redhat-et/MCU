@@ -67,7 +67,7 @@ func SanitizeGroupJSON(filePath string) error {
 	}
 
 	var parsed map[string]map[string]string
-	if err := json.Unmarshal(raw, &parsed); err != nil {
+	if err = json.Unmarshal(raw, &parsed); err != nil {
 		return fmt.Errorf("failed to parse JSON in %s: %w", filePath, err)
 	}
 
@@ -91,14 +91,14 @@ func SanitizeGroupJSON(filePath string) error {
 }
 
 // RestoreFullPathsInGroupJSON adds full TritonCacheDir prefix to child_paths in __grp__*.json files
-func RestoreFullPathsInGroupJSON(filePath string, basePath string) error {
+func RestoreFullPathsInGroupJSON(filePath, basePath string) error {
 	raw, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", filePath, err)
 	}
 
 	var parsed map[string]map[string]string
-	if err := json.Unmarshal(raw, &parsed); err != nil {
+	if err = json.Unmarshal(raw, &parsed); err != nil {
 		return fmt.Errorf("failed to parse JSON in %s: %w", filePath, err)
 	}
 
