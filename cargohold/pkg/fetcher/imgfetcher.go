@@ -353,7 +353,6 @@ func extractOCIStandardImg(img v1.Image) error {
 
 // Extracts the triton named "io.triton.cache" in a given reader for tar.gz.
 // This is only used for *compat* variant.
-// TODO add preflight checks here.
 func extractTritonCacheDirectory(r io.Reader) error {
 	gr, err := gzip.NewReader(r)
 	if err != nil {
@@ -420,7 +419,6 @@ func extractTritonCacheDirectory(r io.Reader) error {
 	return nil
 }
 
-// writeFile writes a file's content to disk from the tar reader
 func writeFile(filePath string, tarReader io.Reader, mode os.FileMode) error {
 	// Create any parent directories if needed
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
