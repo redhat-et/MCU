@@ -363,11 +363,11 @@ func extractTritonCacheDirectory(r io.Reader) error {
 	// var cacheDirs []string  TODO RE-ENABLE
 
 	for {
-		h, err := tr.Next()
-		if err == io.EOF {
+		h, ret := tr.Next()
+		if ret == io.EOF {
 			break // End of archive
 		} else if err != nil {
-			return fmt.Errorf("error reading tar archive: %w", err)
+			return fmt.Errorf("error reading tar archive: %w", ret)
 		}
 
 		// Skip files not in the Triton cache directory
@@ -386,13 +386,13 @@ func extractTritonCacheDirectory(r io.Reader) error {
 
 		switch h.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(filePath, os.FileMode(h.Mode)); err != nil {
+			if err = os.MkdirAll(filePath, os.FileMode(h.Mode)); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", filePath, err)
 			}
 			// cacheDirs = append(cacheDirs, filePath) // Store created directory TODO RE-ENABLE
 
 		case tar.TypeReg:
-			if err := writeFile(filePath, tr, os.FileMode(h.Mode)); err != nil {
+			if err = writeFile(filePath, tr, os.FileMode(h.Mode)); err != nil {
 				return fmt.Errorf("failed to create file %s: %w", filePath, err)
 			}
 
