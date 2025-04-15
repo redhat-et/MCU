@@ -402,6 +402,21 @@ func extractTritonCacheDirectory(r io.Reader) error {
 		}
 	}
 
+	err = filepath.Walk(constants.TritonCacheDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasPrefix(info.Name(), "__grp__") && strings.HasSuffix(info.Name(), ".json") {
+			if err := utils.RestoreFullPathsInGroupJSON(path, constants.TritonCacheDir); err != nil {
+				logging.Warnf("failed to restore full paths in %s: %v", path, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("error restoring full paths in cache JSON files: %w", err)
+	}
+
 	return nil
 }
 

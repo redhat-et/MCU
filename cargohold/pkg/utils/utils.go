@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	logging "github.com/sirupsen/logrus"
@@ -87,4 +88,31 @@ func SanitizeGroupJSON(filePath string) error {
 	}
 
 	return nil
+}
+
+// RestoreFullPathsInGroupJSON adds full TritonCacheDir prefix to child_paths in __grp__*.json files
+func RestoreFullPathsInGroupJSON(filePath string, basePath string) error {
+	raw, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %w", filePath, err)
+	}
+
+	var parsed map[string]map[string]string
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return fmt.Errorf("failed to parse JSON in %s: %w", filePath, err)
+	}
+
+	childPaths := parsed["child_paths"]
+	for key, val := range childPaths {
+		if strings.HasPrefix(val, ".triton/cache") {
+			// Make it absolute based on actual TritonCacheDir
+			childPaths[key] = filepath.Join(basePath, strings.TrimPrefix(val, ".triton/cache/"))
+		}
+	}
+
+	updated, err := json.MarshalIndent(parsed, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated json: %w", err)
+	}
+	return os.WriteFile(filePath, updated, 0644)
 }
