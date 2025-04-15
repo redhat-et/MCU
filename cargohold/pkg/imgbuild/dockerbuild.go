@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -82,6 +84,18 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 			DummyKey:   dummyKey,
 		})
 	}
+
+	filepath.Walk(tmpCacheDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasPrefix(info.Name(), "__grp__") && strings.HasSuffix(info.Name(), ".json") {
+			if err := utils.SanitizeGroupJSON(path); err != nil {
+				logging.Warnf("could not sanitize %s: %v", path, err)
+			}
+		}
+		return nil
+	})
 
 	err = generateDockerfile(imageName, tmpCacheDir, dockerfilePath)
 	if err != nil {
