@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	logging "github.com/sirupsen/logrus"
 	"github.com/tkdk/cargohold/pkg/constants"
@@ -53,5 +55,36 @@ func CleanupTmpDirs() error {
 	}
 
 	logging.Info("Temporary directories successfully deleted.")
+	return nil
+}
+
+// SanitizeGroupJSON rewrites child_paths in a __grp__*.json file to remove any leading paths before ".triton/cache"
+func SanitizeGroupJSON(filePath string) error {
+	raw, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %w", filePath, err)
+	}
+
+	var parsed map[string]map[string]string
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return fmt.Errorf("failed to parse JSON in %s: %w", filePath, err)
+	}
+
+	paths := parsed["child_paths"]
+	for key, val := range paths {
+		if idx := strings.Index(val, ".triton/cache"); idx != -1 {
+			paths[key] = val[idx:] // Strip prefix before .triton/cache
+		}
+	}
+
+	// Marshal and overwrite file
+	updated, err := json.MarshalIndent(parsed, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to re-marshal sanitized JSON: %w", err)
+	}
+	if err := os.WriteFile(filePath, updated, 0644); err != nil {
+		return fmt.Errorf("failed to write sanitized JSON to %s: %w", filePath, err)
+	}
+
 	return nil
 }

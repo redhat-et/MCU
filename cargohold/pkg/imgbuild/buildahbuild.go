@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/containers/buildah"
 	"github.com/containers/common/pkg/config"
@@ -67,6 +69,18 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 		return fmt.Errorf("error copying contents using cp: %v", err)
 	}
 	logging.Debugf("%s", tmpDir)
+
+	filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasPrefix(info.Name(), "__grp__") && strings.HasSuffix(info.Name(), ".json") {
+			if err := utils.SanitizeGroupJSON(path); err != nil {
+				logging.Warnf("could not sanitize %s: %v", path, err)
+			}
+		}
+		return nil
+	})
 
 	buildStoreOptions, _ := storage.DefaultStoreOptions()
 	conf, err := config.Default()
