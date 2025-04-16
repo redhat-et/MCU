@@ -20,32 +20,39 @@ import (
 type TritonCacheData struct {
 	Hash                      string     `json:"hash"`
 	Target                    Target     `json:"target"`
+	Name                      string     `json:"name"`
 	NumWarps                  int        `json:"num_warps"`
-	NumCtas                   int        `json:"num_ctas"`
+	NumCtas                   int        `json:"num_ctas,omitempty"`
 	NumStages                 int        `json:"num_stages"`
-	MaxNReg                   *int       `json:"maxnreg"`
 	ClusterDims               []int      `json:"cluster_dims"`
-	PtxVersion                *int       `json:"ptx_version"`
 	EnableFpFusion            bool       `json:"enable_fp_fusion"`
-	SupportedFp8Dtypes        []string   `json:"supported_fp8_dtypes"`
-	DeprecatedFp8Dtypes       []string   `json:"deprecated_fp8_dtypes"`
+	SupportedFp8Dtypes        []string   `json:"supported_fp8_dtypes,omitempty"`
+	DeprecatedFp8Dtypes       []string   `json:"deprecated_fp8_dtypes,omitempty"`
 	DefaultDotInputPrecision  string     `json:"default_dot_input_precision"`
 	AllowedDotInputPrecisions []string   `json:"allowed_dot_input_precisions"`
 	MaxNumImpreciseAccDefault int        `json:"max_num_imprecise_acc_default"`
-	ExternLibs                [][]string `json:"extern_libs"`
+	ExternLibs                [][]string `json:"extern_libs,omitempty"`
 	Debug                     bool       `json:"debug"`
 	BackendName               string     `json:"backend_name"`
-	Arch                      string     `json:"arch"`
 	SanitizeOverflow          bool       `json:"sanitize_overflow"`
 	Shared                    int        `json:"shared"`
-	GlobalScratchSize         int        `json:"global_scratch_size"`
-	GlobalScratchAlign        int        `json:"global_scratch_align"`
-	Name                      string     `json:"name"`
+	Arch                      string     `json:"arch"`
+	WarpSize                  int        `json:"warp_size"`
+
+	// Optional/Backend-specific fields
+	PtxVersion              *int    `json:"ptx_version,omitempty"`  // CUDA-only
+	MaxNReg                 *int    `json:"maxnreg,omitempty"`      // CUDA
+	WavesPerEU              *int    `json:"waves_per_eu,omitempty"` // ROCm-only
+	LaunchCooperativeGrid   *bool   `json:"launch_cooperative_grid,omitempty"`
+	MatrixInstrNonKDim      *int    `json:"matrix_instr_nonkdim,omitempty"`
+	KPack                   *int    `json:"kpack,omitempty"`
+	AllowFlushDenorm        *bool   `json:"allow_flush_denorm,omitempty"`
+	InstructionSchedVariant *string `json:"instruction_sched_variant,omitempty"`
 }
 
 type TritonImageData struct {
 	Hash       string `json:"hash"`
-	DummyKey   string `json:"dummy_key"`
+	DummyKey   string `json:"dummy_key,omitempty"`
 	PtxVersion int    `json:"ptx_version,omitempty"`
 	NumStages  int    `json:"num_stages,omitempty"`
 	NumWarps   int    `json:"num_warps,omitempty"`
@@ -94,7 +101,7 @@ func CompareTritonCacheToGPU(cacheData *TritonCacheData, acc accelerator.Acceler
 		return errors.New("cache data is nil")
 	}
 	if acc == nil {
-		return errors.New("acc is nil")
+		return errors.New("no Accelerator detected")
 	}
 
 	var devInfo []devices.TritonGPUInfo
@@ -104,13 +111,12 @@ func CompareTritonCacheToGPU(cacheData *TritonCacheData, acc accelerator.Acceler
 			if tritonDevInfo, err := d.GetAllGPUInfo(); err == nil {
 				devInfo = tritonDevInfo
 			} else {
-				return errors.New("couldn't retrieve the GPU Triton info")
+				return fmt.Errorf("couldn't retrieve Accelerator info: %w", err)
 			}
 		}
 	}
 
 	var hasMatch bool
-	var backendMismatch bool
 
 	for _, gpuInfo := range devInfo {
 		backendMatches := cacheData.Target.Backend == gpuInfo.Backend
@@ -127,24 +133,24 @@ func CompareTritonCacheToGPU(cacheData *TritonCacheData, acc accelerator.Acceler
 
 		if backendMatches && archMatches && warpMatches && ptxMatches {
 			hasMatch = true
-			break // No need to check further, at least one match is found
+			break
 		}
 
-		if !backendMatches {
-			backendMismatch = true
-			logging.Debugf("Backend mismatch - cache=%s, gpu=%s", cacheData.Target.Backend, gpuInfo.Backend)
+		if !backendMatches || !archMatches || !warpMatches {
+			logging.Debugf(
+				"Mismatch - backendMatches=%v, archMatches=%v", backendMatches, archMatches)
+			logging.Debugf("Backend - cache=%v, gpu=%v", cacheData.Target.Backend, gpuInfo.Backend)
+			logging.Debugf("Arch - cache=%v, gpu=%v", ConvertArchToString(cacheData.Target.Arch), gpuInfo.Arch)
+			logging.Debugf("WarpSize - cache=%v, gpu=%v", cacheData.Target.WarpSize, gpuInfo.WarpSize)
+			break
 		}
 	}
 
 	if hasMatch {
-		return nil // At least one GPU matches all fields, return no error
+		return nil
 	}
 
-	if backendMismatch {
-		return fmt.Errorf("incompatibility detected: backendMismatch=%t", backendMismatch)
-	}
-
-	return fmt.Errorf("no compatible GPU found")
+	return fmt.Errorf("incompatibility detected")
 }
 
 func CompareTritonCacheImageToGPU(img v1.Image, acc accelerator.Accelerator) error {
@@ -217,6 +223,9 @@ func CompareTritonCacheImageToGPU(img v1.Image, acc accelerator.Accelerator) err
 			if err != nil {
 				return fmt.Errorf("failed to compute dummy key for image entry: %w", err)
 			}
+
+			j, _ := json.MarshalIndent(expectedDummyKey, "", "  ")
+			logging.Debugf("Dummy Key Components:%s", string(j))
 
 			dummyKeyMatches = entry.DummyKey == expectedDummyKey
 			if !dummyKeyMatches {
@@ -322,13 +331,13 @@ func FindAllTritonCacheJSON(rootDir string) ([]string, error) {
 func ConvertArchToString(arch any) string {
 	switch v := arch.(type) {
 	case string:
-		return v // Already a string, return as is
+		return v
 	case int:
-		return strconv.Itoa(v) // Convert int to string
+		return strconv.Itoa(v)
 	case float64:
-		return fmt.Sprintf("%.0f", v) // Convert float64 to string
+		return fmt.Sprintf("%.0f", v)
 	default:
-		logging.Errorf("Unexpected type for arch: %T", v)
-		return "" // Return an empty string for unexpected types
+		logging.Warnf("Unexpected arch type: %T", v)
+		return ""
 	}
 }
