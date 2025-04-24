@@ -1,6 +1,6 @@
 # Triton Cache Manager (TCM)
 
-A lightweight CLI for **indexing, searching, and more for Triton GPU-kernel caches**.  
+A lightweight CLI for **indexing, searching, and more for Triton GPU-kernel caches**.
 
 ---
 
@@ -26,5 +26,5 @@ tcm search --backend cuda
 
 ## Requirements
 
-* Python ≥ 3.9  
+* Python ≥ 3.9
 * Triton
