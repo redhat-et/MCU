@@ -5,15 +5,18 @@ from typing import Iterable
 from ..utils.paths import get_cache_dir
 from ..models.kernel import Kernel, KernelFile
 from ..plugins.base import discover_plugins
+import logging
 
 _COMMON = {".json": "metadata", ".ttir": "ttir", ".ttgir": "ttgir", ".llir": "llir"}
+
+log = logging.getLogger(__name__)
 
 
 class CacheRepository:
     def __init__(self, root: Path | None = None):
         self.root = root or get_cache_dir()
         if not self.root.exists():
-            raise FileNotFoundError(self.root)
+            raise FileNotFoundError(f"Cache directory not found: {self.root}")
         self.plugins = {p.backend: p for p in discover_plugins()}
 
     def _dirs(self):
@@ -29,7 +32,15 @@ class CacheRepository:
                 continue
             try:
                 m = json.loads(meta.read_text())
-            except Exception:
+            except json.JSONDecodeError as e:
+                log.error(
+                    f"Skipping kernel, failed to parse metadata JSON '{meta}': {e}"
+                )
+                continue
+            except OSError as e:
+                log.error(
+                    f"Skipping kernel, OS error reading metadata file '{meta}': {e}"
+                )
                 continue
             tgt = m.get("target", {})
             backend = tgt.get("backend", "")
