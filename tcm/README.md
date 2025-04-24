@@ -19,7 +19,7 @@ pip install -e .
 tcm index --cache-dir ~/.triton
 
 # search kernels by backend
-tcm search --backend cuda
+tcm list --backend cuda
 
 ```
 ---
