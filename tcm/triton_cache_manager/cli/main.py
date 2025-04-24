@@ -78,11 +78,11 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     table.add_column("Version", style="yellow", width=10)
     table.add_column("Warps", style="dim", width=5)
     table.add_column("Stages", style="dim", width=6)
-    table.add_column("Shared (KiB)", style="dim", width=10)
+    table.add_column("Shared", style="dim", width=10)
 
     for row in rows:
         row_dict = dict(row)
-        shared_mem_kb = (
+        shared_mem = (
             row_dict.get("shared", 0) if row_dict.get("shared") is not None else "N/A"
         )
         table.add_row(
@@ -94,9 +94,9 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
             str(row_dict.get("num_warps", "N/A")),
             str(row_dict.get("num_stages", "N/A")),
             (
-                f"{shared_mem_kb:.1f}"
-                if isinstance(shared_mem_kb, float)
-                else str(shared_mem_kb)
+                f"{shared_mem:.1f}"
+                if isinstance(shared_mem, float)
+                else str(shared_mem)
             ),
         )
 

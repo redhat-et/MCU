@@ -22,9 +22,10 @@ tcm index --cache-dir ~/.triton
 tcm list --backend cuda
 
 ```
+
 ---
 
 ## Requirements
 
-* Python ≥ 3.9
-* Triton
+- Python ≥ 3.9
+- Triton
