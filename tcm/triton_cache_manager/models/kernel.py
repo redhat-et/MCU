@@ -15,11 +15,12 @@ class Kernel:
     hash: str
     backend: str
     arch: str
+    warp_size: int
     num_warps: int
     num_stages: int
     name: str
     num_ctas: int
-    maxnreg: Optional[int]
+    maxnreg: int
     cluster_dims: list[int]
     ptx_version: Optional[str]
     enable_fp_fusion: bool
@@ -39,7 +40,7 @@ class Kernel:
     global_scratch_size: int
     global_scratch_align: int
     metadata: Mapping[str, Any]
-    waves_per_eu: int
-    kpack: int
-    matrix_instr_nonkdim: int
+    waves_per_eu: Optional[int]
+    kpack: Optional[int]
+    matrix_instr_nonkdim: Optional[int]
     files: list[KernelFile]

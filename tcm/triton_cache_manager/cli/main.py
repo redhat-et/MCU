@@ -76,9 +76,11 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     table.add_column("Backend", style="green", width=5)
     table.add_column("Arch", style="blue", width=5)
     table.add_column("Version", style="yellow", width=5)
+    table.add_column("Warp size", style='dim', width=5)
     table.add_column("Warps", style="dim", width=5)
     table.add_column("Stages", style="dim", width=5)
     table.add_column("Shared", style="dim", width=8)
+    table.add_column("Debug", style="dim", width=8)
 
     for row in rows:
         row_dict = dict(row)
@@ -88,9 +90,11 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
             row_dict.get("backend", "N/A"),
             row_dict.get("arch", "N/A"),
             row_dict.get("triton_version", "N/A"),
+            str(row_dict.get("warp_size", "N/A")),
             str(row_dict.get("num_warps", "N/A")),
             str(row_dict.get("num_stages", "N/A")),
             str(row_dict.get("shared", "N/A")),
+            str(row_dict.get("debug", "N/A")),
         )
 
     rich.print(table)
