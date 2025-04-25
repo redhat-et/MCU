@@ -73,18 +73,15 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     )
     table.add_column("Hash", style="dim", width=15, overflow="fold")
     table.add_column("Name", style="cyan", min_width=20, overflow="fold")
-    table.add_column("Backend", style="green", width=10)
-    table.add_column("Arch", style="blue", width=10)
-    table.add_column("Version", style="yellow", width=10)
+    table.add_column("Backend", style="green", width=5)
+    table.add_column("Arch", style="blue", width=5)
+    table.add_column("Version", style="yellow", width=5)
     table.add_column("Warps", style="dim", width=5)
-    table.add_column("Stages", style="dim", width=6)
-    table.add_column("Shared", style="dim", width=10)
+    table.add_column("Stages", style="dim", width=5)
+    table.add_column("Shared", style="dim", width=8)
 
     for row in rows:
         row_dict = dict(row)
-        shared_mem = (
-            row_dict.get("shared", 0) if row_dict.get("shared") is not None else "N/A"
-        )
         table.add_row(
             row_dict.get("hash", "N/A")[:12] + "...",
             row_dict.get("name", "N/A"),
@@ -93,11 +90,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
             row_dict.get("triton_version", "N/A"),
             str(row_dict.get("num_warps", "N/A")),
             str(row_dict.get("num_stages", "N/A")),
-            (
-                f"{shared_mem:.1f}"
-                if isinstance(shared_mem, float)
-                else str(shared_mem)
-            ),
+            str(row_dict.get("shared", "N/A")),
         )
 
     rich.print(table)
