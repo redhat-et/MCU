@@ -45,10 +45,12 @@ class CacheRepository:
             tgt = m.get("target", {})
             backend = tgt.get("backend", "")
             arch = tgt.get("arch", "")
+            warp_size = tgt.get("warp_size", 0)
             k = Kernel(
                 hash=d.name,
                 backend=backend,
                 arch=arch,
+                warp_size=warp_size,
                 num_warps=m.get("num_warps", 0),
                 num_stages=m.get("num_stages", 0),
                 name=m.get("name", ""),

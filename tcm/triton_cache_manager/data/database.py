@@ -5,8 +5,6 @@ from ..utils.paths import get_db_path
 from ..models.kernel import Kernel
 from typing import Any, Dict
 
-_SCHEMA_VERSION = 1
-
 
 def _json(x):
     return json.dumps(x)
@@ -40,6 +38,7 @@ class Database:
             backend TEXT,
             arch TEXT,
             name TEXT,
+            warp_size INTEGER,
             num_warps INTEGER,
             num_stages INTEGER,
             num_ctas INTEGER,
@@ -89,6 +88,7 @@ class Database:
             "backend": k.backend,
             "arch": k.arch,
             "name": k.name,
+            "warp_size": k.warp_size,
             "num_warps": k.num_warps,
             "num_stages": k.num_stages,
             "num_ctas": k.num_ctas,
