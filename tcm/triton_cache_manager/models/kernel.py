@@ -36,7 +36,7 @@ class Kernel:
     # pylint: disable=too-many-instance-attributes
     hash: str
     backend: str
-    arch: str
+    arch: int
     warp_size: int
     num_warps: int
     num_stages: int
