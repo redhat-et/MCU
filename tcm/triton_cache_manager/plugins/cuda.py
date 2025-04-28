@@ -8,6 +8,7 @@ from .base import KernelBackendPlugin
 
 
 class CudaPlugin(KernelBackendPlugin):
+    # pylint: disable=too-few-public-methods
     """
     Plugin for CUDA backend support.
 

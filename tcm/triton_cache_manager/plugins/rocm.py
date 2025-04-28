@@ -8,6 +8,7 @@ from .base import KernelBackendPlugin
 
 
 class RocmPlugin(KernelBackendPlugin):
+    # pylint: disable=too-few-public-methods
     """
     Plugin for ROCm backend support.
 

@@ -12,7 +12,7 @@ import logging
 from typing import Iterable
 from ..utils.paths import get_cache_dir
 from ..models.kernel import Kernel, KernelFile
-from ..plugins.base import discover_plugins
+from ..plugins.discovery import discover_plugins
 
 _COMMON = {".json": "metadata", ".ttir": "ttir", ".ttgir": "ttgir", ".llir": "llir"}
 
@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 
 
 class CacheRepository:
+    # pylint: disable=too-few-public-methods
     """
     Repository for accessing and managing Triton kernel cache files.
 
