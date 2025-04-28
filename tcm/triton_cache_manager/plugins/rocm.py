@@ -19,7 +19,7 @@ class RocmPlugin(KernelBackendPlugin):
     def relevant_extensions(self):
         """
         Get file extensions relevant to ROCm backend.
-        
+
         Returns:
             Dictionary mapping file extensions to file type names.
         """

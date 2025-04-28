@@ -29,7 +29,7 @@ class KernelBackendPlugin(Protocol):
 def discover_plugins() -> List[KernelBackendPlugin]:
     """
     Discover and instantiate all available backend plugins.
-    
+
     Returns:
         List of instantiated backend plugin objects.
     """
