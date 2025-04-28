@@ -1,3 +1,9 @@
+"""
+Data models for Triton kernels and related files.
+
+This module defines the data structures used to represent kernels and their files.
+"""
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Any, Optional
@@ -5,6 +11,15 @@ from typing import Mapping, Any, Optional
 
 @dataclass(slots=True)
 class KernelFile:
+    """
+    Represents a file associated with a Triton kernel.
+
+    Attributes:
+        file_type: The type of file (e.g., 'ptx', 'cubin', 'metadata')
+        path: Path to the file
+        size: Size of the file in bytes
+    """
+
     file_type: str
     path: Path
     size: int
@@ -12,6 +27,13 @@ class KernelFile:
 
 @dataclass(slots=True)
 class Kernel:
+    """
+    Represents a Triton kernel with its metadata and associated files.
+
+    This class contains all attributes extracted from a kernel's metadata file.
+    """
+
+    # pylint: disable=too-many-instance-attributes
     hash: str
     backend: str
     arch: str

@@ -1,9 +1,17 @@
+"""
+Database module for storing and retrieving Triton kernel metadata.
+
+This module provides a SQLite-based database interface for kernel metadata.
+"""
+
 from __future__ import annotations
-import sqlite3, json, time
+import sqlite3
+import json
+import time
 from pathlib import Path
+from typing import Any, Dict
 from ..utils.paths import get_db_path
 from ..models.kernel import Kernel
-from typing import Any, Dict
 
 
 def _json(x):
@@ -15,7 +23,20 @@ def _bool(x):
 
 
 class Database:
+    """
+    SQLite database for storing and querying Triton kernel metadata.
+
+    This class provides methods to initialize the database schema,
+    insert kernel metadata, and search for kernels based on criteria.
+    """
+
     def __init__(self, path: Path | None = None):
+        """
+        Initialize the database connection.
+
+        Args:
+            path: Path to the database file. If None, uses the default location.
+        """
         self.path = path or get_db_path()
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
@@ -23,6 +44,12 @@ class Database:
         self._ensure_schema()
 
     def _ensure_schema(self):
+        """
+        Ensure the database schema exists and is properly initialized.
+
+        Creates the necessary tables and indexes if they do not exist.
+        """
+
         cur = self.conn.cursor()
         cur.execute("PRAGMA user_version")
         if cur.fetchone()[0] == 0:
@@ -32,6 +59,13 @@ class Database:
 
     @staticmethod
     def _schema_sql() -> str:
+        """
+        Generate SQL for database schema creation.
+
+        Returns:
+            SQL script to create the database schema.
+        """
+
         return """
         CREATE TABLE kernels(
             hash TEXT PRIMARY KEY,
@@ -80,6 +114,9 @@ class Database:
     def insert_kernel(self, k: Kernel) -> None:
         """
         Upsert a kernel and refresh its file list.
+
+        Args:
+            k: Kernel object containing metadata to be stored.
         """
         c = self.conn.cursor()
 
@@ -141,6 +178,15 @@ class Database:
         self.conn.commit()
 
     def search(self, **flt):
+        """
+        Search for kernels matching specified criteria.
+
+        Args:
+            **flt: Filter criteria as keyword arguments (name, backend, arch)
+
+        Returns:
+            List of dictionaries containing kernel metadata matching the criteria.
+        """
         sql = "SELECT * FROM kernels WHERE 1=1 "
         params = []
         for k in ("name", "backend", "arch"):
@@ -151,4 +197,5 @@ class Database:
         return [dict(r) for r in self.conn.execute(sql, params)]
 
     def close(self):
+        """Close the database connection."""
         self.conn.close()

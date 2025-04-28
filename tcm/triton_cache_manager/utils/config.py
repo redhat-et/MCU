@@ -1,10 +1,24 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
+"""
+Configuration settings for the Triton Cache Manager.
+
+This module provides configuration settings including paths and defaults.
+"""
+
+import platform
+import os
 from pathlib import Path
-import platform, os
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    """
+    Configuration settings for the Triton Cache Manager.
+
+    This class defines the default paths and settings used throughout the application.
+    It supports overriding via environment variables prefixed with TCM_.
+    """
+
     triton_cache_dir: Path = Field(
         default_factory=lambda: Path.home() / ".triton" / "cache"
     )
@@ -27,6 +41,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     class Config:
+        """Configuration for the Settings class."""
+
         env_prefix = "TCM_"
 
 

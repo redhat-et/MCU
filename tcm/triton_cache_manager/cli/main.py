@@ -1,8 +1,15 @@
+"""
+CLI interface for the Triton Cache Manager.
+
+This module provides command-line commands to interact with the Triton kernel cache.
+"""
+
+
+from pathlib import Path
+from typing import Optional, List, Dict, Any
 import typer
 import rich
 from rich.table import Table
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 from ..services.index import IndexService
 from ..utils.logger import configure_logging
 
@@ -43,14 +50,22 @@ def index(
             e.filename if hasattr(e, "filename") else (cache_dir or "default location")
         )
         rich.print(f"[red]Error: Cache directory not found at '{missing_path}'.[/red]")
-    except Exception as e:
+    except IndexError as e:
+        rich.print(f"[red]Index error during indexing: {e}[/red]")
+    except ValueError as e:
+        rich.print(f"[red]Value error during indexing: {e}[/red]")
+    except KeyError as e:
+        rich.print(f"[red]Key error during indexing: {e}[/red]")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # Acceptable use of broad exception to prevent CLI crashes
         rich.print(f"[red]An unexpected error occurred during indexing: {e}[/red]")
     finally:
         if svc:
             try:
                 svc.close()
                 rich.print("Database connection closed.")
-            except Exception as e_close:
+            except Exception as e_close:  # pylint: disable=broad-exception-caught
+                # Acceptable use of broad exception in cleanup code
                 rich.print(
                     f"[yellow]Warning: Error closing database connection: {e_close}[/yellow]"
                 )
@@ -76,7 +91,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     table.add_column("Backend", style="green", width=5)
     table.add_column("Arch", style="blue", width=5)
     table.add_column("Version", style="yellow", width=5)
-    table.add_column("Warp size", style='dim', width=5)
+    table.add_column("Warp size", style="dim", width=5)
     table.add_column("Warps", style="dim", width=5)
     table.add_column("Stages", style="dim", width=5)
     table.add_column("Shared", style="dim", width=8)
@@ -119,19 +134,23 @@ def search(
     try:
         svc = IndexService()
         rich.print(
-            f"Searching for kernels with: Name='{name or 'any'}', Backend='{backend or 'any'}', Arch='{arch or 'any'}'..."
+            f"Searching for kernels with: Name='{name or 'any'}',"
+            f"Backend='{backend or 'any'}', Arch='{arch or 'any'}'..."
         )
         rows = svc.db.search(name=name, backend=backend, arch=arch)
         _display_kernels_table(rows)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # Acceptable use of broad exception in cleanup code
         rich.print(f"[red]An error occurred during search: {e}[/red]")
     finally:
         if svc:
             try:
                 svc.close()
-            except Exception as e_close:
+            except Exception as e_close:  # pylint: disable=broad-exception-caught
+                # Acceptable use of broad exception in cleanup code
                 rich.print(
-                    f"[yellow]Warning: Error closing database connection: {e_close}[/yellow]"
+                    f"[yellow]Warning: Error closing database connection:\
+                    {e_close}[/yellow]"
                 )
 
 
