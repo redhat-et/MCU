@@ -5,7 +5,7 @@ This module provides functions to get standard paths used by the application.
 """
 
 from pathlib import Path
-from .config import settings
+from triton_cache_manager.utils.config import settings
 
 
 def get_cache_dir() -> Path:

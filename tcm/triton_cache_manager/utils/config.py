@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # pylint: disable=too-few-public-methods
     """
     Configuration settings for the Triton Cache Manager.
 
@@ -47,4 +48,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-settings.data_dir.mkdir(parents=True, exist_ok=True)
+Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
