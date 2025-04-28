@@ -6,8 +6,11 @@
 
 ## Checklist
 
+<!-- Please check the ones that apply, or mark them as N/A if not applicable -->
+
 - [ ] I have run **`pre-commit run --all-files`** locally and fixed any issues
-- [ ] My commits follow the **Conventional Commits** standard (`feat:`, `fix:`, `chore:`, etc.)
+- [ ] My commits follow the **Conventional Commits** standard (`feat:`, `fix:`,
+   `chore:`, etc.)
 - [ ] I have updated **documentation** if needed (README, comments, etc.)
 
 ## Related Issues / Tickets
