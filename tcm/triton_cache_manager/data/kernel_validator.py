@@ -3,10 +3,12 @@ This module defines Pydantic models for validating Triton kernel metadata
 and utilities for deserializing kernel metadata from JSON.
 """
 
-from pathlib import Path
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
+
 from pydantic import BaseModel, Field, ValidationError, model_validator
+
 from ..models.kernel import Kernel, KernelFile
 from ..plugins.base import KernelBackendPlugin
 
@@ -69,6 +71,47 @@ class KernelMetadata(BaseModel):
         return self
 
 
+def is_kernel_related(data: Dict[str, Any]) -> bool:
+    """
+    Determine if the JSON data appears to be kernel metadata.
+
+    This function checks for the presence of kernel-specific fields or patterns
+    to determine if the JSON is likely to represent a kernel.
+
+    Args:
+        data: Dictionary of JSON data to check
+
+    Returns:
+        True if the data appears to be kernel-related, False otherwise
+    """
+    kernel_specific_fields = [
+        "triton_version",
+        "num_warps",
+        "num_stages",
+        "debug",
+        "shared",
+        "tmem_size",
+        "maxnreg",
+        "cluster_dims",
+    ]
+
+    for field in kernel_specific_fields:
+        if field in data:
+            return True
+
+    if "target" in data and isinstance(data["target"], dict):
+        if "backend" in data["target"]:
+            return True
+
+    if "name" in data and isinstance(data["name"], str):
+        kernel_name_indicators = ["kernel", "matmul", "gemm", "conv", "triton"]
+        for indicator in kernel_name_indicators:
+            if indicator in data["name"].lower():
+                return True
+
+    return False
+
+
 def deserialize_kernel(
     data: Dict[str, Any],
     hash_value: str,
@@ -85,11 +128,19 @@ def deserialize_kernel(
         plugins: Dictionary mapping backend names to plugin instances
 
     Returns:
-        A Kernel object if valid, None if invalid
+        A Kernel object if valid, None if invalid or not kernel-related
     """
     try:
+        if not is_kernel_related(data):
+            log.warning(
+                "JSON data for '%s' does not appear to be kernel metadata", hash_value
+            )
+            return None
+
+        # Validate with Pydantic
         metadata = KernelMetadata.model_validate(data)
 
+        # Cast to KernelTarget to help pylint understand the type
         target = cast(KernelTarget, metadata.target)
 
         # pylint: disable=no-member
