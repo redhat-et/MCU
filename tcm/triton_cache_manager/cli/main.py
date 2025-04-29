@@ -4,7 +4,6 @@ CLI interface for the Triton Cache Manager.
 This module provides command-line commands to interact with the Triton kernel cache.
 """
 
-
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import typer
@@ -81,7 +80,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
         return
 
     table = Table(
-        title="Kernel Search Results",
+        title=f"Kernel(s) Found {len(rows)}",
         show_header=True,
         header_style="bold magenta",
         expand=True,
