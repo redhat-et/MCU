@@ -103,7 +103,7 @@ def is_kernel_related(data: Dict[str, Any]) -> bool:
     if "target" in data and isinstance(data["target"], dict):
         if "backend" not in data["target"]:
             return False
- 
+
     return True
 
 
