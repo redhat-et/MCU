@@ -85,6 +85,7 @@ def is_kernel_related(data: Dict[str, Any]) -> bool:
         True if the data appears to be kernel-related, False otherwise
     """
     kernel_specific_fields = [
+        "name",
         "triton_version",
         "num_warps",
         "num_stages",
@@ -96,20 +97,14 @@ def is_kernel_related(data: Dict[str, Any]) -> bool:
     ]
 
     for field in kernel_specific_fields:
-        if field in data:
-            return True
+        if field not in data:
+            return False
 
     if "target" in data and isinstance(data["target"], dict):
-        if "backend" in data["target"]:
-            return True
-
-    if "name" in data and isinstance(data["name"], str):
-        kernel_name_indicators = ["kernel", "matmul", "gemm", "conv", "triton"]
-        for indicator in kernel_name_indicators:
-            if indicator in data["name"].lower():
-                return True
-
-    return False
+        if "backend" not in data["target"]:
+            return False
+ 
+    return True
 
 
 def deserialize_kernel(
