@@ -73,10 +73,9 @@ def index(
 def _display_kernels_table(rows: List[Dict[str, Any]]):
     """
     Helper function to display kernel data (list of dicts) in a rich Table.
-    Compatible with the original database.py's search result format.
     """
     if not rows:
-        rich.print("[yellow]No kernels found matching the criteria.[/yellow]")
+        rich.print("[yellow]No kernels found matching the criteria.\nHave you used `tcm index` first?[/yellow]")
         return
 
     table = Table(
