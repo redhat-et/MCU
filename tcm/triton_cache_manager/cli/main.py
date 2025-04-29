@@ -4,6 +4,7 @@ CLI interface for the Triton Cache Manager.
 This module provides command-line commands to interact with the Triton kernel cache.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import typer
@@ -11,7 +12,9 @@ import rich
 from rich.table import Table
 from ..services.index import IndexService
 from ..utils.logger import configure_logging
+from ..utils.paths import get_db_path
 
+log = logging.getLogger(__name__)
 app = typer.Typer(help="Triton Kernel Cache Manager CLI")
 
 
@@ -70,13 +73,33 @@ def index(
                 )
 
 
+def _cache_db_exists() -> bool:
+    """
+    Check if the cache database file exists.
+
+    Returns:
+        bool: True if the database file exists, False otherwise
+    """
+    db_path = get_db_path()
+    exists = db_path.exists()
+
+    if exists:
+        log.debug("Cache database found at %s", db_path)
+    else:
+        log.debug("Cache database not found at %s", db_path)
+
+    return exists
+
+
 def _display_kernels_table(rows: List[Dict[str, Any]]):
     """
     Helper function to display kernel data (list of dicts) in a rich Table.
     """
     if not rows:
-        rich.print("[yellow]No kernels found matching the criteria.\
-                   Have you used `tcm index` first?[/yellow]")
+        rich.print(
+            "[yellow]No kernels found matching the criteria.\
+                   Have you used `tcm index` first?[/yellow]"
+        )
         return
 
     table = Table(
@@ -129,6 +152,10 @@ def search(
     """
     Search for indexed kernels based on name, backend, or architecture.
     """
+    if not _cache_db_exists():
+        rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
+        return
+
     svc = None
     try:
         svc = IndexService()
