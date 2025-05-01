@@ -38,4 +38,3 @@ jobs:
             Update pre-commit hooks to latest version
           labels: dependencies
           draft: false
-
