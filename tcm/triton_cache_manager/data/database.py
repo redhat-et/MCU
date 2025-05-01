@@ -99,6 +99,7 @@ class Database:
             kpack INTEGER,
             matrix_instr_nonkdim INTEGER,
             created INTEGER,
+            total_size INTEGER,
             metadata JSON
         );
         CREATE TABLE files(
@@ -119,6 +120,8 @@ class Database:
             k: Kernel object containing metadata to be stored.
         """
         c = self.conn.cursor()
+
+        total_size = sum(f.size for f in k.files)
 
         row: Dict[str, Any] = {
             "hash": k.hash,
@@ -152,6 +155,7 @@ class Database:
             "kpack": k.kpack,
             "matrix_instr_nonkdim": k.matrix_instr_nonkdim,
             "created": int(time.time()),
+            "total_size": total_size,
             "metadata": _json(k.metadata),
         }
 

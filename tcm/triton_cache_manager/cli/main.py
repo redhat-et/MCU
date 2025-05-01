@@ -13,6 +13,7 @@ from rich.table import Table
 from ..services.index import IndexService
 from ..utils.logger import configure_logging
 from ..utils.paths import get_db_path
+from ..utils.size_utils import format_size
 
 log = logging.getLogger(__name__)
 app = typer.Typer(help="Triton Kernel Cache Manager CLI")
@@ -117,10 +118,16 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     table.add_column("Warps", style="dim", width=5)
     table.add_column("Stages", style="dim", width=5)
     table.add_column("Shared", style="dim", width=8)
+    table.add_column("Size", style="cyan", width=10)
     table.add_column("Debug", style="dim", width=8)
 
     for row in rows:
         row_dict = dict(row)
+        total_size_bytes = row_dict.get("total_size", 0)
+        total_size_str = format_size(total_size_bytes)
+        shared_size_bytes = row_dict.get("shared", 0)
+        shared_size_str = format_size(shared_size_bytes)
+
         table.add_row(
             row_dict.get("hash", "N/A")[:12] + "...",
             row_dict.get("name", "N/A"),
@@ -130,7 +137,8 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
             str(row_dict.get("warp_size", "N/A")),
             str(row_dict.get("num_warps", "N/A")),
             str(row_dict.get("num_stages", "N/A")),
-            str(row_dict.get("shared", "N/A")),
+            shared_size_str,
+            total_size_str,
             str(row_dict.get("debug", "N/A")),
         )
 
