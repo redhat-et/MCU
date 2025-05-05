@@ -176,7 +176,7 @@ def search(
     ),
 ):
     """
-    Search for indexed kernels based on various criteria including age.
+    Search for indexed kernels based on various criteria SearchCriteria.
     """
     if not _cache_db_exists():
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
