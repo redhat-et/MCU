@@ -189,7 +189,7 @@ class Database:
 
     def search(self, criteria: SearchCriteria):
         """
-        Search for kernels matching specified criteria, including age.
+        Search for kernels matching specified criteria.
 
         Args:
             criteria: A SearchCriteria object containing filter values.
@@ -197,32 +197,31 @@ class Database:
         Returns:
             List of dictionaries containing kernel metadata matching the criteria.
         """
-        sql = "SELECT * FROM kernels WHERE 1=1 "
+        where_clauses = ["1=1"]
         params = []
 
-        if criteria.name:
-            sql += "AND name=? "
-            params.append(criteria.name)
-        if criteria.backend:
-            sql += "AND backend=? "
-            params.append(criteria.backend)
-        if criteria.arch:
-            sql += "AND arch=? "
-            params.append(criteria.arch)
+        simple_equality_filters = ["name", "backend", "arch"]
+
+        for field_name in simple_equality_filters:
+            value = getattr(criteria, field_name, None)
+            if value is not None:
+                where_clauses.append(f"{field_name}=?")
+                params.append(value)
 
         if criteria.older_than_timestamp is not None:
-            sql += "AND modified_time < ? "
+            where_clauses.append("modified_time < ?")
             params.append(criteria.older_than_timestamp)
         if criteria.younger_than_timestamp is not None:
-            sql += "AND modified_time > ? "
+            where_clauses.append("modified_time > ?")
             params.append(criteria.younger_than_timestamp)
 
-        sql += "ORDER BY modified_time DESC"
+        sql = f"SELECT * FROM kernels WHERE {' AND '.join(where_clauses)}"\
+                +" ORDER BY modified_time DESC"
 
         log.debug("Executing SQL: %s with params: %s", sql, params)
 
         try:
-            return [dict(r) for r in self.conn.execute(sql, params)]
+            return [dict(r) for r in self.conn.execute(sql, tuple(params))]
         except sqlite3.Error as e:
             log.error(
                 "Database search failed. SQL: %s, Params: %s, Error: %s", sql, params, e
