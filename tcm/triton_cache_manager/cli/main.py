@@ -229,7 +229,7 @@ def search(
         _display_kernels_table(rows)
     except Exception as e:  # pylint: disable=broad-exception-caught
         rich.print(f"[red]An error occurred during search: {e}[/red]")
-        log.exception("Search command failed")  # Add logging for debugging
+        log.exception("Search command failed")
     finally:
         if svc:
             try:
