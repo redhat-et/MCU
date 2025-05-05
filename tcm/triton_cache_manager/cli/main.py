@@ -5,7 +5,7 @@ This module provides command-line commands to interact with the Triton kernel ca
 """
 
 import logging
-import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import typer
@@ -14,7 +14,8 @@ from rich.table import Table
 from ..services.index import IndexService
 from ..utils.logger import configure_logging
 from ..utils.paths import get_db_path
-from ..utils.size_utils import format_size
+from ..utils.utils import format_size, parse_duration
+from ..models.criteria import SearchCriteria
 
 log = logging.getLogger(__name__)
 app = typer.Typer(help="Triton Kernel Cache Manager CLI")
@@ -152,7 +153,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
 def _mod_time_handle(mod_time_unix) -> str:
     if mod_time_unix is not None:
         try:
-            dt_obj = datetime.datetime.fromtimestamp(mod_time_unix)
+            dt_obj = datetime.fromtimestamp(mod_time_unix)
             return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
         except (ValueError, TypeError, OSError):
             return "Invalid Date"
@@ -170,35 +171,79 @@ def search(
     arch: Optional[str] = typer.Option(
         None, "--arch", "-a", help="Filter by architecture (e.g., '120', 'gfx90a')."
     ),
+    older_than: Optional[str] = typer.Option(
+        None,
+        "--older-than",
+        help="Show kernels older than specified duration (e.g., '7d', '2w').",
+    ),
+    younger_than: Optional[str] = typer.Option(
+        None,
+        "--younger-than",
+        help="Show kernels younger than specified duration (e.g., '14d', '1w').",
+    ),
 ):
     """
-    Search for indexed kernels based on name, backend, or architecture.
+    Search for indexed kernels based on various criteria including age.
     """
     if not _cache_db_exists():
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
         return
 
+    older_than_timestamp: Optional[float] = None
+    younger_than_timestamp: Optional[float] = None
+    now = datetime.now(timezone.utc)
+
+    try:
+        if older_than:
+            delta = parse_duration(older_than)
+            if delta:
+                older_than_timestamp = (now - delta).timestamp()
+        if younger_than:
+            delta = parse_duration(younger_than)
+            if delta:
+                younger_than_timestamp = (now - delta).timestamp()
+    except typer.Exit:
+        return
+
+    if (
+        older_than_timestamp is not None
+        and younger_than_timestamp is not None
+        and older_than_timestamp < younger_than_timestamp
+    ):
+        rich.print(
+            "[red]Error: --older-than timestamp cannot be more recent than"
+            "--younger-than timestamp.[/red]"
+        )
+        return
+
+    criteria = SearchCriteria(
+        name=name,
+        backend=backend,
+        arch=arch,
+        older_than_timestamp=older_than_timestamp,
+        younger_than_timestamp=younger_than_timestamp,
+    )
+
     svc = None
     try:
         svc = IndexService()
         rich.print(
-            f"Searching for kernels with: Name='{name or 'any'}',"
-            f"Backend='{backend or 'any'}', Arch='{arch or 'any'}'..."
+            f"Searching for kernels with: Name='{name or 'any'}', "
+            f"Backend='{backend or 'any'}', Arch='{arch or 'any'}', "
+            f"OlderThan='{older_than or 'N/A'}', YoungerThan='{younger_than or 'N/A'}'..."
         )
-        rows = svc.db.search(name=name, backend=backend, arch=arch)
+        rows = svc.db.search(criteria)
         _display_kernels_table(rows)
     except Exception as e:  # pylint: disable=broad-exception-caught
-        # Acceptable use of broad exception in cleanup code
         rich.print(f"[red]An error occurred during search: {e}[/red]")
+        log.exception("Search command failed")  # Add logging for debugging
     finally:
         if svc:
             try:
                 svc.close()
             except Exception as e_close:  # pylint: disable=broad-exception-caught
-                # Acceptable use of broad exception in cleanup code
                 rich.print(
-                    f"[yellow]Warning: Error closing database connection:\
-                    {e_close}[/yellow]"
+                    f"[yellow]Warning: Error closing database connection: {e_close}[/yellow]"
                 )
 
 

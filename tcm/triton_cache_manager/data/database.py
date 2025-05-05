@@ -8,10 +8,14 @@ from __future__ import annotations
 import sqlite3
 import json
 import time
+import logging
 from pathlib import Path
 from typing import Any, Dict
 from ..utils.paths import get_db_path
 from ..models.kernel import Kernel
+from ..models.criteria import SearchCriteria
+
+log = logging.getLogger(__name__)
 
 
 def _json(x):
@@ -183,24 +187,47 @@ class Database:
 
         self.conn.commit()
 
-    def search(self, **flt):
+    def search(self, criteria: SearchCriteria):
         """
-        Search for kernels matching specified criteria.
+        Search for kernels matching specified criteria, including age.
 
         Args:
-            **flt: Filter criteria as keyword arguments (name, backend, arch)
+            criteria: A SearchCriteria object containing filter values.
 
         Returns:
             List of dictionaries containing kernel metadata matching the criteria.
         """
         sql = "SELECT * FROM kernels WHERE 1=1 "
         params = []
-        for k in ("name", "backend", "arch"):
-            v = flt.get(k)
-            if v:
-                sql += f"AND {k}=? "
-                params.append(v)
-        return [dict(r) for r in self.conn.execute(sql, params)]
+
+        if criteria.name:
+            sql += "AND name=? "
+            params.append(criteria.name)
+        if criteria.backend:
+            sql += "AND backend=? "
+            params.append(criteria.backend)
+        if criteria.arch:
+            sql += "AND arch=? "
+            params.append(criteria.arch)
+
+        if criteria.older_than_timestamp is not None:
+            sql += "AND modified_time < ? "
+            params.append(criteria.older_than_timestamp)
+        if criteria.younger_than_timestamp is not None:
+            sql += "AND modified_time > ? "
+            params.append(criteria.younger_than_timestamp)
+
+        sql += "ORDER BY modified_time DESC"
+
+        log.debug("Executing SQL: %s with params: %s", sql, params)
+
+        try:
+            return [dict(r) for r in self.conn.execute(sql, params)]
+        except sqlite3.Error as e:
+            log.error(
+                "Database search failed. SQL: %s, Params: %s, Error: %s", sql, params, e
+            )
+            return []
 
     def close(self):
         """Close the database connection."""
