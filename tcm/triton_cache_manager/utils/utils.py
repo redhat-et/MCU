@@ -4,7 +4,7 @@ Utilities.
 
 import re
 from typing import Optional
-from datetime import timedelta
+from datetime import timedelta, datetime
 import rich
 import typer
 
@@ -52,3 +52,24 @@ def parse_duration(duration_str: Optional[str]) -> Optional[timedelta]:
     if unit == "w":
         return timedelta(weeks=value)
     return None
+
+
+def mod_time_handle(mod_time_unix) -> str:
+    """
+    Convert an optional UNIX timestamp into a formatted date string.
+
+    Args:
+        timestamp: An optional float representing the UNIX timestamp.
+
+    Returns:
+        A string formatted as 'YYYY-MM-DD HH:MM:SS',
+        'Invalid Date' if the timestamp causes an error during conversion,
+        or 'N/A' if the timestamp is None.
+    """
+    if mod_time_unix is not None:
+        try:
+            dt_obj = datetime.fromtimestamp(mod_time_unix)
+            return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError, OSError):
+            return "Invalid Date"
+    return "N/A"

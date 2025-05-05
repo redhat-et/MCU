@@ -14,7 +14,7 @@ from rich.table import Table
 from ..services.index import IndexService
 from ..utils.logger import configure_logging
 from ..utils.paths import get_db_path
-from ..utils.utils import format_size, parse_duration
+from ..utils.utils import format_size, parse_duration, mod_time_handle
 from ..models.criteria import SearchCriteria
 
 log = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
         shared_size_bytes = row_dict.get("shared", 0)
         shared_size_str = format_size(shared_size_bytes)
         mod_time_unix = row_dict.get("modified_time")
-        mod_time_str = _mod_time_handle(mod_time_unix)
+        mod_time_str = mod_time_handle(mod_time_unix)
         table.add_row(
             row_dict.get("hash", "N/A")[:12] + "...",
             row_dict.get("name", "N/A"),
@@ -150,14 +150,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     rich.print(table)
 
 
-def _mod_time_handle(mod_time_unix) -> str:
-    if mod_time_unix is not None:
-        try:
-            dt_obj = datetime.fromtimestamp(mod_time_unix)
-            return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
-        except (ValueError, TypeError, OSError):
-            return "Invalid Date"
-    return "N/A"
+
 
 
 @app.command(name="list")
