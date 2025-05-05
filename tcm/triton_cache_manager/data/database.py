@@ -100,7 +100,8 @@ class Database:
             matrix_instr_nonkdim INTEGER,
             created INTEGER,
             total_size INTEGER,
-            metadata JSON
+            metadata JSON,
+            modified_time REAL
         );
         CREATE TABLE files(
             hash TEXT,
@@ -157,6 +158,7 @@ class Database:
             "created": int(time.time()),
             "total_size": total_size,
             "metadata": _json(k.metadata),
+            "modified_time": k.modified_time,
         }
 
         filtered = {col: val for col, val in row.items() if val is not None}

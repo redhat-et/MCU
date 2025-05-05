@@ -135,7 +135,12 @@ def deserialize_kernel(
         # Validate with Pydantic
         metadata = KernelMetadata.model_validate(data)
 
-        # Cast to KernelTarget to help pylint understand the type
+        mod_time: Optional[float] = None
+        try:
+            mod_time = directory.stat().st_mtime
+        except OSError as e:
+            log.warning("Could not get stat for directory '%s': %s", directory, e)
+
         target = cast(KernelTarget, metadata.target)
 
         # pylint: disable=no-member
@@ -172,6 +177,7 @@ def deserialize_kernel(
             matrix_instr_nonkdim=metadata.matrix_instr_nonkdim,
             metadata=data,
             files=[],
+            modified_time=mod_time,
         )
 
         common_extensions = {
@@ -192,7 +198,12 @@ def deserialize_kernel(
             elif plugin and f.suffix in plugin.relevant_extensions():
                 ft = plugin.relevant_extensions()[f.suffix]
             if ft:
-                kernel.files.append(KernelFile(ft, f, f.stat().st_size))
+                try:
+                    file_stat = f.stat()
+                    kernel.files.append(KernelFile(ft, f, file_stat.st_size))
+                except OSError as e:
+                    log.warning("Could not get stat for file '%s': %s", f, e)
+                    kernel.files.append(KernelFile(ft, f, 0))
 
         return kernel
 

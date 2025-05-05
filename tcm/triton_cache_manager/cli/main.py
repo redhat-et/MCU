@@ -5,6 +5,7 @@ This module provides command-line commands to interact with the Triton kernel ca
 """
 
 import logging
+import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import typer
@@ -111,6 +112,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     )
     table.add_column("Hash", style="dim", width=15, overflow="fold")
     table.add_column("Name", style="cyan", min_width=20, overflow="fold")
+    table.add_column("Modified", style="magenta", width=18)
     table.add_column("Backend", style="green", width=5)
     table.add_column("Arch", style="blue", width=5)
     table.add_column("Version", style="yellow", width=5)
@@ -127,10 +129,12 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
         total_size_str = format_size(total_size_bytes)
         shared_size_bytes = row_dict.get("shared", 0)
         shared_size_str = format_size(shared_size_bytes)
-
+        mod_time_unix = row_dict.get("modified_time")
+        mod_time_str = _mod_time_handle(mod_time_unix)
         table.add_row(
             row_dict.get("hash", "N/A")[:12] + "...",
             row_dict.get("name", "N/A"),
+            mod_time_str,
             row_dict.get("backend", "N/A"),
             row_dict.get("arch", "N/A"),
             row_dict.get("triton_version", "N/A"),
@@ -143,6 +147,16 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
         )
 
     rich.print(table)
+
+
+def _mod_time_handle(mod_time_unix) -> str:
+    if mod_time_unix is not None:
+        try:
+            dt_obj = datetime.datetime.fromtimestamp(mod_time_unix)
+            return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError, OSError):
+            return "Invalid Date"
+    return "N/A"
 
 
 @app.command(name="list")
