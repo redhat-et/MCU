@@ -3,13 +3,13 @@
 Database service class for managing Triton kernel metadata.
 
 This module provides the `Database` class, which acts as a high-level API
-for interacting with the kernel cache database. It uses ORM models and
-session configurations defined in other modules within this package.
+for interacting with the kernel cache database. It uses ORM models (SqlAlchemy).
 """
 from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List
+from sqlalchemy import and_
 
 from .db_config import engine, SessionLocal, DB_PATH
 from .db_models import Base, KernelOrm, SqlaSession
@@ -79,21 +79,33 @@ class Database:
         session = self.get_session()
         try:
             query = session.query(KernelOrm)
-            if criteria.name is not None:
-                query = query.filter(KernelOrm.name == criteria.name)
-            if criteria.backend is not None:
-                query = query.filter(KernelOrm.backend == criteria.backend)
-            if criteria.arch is not None:
-                query = query.filter(KernelOrm.arch == str(criteria.arch))
+            active_filters = []
+
+            equality_filter_configs = [
+                ("name", KernelOrm.name, None),
+                ("backend", KernelOrm.backend, None),
+                ("arch", KernelOrm.arch, str),
+            ]
+
+            for crit_attr, orm_column, transformer in equality_filter_configs:
+                value = getattr(criteria, crit_attr, None)
+                if value is not None:
+                    if transformer:
+                        value = transformer(value)
+                    active_filters.append(orm_column == value)
+
             if criteria.older_than_timestamp is not None:
-                query = query.filter(
+                active_filters.append(
                     KernelOrm.modified_time < criteria.older_than_timestamp
                 )
+
             if criteria.younger_than_timestamp is not None:
-                query = query.filter(
+                active_filters.append(
                     KernelOrm.modified_time > criteria.younger_than_timestamp
                 )
 
+            if active_filters:
+                query = query.filter(and_(*active_filters))
             query = query.order_by(KernelOrm.modified_time.desc())
             results_orm = query.all()
             log.debug(
