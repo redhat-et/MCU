@@ -1,5 +1,5 @@
 """
-Data models for Triton kernels criteria(s).
+Data models for Triton kernels criteria.
 """
 
 from dataclasses import dataclass
