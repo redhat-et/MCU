@@ -150,9 +150,6 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     rich.print(table)
 
 
-
-
-
 @app.command(name="list")
 def search(
     name: Optional[str] = typer.Option(
@@ -176,7 +173,7 @@ def search(
     ),
 ):
     """
-    Search for indexed kernels based on various criteria SearchCriteria.
+    Search for indexed kernels based on various SearchCriteria.
     """
     if not _cache_db_exists():
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
