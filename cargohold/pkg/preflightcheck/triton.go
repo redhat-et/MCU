@@ -10,10 +10,10 @@ import (
 	"strconv"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/redhat-et/TKDK/cargohold/pkg/accelerator"
+	"github.com/redhat-et/TKDK/cargohold/pkg/accelerator/devices"
+	"github.com/redhat-et/TKDK/cargohold/pkg/config"
 	logging "github.com/sirupsen/logrus"
-	"github.com/tkdk/cargohold/pkg/accelerator"
-	"github.com/tkdk/cargohold/pkg/accelerator/devices"
-	"github.com/tkdk/cargohold/pkg/config"
 )
 
 // Define the struct matching the JSON structure

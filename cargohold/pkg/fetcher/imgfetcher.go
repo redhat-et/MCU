@@ -31,12 +31,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/hashicorp/go-multierror"
+	"github.com/redhat-et/TKDK/cargohold/pkg/accelerator"
+	"github.com/redhat-et/TKDK/cargohold/pkg/config"
+	"github.com/redhat-et/TKDK/cargohold/pkg/constants"
+	"github.com/redhat-et/TKDK/cargohold/pkg/preflightcheck"
+	"github.com/redhat-et/TKDK/cargohold/pkg/utils"
 	logging "github.com/sirupsen/logrus"
-	"github.com/tkdk/cargohold/pkg/accelerator"
-	"github.com/tkdk/cargohold/pkg/config"
-	"github.com/tkdk/cargohold/pkg/constants"
-	"github.com/tkdk/cargohold/pkg/preflightcheck"
-	"github.com/tkdk/cargohold/pkg/utils"
 )
 
 // A quick list of TODOS:

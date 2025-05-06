@@ -19,8 +19,8 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/redhat-et/TKDK/cargohold/pkg/config"
 	logging "github.com/sirupsen/logrus"
-	"github.com/tkdk/cargohold/pkg/config"
 	"golang.org/x/exp/maps"
 )
 

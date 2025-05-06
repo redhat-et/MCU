@@ -1,4 +1,4 @@
-module github.com/tkdk/cargohold
+module github.com/redhat-et/TKDK/cargohold
 
 go 1.24.0
 

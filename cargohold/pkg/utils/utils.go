@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/redhat-et/TKDK/cargohold/pkg/constants"
 	logging "github.com/sirupsen/logrus"
-	"github.com/tkdk/cargohold/pkg/constants"
 )
 
 func FilePathExists(path string) (bool, error) {
