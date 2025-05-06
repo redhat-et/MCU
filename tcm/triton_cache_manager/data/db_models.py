@@ -31,10 +31,8 @@ from ..models.kernel import Kernel
 log = logging.getLogger(__name__)
 
 
-class Base(DeclarativeBase):
+class Base(DeclarativeBase):  # pylint: disable=too-few-public-methods
     """Base class for SQLAlchemy ORM models."""
-
-    pass
 
 
 class KernelOrm(Base):
@@ -164,7 +162,7 @@ class KernelOrm(Base):
         log.debug("Added %d files for kernel_hash: %s", len(k_data.files), k_data.hash)
 
 
-class KernelFileOrm(Base):
+class KernelFileOrm(Base):  # pylint: disable=too-few-public-methods
     """SQLAlchemy ORM model for a file associated with a Triton kernel."""
 
     __tablename__ = "files"

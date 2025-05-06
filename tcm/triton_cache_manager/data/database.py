@@ -28,7 +28,7 @@ class Database:
     def __init__(self) -> None:
         """Initializes DB engine, session factory, and ensures schema exists."""
         self.engine = engine
-        self.SessionLocal = SessionLocal
+        self.SessionLocal = SessionLocal  # pylint: disable=invalid-name
         self._ensure_schema()
         log.info("Database service interface initialized successfully.")
 
