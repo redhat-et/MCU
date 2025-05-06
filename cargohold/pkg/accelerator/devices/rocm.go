@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"strconv"
 
+	"github.com/redhat-et/TKDK/cargohold/pkg/config"
+	"github.com/redhat-et/TKDK/cargohold/pkg/utils"
 	logging "github.com/sirupsen/logrus"
-	"github.com/tkdk/cargohold/pkg/config"
-	"github.com/tkdk/cargohold/pkg/utils"
 )
 
 const rocmHwType = config.GPU
