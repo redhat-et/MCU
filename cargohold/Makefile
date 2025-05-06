@@ -39,7 +39,7 @@ GOARCH := $(shell go env GOARCH)
 GOENV = GO111MODULE="" \
 				GOOS=$(GOOS) \
 				GOARCH=$(GOARCH)
-PKG_BUILD="github.com/tkdk/cargohold/pkg/build"
+PKG_BUILD="github.com/redhat-et/TKDK/cargohold/pkg/build"
 LDFLAGS := $(LDFLAGS) \
 		-X $(PKG_BUILD).Version=$(VERSION) \
 		-X $(PKG_BUILD).Revision=$(GIT_SHA) \

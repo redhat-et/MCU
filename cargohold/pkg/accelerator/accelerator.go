@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/redhat-et/TKDK/cargohold/pkg/accelerator/devices"
 	logging "github.com/sirupsen/logrus"
-	"github.com/tkdk/cargohold/pkg/accelerator/devices"
 )
 
 var (

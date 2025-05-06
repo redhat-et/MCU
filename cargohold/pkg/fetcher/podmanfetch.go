@@ -12,8 +12,8 @@ import (
 	"github.com/containers/podman/v5/pkg/bindings"
 	"github.com/containers/podman/v5/pkg/bindings/images"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/redhat-et/TKDK/cargohold/pkg/constants"
 	logging "github.com/sirupsen/logrus"
-	"github.com/tkdk/cargohold/pkg/constants"
 )
 
 type podmanFetcher struct{}
