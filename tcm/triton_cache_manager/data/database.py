@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List
-from sqlalchemy import and_
+from sqlalchemy import and_, exc
 
 from .db_config import engine, SessionLocal, DB_PATH
 from .db_models import Base, KernelOrm, SqlaSession
@@ -57,6 +57,24 @@ class Database:
             KernelOrm.upsert_from_dto(session, k_data)
             session.commit()
             log.info("Kernel %s and its files upserted into DB.", k_data.hash)
+        except exc.IntegrityError as e:
+            session.rollback()
+            log.error(
+                "Failed to upsert kernel %s due to a constraint violation: %s",
+                k_data.hash,
+                e,
+                exc_info=True,
+            )
+            raise
+        except exc.OperationalError as e:
+            session.rollback()
+            log.error(
+                "Failed to upsert kernel %s due to a db operation issue: %s",
+                k_data.hash,
+                e,
+                exc_info=True,
+            )
+            raise
         except Exception:  # pylint: disable=broad-except
             session.rollback()
             log.error(
