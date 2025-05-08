@@ -49,7 +49,7 @@ def index(
         svc = IndexService(cache_dir=cache_dir)
         rich.print(f"Starting indexing process for cache directory: {svc.repo.root}...")
         n = svc.reindex()
-        rich.print(f"[green]Successfully indexed {n} kernels.[/green]")
+        rich.print(f"[green]Kernels Numbers\n\t before: {n[1]}\n\t now: {n[0]}[/green]")
     except FileNotFoundError as e:
         missing_path = (
             e.filename if hasattr(e, "filename") else (cache_dir or "default location")

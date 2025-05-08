@@ -5,9 +5,11 @@ This module provides the main service for scanning the cache and populating the 
 """
 
 from __future__ import annotations
+from typing import Tuple
 from pathlib import Path
 from ..data.cache_repo import CacheRepository
 from ..data.database import Database
+from ..models.criteria import SearchCriteria
 
 
 class IndexService:
@@ -28,18 +30,23 @@ class IndexService:
         self.repo = CacheRepository(cache_dir)
         self.db = Database()
 
-    def reindex(self) -> int:
+    def reindex(self) -> Tuple[int, int]:
         """
         Scan the cache directory and update the database.
 
         Returns:
             Number of kernels indexed.
         """
-        total = 0
+        criteria = SearchCriteria()
+
+        current_kernels = len(self.db.search(criteria))
+
+        updated_kernels = 0
         for kernel in self.repo.kernels():
             self.db.insert_kernel(kernel)
-            total += 1
-        return total
+            updated_kernels += 1
+
+        return updated_kernels, current_kernels
 
     def close(self):
         """Close the database connection."""
