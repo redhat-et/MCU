@@ -27,4 +27,4 @@ repos:
     rev: v1.37.0
     hooks:
       - id: yamllint
-exclude: ^cargohold/vendor/.*|^cargohold/_output/.*|^venv/.*
+exclude: ^tcv/vendor/.*|^tcv/_output/.*|^venv/.*

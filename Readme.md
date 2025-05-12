@@ -10,18 +10,18 @@ securely, TKDK has you covered.
 
 ## Features
 
-### Triton Cache Manager
+### Triton Cache Manager (TCM)
 
 Organize, index, and monitor your Triton kernel caches. This tool
 provides detailed reports on cache usage, offering data-driven
 insights into compilation performance and cache effectiveness.
 
-### CargoHold
+### Triton Cache Vault (TCV)
 
 Package Triton kernel caches into **OCI-compliant container images**.
 Secure your caches with cryptographic signing, enabling safe and
 efficient cache distribution and reuse across environments and teams.
-For more information please see the CargoHold [readme](./cargohold/README.md).
+For more information please see the TCV [readme](./tcv/README.md).
 
 ## Getting Started
 
@@ -38,14 +38,14 @@ For more information please see the CargoHold [readme](./cargohold/README.md).
 
 ```bash
 tkdk/
-├── cache-manager/         # Triton Cache Manager
-├── cargohold/             # OCI packaging and signing tool
+├── tcm/         # Triton Cache Manager
+├── tcv/             # OCI packaging and signing tool
 └── README.md              # You're here!
 ```
 
 ## Security & Distribution
 
-CargoHold ensures that your cache packages are:
+Triton Cache Vault ensures that your cache packages are:
 
 - Packaged using OCI standards
 - Signed cryptographically for tamper-proof integrity

@@ -12,5 +12,5 @@ rules:
       - ^.*:$
     quote-type: double
 ignore:
-  - cargohold/_output/*
-  - cargohold/vendor/*
+  - tcv/_output/*
+  - tcv/vendor/*
