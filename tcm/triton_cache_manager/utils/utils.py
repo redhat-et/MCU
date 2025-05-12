@@ -3,13 +3,17 @@ Utilities.
 """
 
 import re
-from typing import Optional
-from datetime import timedelta, datetime
+from typing import Optional, Tuple, Iterable
+from datetime import timedelta, datetime, timezone
+from sqlalchemy import or_, func
 import rich
 import typer
+from triton_cache_manager.data.db_models import KernelFileOrm
+from triton_cache_manager.data.database import Database
+from triton_cache_manager.utils.tcm_constants import IR_EXTS
 
 
-def format_size(size_bytes: int) -> str:
+def format_size(size_bytes: int | float) -> str:
     """
     Format a file size in a human-readable way.
 
@@ -73,3 +77,66 @@ def mod_time_handle(mod_time_unix) -> str:
         except (ValueError, TypeError, OSError):
             return "Invalid Date"
     return "N/A"
+
+
+def get_older_younger(
+    older_than: str | None, younger_than: str | None
+) -> Tuple[float | None, float | None]:
+    """
+    Calculates cutoff timestamps based on "older than" and "younger than" duration strings.
+
+    Args:
+        older_than: A duration string (e.g., "7d") indicating the minimum
+            age. If provided, items must have been modified *before* this
+            duration ago from the current UTC time. None if no older_than limit.
+        younger_than: A duration string (e.g., "1d") indicating the maximum
+            age. If provided, items must have been modified *after* this
+            duration ago from the current UTC time. None if no younger_than limit.
+    Returns:
+        A tuple containing two float or None values:
+        (older_than_timestamp, younger_than_timestamp).
+    """
+    older_than_timestamp: Optional[float] = None
+    younger_than_timestamp: Optional[float] = None
+    now = datetime.now(timezone.utc)
+
+    try:
+        if older_than:
+            delta = parse_duration(older_than)
+            if delta:
+                older_than_timestamp = (now - delta).timestamp()
+        if younger_than:
+            delta = parse_duration(younger_than)
+            if delta:
+                younger_than_timestamp = (now - delta).timestamp()
+    except Exception as exc:
+        raise typer.Exit(1) from exc
+
+    if (
+        older_than_timestamp is not None
+        and younger_than_timestamp is not None
+        and older_than_timestamp < younger_than_timestamp
+    ):
+        rich.print(
+            "[red]Error: --older-than timestamp cannot be more recent than"
+            "--younger-than timestamp.[/red]"
+        )
+        raise typer.Exit(1)
+    return older_than_timestamp, younger_than_timestamp
+
+
+def estimate_space(db: Database, hashes: Iterable[str], ir_only: bool) -> int:
+    """Sum the sizes of artefacts that would be deleted."""
+    size = 0
+    with db.get_session() as s:
+        q = s.query(func.sum(KernelFileOrm.size)).filter(
+            KernelFileOrm.kernel_hash.in_(hashes)
+        )
+
+        if ir_only:
+            q = q.filter(
+                or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
+            )
+
+        size = q.scalar() or 0
+    return size
