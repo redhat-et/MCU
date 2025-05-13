@@ -3,15 +3,10 @@ Utilities.
 """
 
 import re
-from typing import Optional, Tuple, Iterable
 from datetime import timedelta, datetime, timezone
-from sqlalchemy import or_, func
+from typing import Optional, Tuple
 import rich
 import typer
-from triton_cache_manager.data.db_models import KernelFileOrm
-from triton_cache_manager.data.database import Database
-from triton_cache_manager.utils.tcm_constants import IR_EXTS
-
 
 def format_size(size_bytes: int | float) -> str:
     """
@@ -121,20 +116,3 @@ def get_older_younger(
         )
         raise typer.Exit(1)
     return older_than_timestamp, younger_than_timestamp
-
-
-def estimate_space(db: Database, hashes: Iterable[str], ir_only: bool) -> int:
-    """Sum the sizes of artefacts that would be deleted."""
-    size = 0
-    with db.get_session() as s:
-        q = s.query(func.sum(KernelFileOrm.size)).filter(
-            KernelFileOrm.kernel_hash.in_(hashes)
-        )
-
-        if ir_only:
-            q = q.filter(
-                or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
-            )
-
-        size = q.scalar() or 0
-    return size
