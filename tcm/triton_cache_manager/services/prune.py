@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, List
 from dataclasses import dataclass
+from rich.prompt import Confirm
 from ..data.cache_repo import CacheRepository
 from ..data.database import Database
 from ..models.criteria import SearchCriteria
@@ -21,6 +22,7 @@ log = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class PruneStats:
+    "Stats for PruningService"
     pruned: int
     reclaimed: float
     aborted: bool = False
@@ -85,8 +87,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _confirm(n: int, bytes_to_free: int, ir_only: bool) -> bool:
-        from rich.prompt import Confirm
-
+        """Confirm to prune"""
         human = f"{bytes_to_free / 2**20:.1f} MB"
         mode = "partial (IR‑only)" if ir_only else "FULL"
         return Confirm.ask(
