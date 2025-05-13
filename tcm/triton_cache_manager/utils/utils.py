@@ -87,11 +87,9 @@ def get_older_younger(
 
     Args:
         older_than: A duration string (e.g., "7d") indicating the minimum
-            age. If provided, items must have been modified *before* this
-            duration ago from the current UTC time. None if no older_than limit.
+            age.
         younger_than: A duration string (e.g., "1d") indicating the maximum
-            age. If provided, items must have been modified *after* this
-            duration ago from the current UTC time. None if no younger_than limit.
+            age.
     Returns:
         A tuple containing two float or None values:
         (older_than_timestamp, younger_than_timestamp).
