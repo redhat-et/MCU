@@ -8,14 +8,15 @@ for interacting with the kernel cache database. It uses ORM models (SqlAlchemy).
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
-from sqlalchemy import and_, exc
+from typing import Any, Dict, List, Set, Iterable
+from sqlalchemy import and_, exc, or_, func
 
 from .db_config import engine, SessionLocal, DB_PATH
-from .db_models import Base, KernelOrm, SqlaSession
+from .db_models import Base, KernelOrm, KernelFileOrm, SqlaSession
 
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
+from ..utils.tcm_constants import IR_EXTS
 
 log = logging.getLogger(__name__)
 
@@ -137,6 +138,22 @@ class Database:
             return []
         finally:
             session.close()
+
+    def estimate_space(self, hashes: Iterable[str], f_ext: Set[str] | None) -> int:
+        """Sum the sizes of artefacts that would be deleted."""
+        size = 0
+        with self.get_session() as s:
+            q = s.query(func.sum(KernelFileOrm.size)).filter(
+                KernelFileOrm.kernel_hash.in_(hashes)
+            )
+
+            if f_ext:
+                q = q.filter(
+                    or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
+                )
+
+            size = q.scalar() or 0
+        return size
 
     def close(self) -> None:
         """Closes the database engine's connection pool."""

@@ -14,7 +14,6 @@ from ..data.cache_repo import CacheRepository
 from ..data.database import Database
 from ..models.criteria import SearchCriteria
 from ..data.db_models import KernelOrm, KernelFileOrm
-from ..utils.utils import estimate_space
 from ..utils.tcm_constants import IR_EXTS
 
 log = logging.getLogger(__name__)
@@ -23,6 +22,7 @@ log = logging.getLogger(__name__)
 @dataclass(slots=True)
 class PruneStats:
     "Stats for PruningService"
+
     pruned: int
     reclaimed: float
     aborted: bool = False
@@ -66,7 +66,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
             log.info("No kernels matched pruning criteria – nothing to do.")
             return PruneStats(0, 0)
 
-        reclaimed = estimate_space(self.db, hashes, delete_ir_only)
+        reclaimed = self.db.estimate_space(hashes, IR_EXTS)
         if not auto_confirm and not self._confirm(
             len(hashes), reclaimed, delete_ir_only
         ):
