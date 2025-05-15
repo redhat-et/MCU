@@ -293,9 +293,9 @@ def prune(  # pylint: disable=too-many-arguments
             return
 
         if not full:
-            rich.print(f"[green]Pruned IRs of {stats.pruned} kernel(s);.[/green]")
+            rich.print(f"[green]Pruned IRs of {stats.pruned} kernel(s).[/green]")
         else:
-            rich.print(f"[green]Pruned fully {stats.pruned} kernel(s);.[/green]")
+            rich.print(f"[green]Pruned fully {stats.pruned} kernel(s).[/green]")
     except Exception as exc:  # pylint: disable=broad-exception-caught
         rich.print(f"[red]Prune failed: {exc}[/red]")
         log.exception("Prune command failed")

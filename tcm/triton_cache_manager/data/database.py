@@ -266,7 +266,7 @@ class Database:
                 "Found %s sets of duplicate kernels "
                 "(grouped by name, JSON metadata identical or "
                 "differs only in internal 'hash' field).",
-                {len(final_duplicate_groups)},
+                len(final_duplicate_groups),
             )
             return final_duplicate_groups
 
