@@ -215,9 +215,10 @@ def search(
                     f"[yellow]Warning: Error closing database connection: {e_close}[/yellow]"
                 )
 
+
 # pylint: disable=too-many-positional-arguments
 @app.command()
-def prune(# pylint: disable=too-many-arguments
+def prune(  # pylint: disable=too-many-arguments
     name: Optional[str] = typer.Option(
         None, "--name", "-n", help="Filter by kernel name (exact match)."
     ),
@@ -240,6 +241,11 @@ def prune(# pylint: disable=too-many-arguments
     full: bool = typer.Option(
         False, "--full", help="Remove the entire kernel directory."
     ),
+    deduplicate: bool = typer.Option(
+        False,
+        "--deduplicate",
+        help="Delete older duplicate kernels, keeping only the newest of each set.",
+    ),
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
 ):
     """
@@ -250,24 +256,34 @@ def prune(# pylint: disable=too-many-arguments
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
         return
 
-    older_younger = get_older_younger(older_than, younger_than)
-
-    criteria = SearchCriteria(
-        name=name,
-        backend=backend,
-        arch=arch,
-        older_than_timestamp=older_younger[0],
-        younger_than_timestamp=older_younger[1],
-    )
-
     svc = None
     try:
         svc = PruningService()
-        stats: PruneStats | None = svc.prune(
-            criteria,
-            delete_ir_only=not full,
-            auto_confirm=yes,
-        )
+        stats: Optional[PruneStats] = None
+        if deduplicate:
+            filter_options_used = [name, backend, arch, older_than, younger_than, full]
+            if any(opt is not None and opt is not False for opt in filter_options_used):
+                rich.print(
+                    "[yellow]Warning: Filter options and --full are ignored"
+                    + "when --deduplicate is used.[/yellow]"
+                )
+            rich.print("Starting kernel deduplication process...")
+            stats = svc.deduplicate_kernels(auto_confirm=yes)
+        else:
+            older_younger = get_older_younger(older_than, younger_than)
+
+            criteria = SearchCriteria(
+                name=name,
+                backend=backend,
+                arch=arch,
+                older_than_timestamp=older_younger[0],
+                younger_than_timestamp=older_younger[1],
+            )
+            stats = svc.prune(
+                criteria,
+                delete_ir_only=not full,
+                auto_confirm=yes,
+            )
 
         if stats is None:
             rich.print("[yellow]Prune cancelled by user.[/yellow]")

@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Any, Tuple, Dict
 from dataclasses import dataclass
 from rich.prompt import Confirm
 from ..data.cache_repo import CacheRepository
@@ -93,6 +93,137 @@ class PruningService:  # pylint: disable=too-few-public-methods
         return Confirm.ask(
             f"[yellow]About to {mode} prune {n} kernel(s), freeing {human}. Continue?[/yellow]"
         )
+
+    def _get_hashes_and_estimated_space_for_deduplication(
+        self, duplicate_groups: List[List[Dict[str, Any]]]
+    ) -> Tuple[List[str], int]:
+        """
+        Identifies hashes of older duplicate kernels to prune and estimates reclaimable space.
+
+        Args:
+            duplicate_groups: List of groups, where each group is a list of kernel dicts
+                              (sorted oldest to newest).
+
+        Returns:
+            A tuple containing:
+                - List of kernel hashes to prune.
+                - Estimated total bytes to be reclaimed.
+        """
+        kernels_to_prune_hashes: List[str] = []
+        total_reclaimed_bytes_estimate = 0
+
+        kernel_info_map: Dict[str, Dict[str, Any]] = {}
+        for group in duplicate_groups:
+            for kernel_dict in group:
+                kernel_info_map[kernel_dict["hash"]] = kernel_dict
+
+        for group in duplicate_groups:
+            log.debug("Processing duplicate group: %s", [k.get("hash") for k in group])
+            if len(group) > 1:
+                for kernel_to_prune_dict in group[:-1]:
+                    h_hash = kernel_to_prune_dict["hash"]
+                    kernels_to_prune_hashes.append(h_hash)
+                    total_reclaimed_bytes_estimate += kernel_to_prune_dict.get(
+                        "total_size", 0
+                    )
+
+        return kernels_to_prune_hashes, total_reclaimed_bytes_estimate
+
+    def _perform_deduplication_deletions(
+        self, session, hashes_to_delete: List[str]
+    ) -> Tuple[int, int]:
+        """
+        Deletes the specified kernels from disk and DB.
+
+        Args:
+            session: The SQLAlchemy session.
+            hashes_to_delete: List of kernel hashes to delete.
+
+        Returns:
+            A tuple containing:
+                - Total bytes freed.
+                - Count of kernels successfully pruned.
+        """
+        freed_bytes_total = 0
+        pruned_count = 0
+        for h_to_delete in hashes_to_delete:
+            try:
+                freed_for_kernel = self._delete_kernel(
+                    h_to_delete, session, ir_only=False
+                )
+                freed_bytes_total += freed_for_kernel
+                pruned_count += 1
+            except FileNotFoundError as e_fnf:
+                log.error(
+                    "Kernel directory or file not found for %s during deduplication: %s. ",
+                    h_to_delete,
+                    e_fnf,
+                    exc_info=True,
+                )
+            except PermissionError as e_perm:
+                log.error(
+                    "Permission denied while trying to delete kernel %s during deduplication: %s.",
+                    h_to_delete,
+                    e_perm,
+                    exc_info=True,
+                )
+            except OSError as e_os:
+                log.error(
+                    "OS error while deleting kernel %s during deduplication: %s.",
+                    h_to_delete,
+                    e_os,
+                    exc_info=True,
+                )
+            # pylint: disable=broad-exception-caught
+            except Exception as e_del:
+                log.error(
+                    "Failed to delete kernel %s during deduplication: %s",
+                    h_to_delete,
+                    e_del,
+                    exc_info=True,
+                )
+        return freed_bytes_total, pruned_count
+
+    def deduplicate_kernels(self, auto_confirm: bool = False) -> Optional[PruneStats]:
+        """
+        Finds duplicate kernels and prunes the older ones, keeping only the
+        newest instance of each set. Kernels are fully deleted.
+        """
+        duplicate_groups = self.db.find_duplicates()
+        if not duplicate_groups:
+            log.info("No duplicate kernels found – nothing to do.")
+            return PruneStats(pruned=0, reclaimed=0.0, empty=True)
+
+        kernels_to_prune_hashes, total_reclaimed_bytes_estimate = (
+            self._get_hashes_and_estimated_space_for_deduplication(duplicate_groups)
+        )
+
+        if not kernels_to_prune_hashes:
+            log.info("No older duplicate kernel instances to prune after analysis.")
+            return PruneStats(pruned=0, reclaimed=0.0, empty=True)
+
+        num_kernels_to_prune = len(kernels_to_prune_hashes)
+        if not auto_confirm:
+            if not self._confirm(
+                num_kernels_to_prune, total_reclaimed_bytes_estimate, ir_only=False
+            ):
+                log.info("Deduplication prune cancelled by user.")
+                return PruneStats(pruned=0, reclaimed=0.0, aborted=True)
+
+        freed_bytes_total = 0
+        pruned_count = 0
+        with self.db.get_session() as session:
+            freed_bytes_total, pruned_count = self._perform_deduplication_deletions(
+                session, kernels_to_prune_hashes
+            )
+            session.commit()
+        reclaimed_mb = freed_bytes_total / (1024 * 1024)
+        log.info(
+            "Deduplication pruned %d older kernel instance(s), reclaiming %.1f MB.",
+            pruned_count,
+            reclaimed_mb,
+        )
+        return PruneStats(pruned=pruned_count, reclaimed=reclaimed_mb)
 
     def _delete_kernel(self, h: str, session, ir_only: bool) -> int:
         """
