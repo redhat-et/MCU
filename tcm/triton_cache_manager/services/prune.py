@@ -49,9 +49,9 @@ class PruningService:  # pylint: disable=too-few-public-methods
 
         Args:
             criteria:
-                Filters to select which kernels are affected (same shape as `tcm list`).
+                Filters to select which kernels are affected.
             delete_ir_only:
-                True  – partial prune (keep CUBIN + metadata).
+                True  – partial prune (keep binary + metadata).
                 False – full prune (remove whole dir & DB row).
             auto_confirm:
                 Skip the interactive - Are you sure? - prompt (used by `-y`).
