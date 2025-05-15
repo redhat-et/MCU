@@ -15,7 +15,7 @@ class RocmPlugin(KernelBackendPlugin):
     Handles ROCm-specific file types like AMDGCN and HSACO.
     """
 
-    backend = "rocm"
+    backend = "hip"
 
     def relevant_extensions(self):
         """

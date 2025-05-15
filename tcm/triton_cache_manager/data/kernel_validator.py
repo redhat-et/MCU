@@ -20,7 +20,7 @@ class KernelTarget(BaseModel):
     """Validation model for the 'target' field of kernel metadata."""
 
     backend: str = ""
-    arch: int = 0
+    arch: int | str = 0
     warp_size: int = 0
 
 
@@ -91,8 +91,6 @@ def is_kernel_related(data: Dict[str, Any]) -> bool:
         "num_stages",
         "debug",
         "shared",
-        "tmem_size",
-        "maxnreg",
         "cluster_dims",
     ]
 
