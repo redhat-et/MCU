@@ -20,6 +20,8 @@ from triton_cache_manager.data.database import Database
 logging.disable(logging.CRITICAL)
 
 
+# pylint: disable=too-many-arguments
+# pylint: disable=too-many-positional-arguments
 def create_mock_kernel_data(
     hash_val: str,
     name: str,
@@ -40,6 +42,9 @@ def create_mock_kernel_data(
     }
 
 
+# pylint: disable=too-many-arguments
+# pylint: disable=too-many-positional-arguments
+# pylint: disable=too-many-instance-attributes
 class TestPruningService(unittest.TestCase):
     """Test suite for the PruningService."""
 
