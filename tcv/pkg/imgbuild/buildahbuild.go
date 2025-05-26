@@ -23,14 +23,19 @@ import (
 type buildahBuilder struct{}
 
 func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
-	var allMetadata []CacheMetadataWithDummy
+	var allMetadata []CacheMetadata
 
-	// Export cacheDir into temporary dir
-	tmpDir, err := os.MkdirTemp("", constants.BuildahCacheDirPrefix)
+	tmpCacheDir, err := os.MkdirTemp("", constants.BuildahCacheDirPrefix)
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpCacheDir)
+
+	tmpManifestDir, err := os.MkdirTemp("", constants.BuildahManifestDirPrefix)
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpManifestDir)
 
 	jsonFiles, err := preflightcheck.FindAllTritonCacheJSON(cacheDir)
 	if err != nil {
@@ -51,7 +56,7 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 			return fmt.Errorf("failed to calculate dummy triton key for %s: %w", jsonFile, ret)
 		}
 
-		allMetadata = append(allMetadata, CacheMetadataWithDummy{
+		allMetadata = append(allMetadata, CacheMetadata{
 			Hash:       data.Hash,
 			Backend:    data.Target.Backend,
 			Arch:       preflightcheck.ConvertArchToString(data.Target.Arch),
@@ -64,13 +69,24 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 		})
 	}
 
-	err = copyDir(cacheDir, tmpDir)
+	manifestPath := filepath.Join(tmpManifestDir, "manifest.json")
+	err = writeCacheManifest(manifestPath, allMetadata)
+	if err != nil {
+		return fmt.Errorf("failed to write manifest: %w", err)
+	}
+
+	err = copyDir(cacheDir, tmpCacheDir)
 	if err != nil {
 		return fmt.Errorf("error copying contents using cp: %v", err)
 	}
-	logging.Debugf("%s", tmpDir)
+	logging.Debugf("%s", tmpCacheDir)
 
-	filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
+	totalSize, err := getTotalDirSize(tmpCacheDir)
+	if err != nil {
+		return fmt.Errorf("failed to compute total cache size: %w", err)
+	}
+
+	filepath.Walk(tmpCacheDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -129,16 +145,28 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 		}
 	}()
 
-	metadataJSON, err := json.Marshal(allMetadata)
+	summary, err := BuildTritonSummary(allMetadata)
 	if err != nil {
-		return fmt.Errorf("failed to marshal metadata for labels: %w", err)
+		return fmt.Errorf("failed to build image summary: %w", err)
+	}
+
+	summaryJSON, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("failed to marshal summary for label: %w", err)
 	}
 
 	builder.SetLabel("cache.triton.image/variant", "multi")
 	builder.SetLabel("cache.triton.image/entry-count", strconv.Itoa(len(allMetadata)))
-	builder.SetLabel("cache.triton.image/metadata", string(metadataJSON))
+	builder.SetLabel("cache.triton.image/summary", string(summaryJSON))
+	builder.SetLabel("cache.triton.image/cache-size-bytes", strconv.FormatInt(totalSize, 10))
 	addOptions := buildah.AddAndCopyOptions{}
-	err = builder.Add("./io.triton.cache/", false, addOptions, tmpDir+"/.")
+
+	err = builder.Add("./io.triton.manifest/", false, addOptions, tmpManifestDir+"/.")
+	if err != nil {
+		return fmt.Errorf("error adding manifest %s to builder: %v", tmpManifestDir, err)
+	}
+
+	err = builder.Add("./io.triton.cache/", false, addOptions, tmpCacheDir+"/.")
 	if err != nil {
 		return fmt.Errorf("error adding %s to builder: %v", cacheDir, err)
 	}
@@ -153,7 +181,7 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 	}
 
 	logging.Infof("Image built! %s\n", imageID)
-	ret := utils.CleanupTmpDirs()
+	ret := utils.CleanupTCVDirs()
 	if ret != nil {
 		return fmt.Errorf("could not cleanup tmp dirs %v", ret)
 	}

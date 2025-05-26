@@ -30,7 +30,6 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/hashicorp/go-multierror"
 	"github.com/redhat-et/TKDK/tcv/pkg/accelerator"
 	"github.com/redhat-et/TKDK/tcv/pkg/config"
 	"github.com/redhat-et/TKDK/tcv/pkg/constants"
@@ -148,66 +147,61 @@ func (i *imgFetcher) FetchImg(imgName string) (v1.Image, error) {
 }
 
 func (e *tritonCacheExtractor) ExtractCache(img v1.Image) error {
-	// Handle Docker, OCI, and custom formats here.
+	var extractedDirs []string
+
+	// Fetch image manifest
 	manifest, err := img.Manifest()
 	if err != nil {
 		return fmt.Errorf("failed to fetch manifest: %w", err)
 	}
 
-	if ret := preflightcheck.CompareTritonCacheImageToGPU(img, e.acc); ret != nil {
-		return fmt.Errorf("***** the gpu and triton cache are incompatible: %v **** ", ret)
+	devInfo, err := preflightcheck.GetAllGPUInfo(e.acc)
+	if err != nil {
+		return fmt.Errorf("failed to get GPU info: %w", err)
 	}
 
-	if manifest.MediaType == types.DockerManifestSchema2 {
-		// This case, assume we have docker images with "application/vnd.docker.distribution.manifest.v2+json"
-		// as the manifest media type. Note that the media type of manifest is Docker specific and
-		// all OCI images would have an empty string in .MediaType field.
+	// Summary check first (labels only)
+	if err := preflightcheck.CompareTritonSummaryLabelToGPU(img, devInfo); err != nil {
+		return fmt.Errorf("summary check failed: %w", err)
+	}
 
-		ret := extractDockerImg(img)
-		if ret != nil {
-			return fmt.Errorf("could not extract the Triton Cache from the container image %v", err)
+	// Always cleanup temp dirs at the end
+	defer func() {
+		if err := utils.CleanupTCVDirs(); err != nil {
+			logging.Warnf("cleanup failed: %v", err)
 		}
+	}()
 
-		ret = utils.CleanupTmpDirs()
-		if ret != nil {
-			return fmt.Errorf("could not cleanup tmp dirs %v", ret)
+	var extractErr error
+
+	switch manifest.MediaType {
+	case types.DockerManifestSchema2:
+		extractedDirs, extractErr = extractDockerImg(img)
+	default:
+		// Try to parse it as the "compat" variant image with a single "application/vnd.oci.image.layer.v1.tar+gzip" layer.
+		extractedDirs, extractErr = extractOCIStandardImg(img)
+		if extractErr != nil {
+			// Otherwise, try to parse it as the *oci* variant image with custom artifact media types.
+			extractedDirs, extractErr = extractOCIArtifactImg(img)
 		}
-
-		return nil
 	}
 
-	// We try to parse it as the "compat" variant image with a single "application/vnd.oci.image.layer.v1.tar+gzip" layer.
-	errCompat := extractOCIStandardImg(img)
-	if errCompat == nil {
-		ret := utils.CleanupTmpDirs()
-		if ret != nil {
-			return fmt.Errorf("could not cleanup tmp dirs %v", ret)
+	if extractErr != nil {
+		return fmt.Errorf("could not extract Triton Cache: %w", extractErr)
+	}
+
+	// Full manifest compatibility check (after extraction)
+	manifestPath := filepath.Join(constants.TCVManifestDir, constants.ManifestFileName)
+	if err := preflightcheck.CompareTritonCacheManifestToGPU(manifestPath, devInfo); err != nil {
+		for _, dir := range extractedDirs {
+			if err = os.RemoveAll(dir); err != nil {
+				logging.Warnf("Failed to clean up extracted kernel dir %s: %v", dir, err)
+			}
 		}
-		return nil
+		return fmt.Errorf("manifest check failed: %w", err)
 	}
 
-	// Otherwise, we try to parse it as the *oci* variant image with custom artifact media types.
-	errOCI := extractOCIArtifactImg(img)
-	if errOCI == nil {
-		ret := utils.CleanupTmpDirs()
-		if ret != nil {
-			return fmt.Errorf("could not cleanup tmp dirs %v", ret)
-		}
-		return nil
-	}
-
-	ret := utils.CleanupTmpDirs()
-	if ret != nil {
-		return fmt.Errorf("could not cleanup tmp dirs %v", ret)
-	}
-
-	// We failed to parse the image in any format, so wrap the errors and return.
-	return fmt.Errorf("the given image is in invalid format as an OCI image: %v",
-		multierror.Append(err,
-			fmt.Errorf("could not parse as compat variant: %v", errCompat),
-			fmt.Errorf("could not parse as oci variant: %v", errOCI),
-		),
-	)
+	return nil
 }
 
 func (i *imgMgr) FetchAndExtractCache(imgName string) error {
@@ -226,15 +220,15 @@ func (i *imgMgr) FetchAndExtractCache(imgName string) error {
 
 // extractOCIArtifactImg extracts the triton cache from the
 // *oci* variant Triton Kernel Cache image:  //TODO ADD URL
-func extractOCIArtifactImg(img v1.Image) error {
+func extractOCIArtifactImg(img v1.Image) ([]string, error) {
 	layers, err := img.Layers()
 	if err != nil {
-		return fmt.Errorf("could not fetch layers: %v", err)
+		return nil, fmt.Errorf("could not fetch layers: %v", err)
 	}
 
 	// The image must be single-layered.
 	if len(layers) != 1 {
-		return fmt.Errorf("number of layers must be 1 but got %d", len(layers))
+		return nil, fmt.Errorf("number of layers must be 1 but got %d", len(layers))
 	}
 
 	// The layer type of the Triton cache itself in *oci* variant.
@@ -245,7 +239,7 @@ func extractOCIArtifactImg(img v1.Image) error {
 	for _, l := range layers {
 		mt, ret := l.MediaType()
 		if ret != nil {
-			return fmt.Errorf("could not retrieve the media type: %v", ret)
+			return nil, fmt.Errorf("could not retrieve the media type: %v", ret)
 		}
 		if mt == cacheLayerMediaType {
 			layer = l
@@ -254,7 +248,7 @@ func extractOCIArtifactImg(img v1.Image) error {
 	}
 
 	if layer == nil {
-		return fmt.Errorf("could not find the layer of type %s", cacheLayerMediaType)
+		return nil, fmt.Errorf("could not find the layer of type %s", cacheLayerMediaType)
 	}
 
 	// Somehow go-container registry recognizes custom artifact layers as compressed ones,
@@ -263,144 +257,166 @@ func extractOCIArtifactImg(img v1.Image) error {
 	// since internally it tries to umcompress it as gzipped blob.
 	r, err := layer.Compressed()
 	if err != nil {
-		return fmt.Errorf("could not get layer content: %v", err)
+		return nil, fmt.Errorf("could not get layer content: %v", err)
 	}
 	defer r.Close()
 
-	err = extractTritonCacheDirectory(r)
+	dirs, err := extractTritonCacheDirectory(r)
 	if err != nil {
-		return fmt.Errorf("could not extract Triton Kernel Cache: %v", err)
+		return nil, fmt.Errorf("could not extract Triton Kernel Cache: %v", err)
 	}
-	return nil
+	return dirs, nil
 }
 
 // extractDockerImg extracts the Triton Kernel Cache from the
 // *compat* variant GPU Kernel Cache/Binary image with the standard Docker
 // media type: application/vnd.docker.image.rootfs.diff.tar.gzip.
 // https://github.com/maryamtahhan/tcv/blob/main/spec-compat.md
-func extractDockerImg(img v1.Image) error {
+func extractDockerImg(img v1.Image) ([]string, error) {
 	layers, err := img.Layers()
 	if err != nil {
-		return fmt.Errorf("could not fetch layers: %v", err)
+		return nil, fmt.Errorf("could not fetch layers: %v", err)
 	}
 
 	// The image must have at least one layer.
 	if len(layers) == 0 {
-		return errors.New("number of layers must be greater than zero")
+		return nil, errors.New("number of layers must be greater than zero")
 	}
 
 	layer := layers[len(layers)-1]
 	mt, err := layer.MediaType()
 	if err != nil {
-		return fmt.Errorf("could not get media type: %v", err)
+		return nil, fmt.Errorf("could not get media type: %v", err)
 	}
 
 	// Media type must be application/vnd.docker.image.rootfs.diff.tar.gzip.
 	if mt != types.DockerLayer {
-		return fmt.Errorf("invalid media type %s (expect %s)", mt, types.DockerLayer)
+		return nil, fmt.Errorf("invalid media type %s (expect %s)", mt, types.DockerLayer)
 	}
 
 	r, err := layer.Compressed()
 	if err != nil {
-		return fmt.Errorf("could not get layer content: %v", err)
+		return nil, fmt.Errorf("could not get layer content: %v", err)
 	}
 	defer r.Close()
 
-	err = extractTritonCacheDirectory(r)
+	dirs, err := extractTritonCacheDirectory(r)
 	if err != nil {
-		return fmt.Errorf("could not extract Triton Kernel Cache: %v", err)
+		return nil, fmt.Errorf("could not extract Triton Kernel Cache: %v", err)
 	}
-	return nil
+	return dirs, nil
 }
 
 // extractOCIStandardImg extracts the Triton Kernel Cache from the
 // *compat* variant Triton Kernel image with the standard OCI media type: application/vnd.oci.image.layer.v1.tar+gzip.
 // https://github.com/maryamtahhan/tcv/blob/main/spec-compat.md
-func extractOCIStandardImg(img v1.Image) error {
+func extractOCIStandardImg(img v1.Image) ([]string, error) {
 	layers, err := img.Layers()
 	if err != nil {
-		return fmt.Errorf("could not fetch layers: %v", err)
+		return nil, fmt.Errorf("could not fetch layers: %v", err)
 	}
 
 	// The image must have at least one layer.
 	if len(layers) == 0 {
-		return fmt.Errorf("number of layers must be greater than zero")
+		return nil, fmt.Errorf("number of layers must be greater than zero")
 	}
 
 	layer := layers[len(layers)-1]
 	mt, err := layer.MediaType()
 	if err != nil {
-		return fmt.Errorf("could not get media type: %v", err)
+		return nil, fmt.Errorf("could not get media type: %v", err)
 	}
 
 	// Check if the layer is "application/vnd.oci.image.layer.v1.tar+gzip".
 	if types.OCILayer != mt {
-		return fmt.Errorf("invalid media type %s (expect %s)", mt, types.OCILayer)
+		return nil, fmt.Errorf("invalid media type %s (expect %s)", mt, types.OCILayer)
 	}
 
 	r, err := layer.Compressed()
 	if err != nil {
-		return fmt.Errorf("could not get layer content: %v", err)
+		return nil, fmt.Errorf("could not get layer content: %v", err)
 	}
 	defer r.Close()
 
-	err = extractTritonCacheDirectory(r)
+	dirs, err := extractTritonCacheDirectory(r)
 	if err != nil {
-		return fmt.Errorf("could not extract Triton Kernel Cache: %v", err)
+		return nil, fmt.Errorf("could not extract Triton Kernel Cache: %v", err)
 	}
-	return nil
+	return dirs, nil
 }
 
-// Extracts the triton named "io.triton.cache" in a given reader for tar.gz.
+// Extracts the triton cache and manifest in a given reader for tar.gz.
 // This is only used for *compat* variant.
-func extractTritonCacheDirectory(r io.Reader) error {
+func extractTritonCacheDirectory(r io.Reader) ([]string, error) {
+	var extractedDirs []string
 	gr, err := gzip.NewReader(r)
 	if err != nil {
-		return fmt.Errorf("failed to parse layer as tar.gz: %v", err)
+		return nil, fmt.Errorf("failed to parse layer as tar.gz: %v", err)
 	}
+	defer gr.Close()
 
 	tr := tar.NewReader(gr)
-	// var cacheDirs []string  TODO RE-ENABLE
+
+	// Ensure top-level output directories exist once
+	if err = os.MkdirAll(constants.TritonCacheDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create cache directory: %w", err)
+	}
+	if err = os.MkdirAll(constants.TCVManifestDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create manifest directory: %w", err)
+	}
 
 	for {
 		h, ret := tr.Next()
 		if ret == io.EOF {
-			break // End of archive
-		} else if err != nil {
-			return fmt.Errorf("error reading tar archive: %w", ret)
+			break
+		} else if ret != nil {
+			return nil, fmt.Errorf("error reading tar archive: %w", ret)
 		}
 
-		// Skip files not in the Triton cache directory
-		if !strings.HasPrefix(h.Name, constants.TritonCacheDirName) {
+		// Skip irrelevant files
+		if !strings.HasPrefix(h.Name, constants.TritonCacheDirName) &&
+			!strings.HasPrefix(h.Name, "io.triton.manifest/manifest.json") {
 			continue
 		}
 
-		// Track Triton cache directories
-		relativePath := strings.TrimPrefix(h.Name, constants.TritonCacheDirName)
-		if relativePath == "" {
-			// cacheDirs = append(cacheDirs, h.Name) // Store the directory name TODO RE-ENABLE
-			continue
+		// Determine output path
+		var filePath string
+		if strings.HasPrefix(h.Name, constants.TritonCacheDirName) {
+			rel := strings.TrimPrefix(h.Name, constants.TritonCacheDirName)
+			if rel == "" {
+				continue
+			}
+			filePath = filepath.Join(constants.TritonCacheDir, rel)
+
+			topDir := filepath.Join(constants.TritonCacheDir, filepath.Dir(rel))
+			if !stringInSlice(topDir, extractedDirs) {
+				extractedDirs = append(extractedDirs, topDir)
+			}
+		} else if strings.HasPrefix(h.Name, "io.triton.manifest/") {
+			rel := strings.TrimPrefix(h.Name, "io.triton.manifest/")
+			filePath = filepath.Join(constants.TCVManifestDir, rel)
 		}
 
-		filePath := filepath.Join(constants.TritonCacheDir, relativePath)
+		// Ensure parent dir exists
+		if err = os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			return nil, fmt.Errorf("failed to create directory for %s: %w", filePath, err)
+		}
 
 		switch h.Typeflag {
 		case tar.TypeDir:
 			if err = os.MkdirAll(filePath, os.FileMode(h.Mode)); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", filePath, err)
+				return nil, fmt.Errorf("failed to create directory %s: %w", filePath, err)
 			}
-			// cacheDirs = append(cacheDirs, filePath) // Store created directory TODO RE-ENABLE
-
 		case tar.TypeReg:
 			if err = writeFile(filePath, tr, os.FileMode(h.Mode)); err != nil {
-				return fmt.Errorf("failed to create file %s: %w", filePath, err)
+				return nil, fmt.Errorf("failed to write file %s: %w", filePath, err)
 			}
-
 		default:
-			logging.Debugf("Skipping unsupported type: %c in file %s\n", h.Typeflag, h.Name)
+			logging.Debugf("Skipping unsupported type: %c in file %s", h.Typeflag, h.Name)
 		}
 	}
 
+	// Fix up cache JSONs
 	err = filepath.Walk(constants.TritonCacheDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -413,10 +429,10 @@ func extractTritonCacheDirectory(r io.Reader) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("error restoring full paths in cache JSON files: %w", err)
+		return nil, fmt.Errorf("error restoring full paths in cache JSON files: %w", err)
 	}
 
-	return nil
+	return extractedDirs, nil
 }
 
 func writeFile(filePath string, tarReader io.Reader, mode os.FileMode) error {
@@ -440,4 +456,13 @@ func writeFile(filePath string, tarReader io.Reader, mode os.FileMode) error {
 	}
 
 	return nil
+}
+
+func stringInSlice(str string, list []string) bool {
+	for _, s := range list {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }
