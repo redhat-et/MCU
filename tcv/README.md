@@ -61,14 +61,14 @@ To extract the Triton Cache for the
 tutorial from [Triton](https://github.com/triton-lang/triton), run the following:
 
 ```bash
-./_output/bin/linux_amd64/tcv -e -i quay.io/mtahhan/triton-cache:01-vector-add-latest
+./_output/bin/linux_amd64/tcv -e -i quay.io/mtahhan/01-vector-add-cache:latest
 Img fetched successfully!!!!!!!!
 Img Digest: sha256:b6d7703261642df0bf95175a64a01548eb4baf265c5755c30ede0fea03cd5d97
 Img Size: 525
 bash-4.4#
 ```
 
-This will extract the cache directory from the `quay.io/mtahhan/triton-cache:01-vector-add-latest`
+This will extract the cache directory from the `quay.io/mtahhan/01-vector-add-cache:latest`
 container image and copy it to  `~/.triton/cache/`.
 
 To Create an OCI image for a Triton Cache using docker run the following:

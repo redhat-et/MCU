@@ -40,7 +40,8 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 	wd, _ := os.Getwd()
 	dockerfilePath := fmt.Sprintf("%s/Dockerfile", wd)
 	tmpCacheDir := fmt.Sprintf("%s/io.triton.cache", wd)
-	var allMetadata []CacheMetadataWithDummy
+	tmpManifestDir := fmt.Sprintf("%s/io.triton.manifest", wd)
+	var allMetadata []CacheMetadata
 
 	// Copy cache contents into a directory within build context
 	if err := os.MkdirAll(tmpCacheDir, 0755); err != nil {
@@ -51,6 +52,11 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 	err := copyDir(cacheDir+"/.", tmpCacheDir)
 	if err != nil {
 		return fmt.Errorf("failed to copy cacheDir into build context: %w", err)
+	}
+
+	totalSize, err := getTotalDirSize(tmpCacheDir)
+	if err != nil {
+		return fmt.Errorf("failed to compute total cache size: %w", err)
 	}
 
 	jsonFiles, err := preflightcheck.FindAllTritonCacheJSON(tmpCacheDir)
@@ -72,7 +78,7 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 			return fmt.Errorf("failed to calculate dummy triton key for %s: %w", jsonFile, ret)
 		}
 
-		allMetadata = append(allMetadata, CacheMetadataWithDummy{
+		allMetadata = append(allMetadata, CacheMetadata{
 			Hash:       data.Hash,
 			Backend:    data.Target.Backend,
 			Arch:       preflightcheck.ConvertArchToString(data.Target.Arch),
@@ -97,7 +103,13 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 		return nil
 	})
 
-	err = generateDockerfile(imageName, tmpCacheDir, dockerfilePath)
+	manifestPath := filepath.Join(tmpManifestDir, "manifest.json")
+	err = writeCacheManifest(manifestPath, allMetadata)
+	if err != nil {
+		return fmt.Errorf("failed to write manifest: %w", err)
+	}
+
+	err = generateDockerfile(imageName, tmpCacheDir, tmpManifestDir, dockerfilePath)
 	if err != nil {
 		return fmt.Errorf("failed to generate Dockerfile: %w", err)
 	}
@@ -118,15 +130,21 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 	}
 	defer tar.Close()
 
-	metadataJSON, err := json.Marshal(allMetadata)
+	summary, err := BuildTritonSummary(allMetadata)
 	if err != nil {
-		return fmt.Errorf("failed to marshal cache metadata: %w", err)
+		return fmt.Errorf("failed to build image summary: %w", err)
+	}
+
+	summaryJSON, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("failed to marshal summary for label: %w", err)
 	}
 
 	labels := map[string]string{
-		"cache.triton.image/metadata":    string(metadataJSON),
-		"cache.triton.image/entry-count": strconv.Itoa(len(allMetadata)),
-		"cache.triton.image/variant":     "multi",
+		"cache.triton.image/summary":          string(summaryJSON),
+		"cache.triton.image/entry-count":      strconv.Itoa(len(allMetadata)),
+		"cache.triton.image/variant":          "multi",
+		"cache.triton.image/cache-size-bytes": strconv.FormatInt(totalSize, 10),
 	}
 	buildOptions := types.ImageBuildOptions{
 		Dockerfile: "Dockerfile",
@@ -153,7 +171,7 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 		return fmt.Errorf("error tagging image: %w", err)
 	}
 
-	ret := utils.CleanupTmpDirs()
+	ret := utils.CleanupTCVDirs()
 	if ret != nil {
 		return fmt.Errorf("could not cleanup tmp dirs %v", ret)
 	}
