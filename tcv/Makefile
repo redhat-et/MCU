@@ -104,3 +104,15 @@ lint:
 	golangci-lint run ./...
 	@echo
 	@echo
+
+##@ Installation
+.PHONY: install
+install: ## Install tcv binary to $(GOBIN)
+	@echo "Installing tcv to $(GOBIN)"
+	@install -d "$(GOBIN)"
+	@install "$(BUILD_BINDIR)/$(GOOS)_$(GOARCH)/tcv" "$(GOBIN)/tcv"
+
+.PHONY: uninstall
+uninstall: ## Uninstall tcv binary from $(GOBIN)
+	@echo "Uninstalling tcv from $(GOBIN)"
+	@rm -f "$(GOBIN)/tcv"
