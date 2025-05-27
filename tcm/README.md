@@ -1,5 +1,7 @@
 # Triton Cache Manager (TCM)
 
+<img src="../logo/tcm.png" alt="tcm" width="20%" height="auto">
+
 A lightweight CLI for **indexing, searching, and more for Triton GPU-kernel caches**.
 
 ---

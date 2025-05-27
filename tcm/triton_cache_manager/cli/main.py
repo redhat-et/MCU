@@ -5,7 +5,6 @@ This module provides command-line commands to interact with the Triton kernel ca
 """
 
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import typer
@@ -14,8 +13,13 @@ from rich.table import Table
 from ..services.index import IndexService
 from ..utils.logger import configure_logging
 from ..utils.paths import get_db_path
-from ..utils.utils import format_size, parse_duration, mod_time_handle
+from ..utils.utils import (
+    format_size,
+    mod_time_handle,
+    get_older_younger,
+)
 from ..models.criteria import SearchCriteria
+from ..services.prune import PruningService, PruneStats
 
 log = logging.getLogger(__name__)
 app = typer.Typer(help="Triton Kernel Cache Manager CLI")
@@ -179,39 +183,14 @@ def search(
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
         return
 
-    older_than_timestamp: Optional[float] = None
-    younger_than_timestamp: Optional[float] = None
-    now = datetime.now(timezone.utc)
-
-    try:
-        if older_than:
-            delta = parse_duration(older_than)
-            if delta:
-                older_than_timestamp = (now - delta).timestamp()
-        if younger_than:
-            delta = parse_duration(younger_than)
-            if delta:
-                younger_than_timestamp = (now - delta).timestamp()
-    except typer.Exit:
-        return
-
-    if (
-        older_than_timestamp is not None
-        and younger_than_timestamp is not None
-        and older_than_timestamp < younger_than_timestamp
-    ):
-        rich.print(
-            "[red]Error: --older-than timestamp cannot be more recent than"
-            "--younger-than timestamp.[/red]"
-        )
-        return
+    older_younger = get_older_younger(older_than, younger_than)
 
     criteria = SearchCriteria(
         name=name,
         backend=backend,
         arch=arch,
-        older_than_timestamp=older_than_timestamp,
-        younger_than_timestamp=younger_than_timestamp,
+        older_than_timestamp=older_younger[0],
+        younger_than_timestamp=older_younger[1],
     )
 
     svc = None
@@ -235,6 +214,94 @@ def search(
                 rich.print(
                     f"[yellow]Warning: Error closing database connection: {e_close}[/yellow]"
                 )
+
+
+# pylint: disable=too-many-positional-arguments
+@app.command()
+def prune(  # pylint: disable=too-many-arguments
+    name: Optional[str] = typer.Option(
+        None, "--name", "-n", help="Filter by kernel name (exact match)."
+    ),
+    backend: Optional[str] = typer.Option(
+        None, "--backend", "-b", help="Filter by backend (e.g., 'cuda', 'rocm')."
+    ),
+    arch: Optional[str] = typer.Option(
+        None, "--arch", "-a", help="Filter by architecture (e.g., '120', 'gfx90a')."
+    ),
+    older_than: Optional[str] = typer.Option(
+        None,
+        "--older-than",
+        help="Show kernels older than specified duration (e.g., '7d', '2w').",
+    ),
+    younger_than: Optional[str] = typer.Option(
+        None,
+        "--younger-than",
+        help="Show kernels younger than specified duration (e.g., '14d', '1w').",
+    ),
+    full: bool = typer.Option(
+        False, "--full", help="Remove the entire kernel directory."
+    ),
+    deduplicate: bool = typer.Option(
+        False,
+        "--deduplicate",
+        help="Delete older duplicate kernels, keeping only the newest of each set.",
+    ),
+    yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
+):
+    """
+    Delete intermediate‑representation files (default) or whole kernel
+    directories that satisfy the given filters.
+    """
+    if not _cache_db_exists():
+        rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
+        return
+
+    svc = None
+    try:
+        svc = PruningService()
+        stats: Optional[PruneStats] = None
+        if deduplicate:
+            filter_options_used = [name, backend, arch, older_than, younger_than, full]
+            if any(opt is not None and opt is not False for opt in filter_options_used):
+                rich.print(
+                    "[yellow]Warning: Filter options and --full are ignored"
+                    + "when --deduplicate is used.[/yellow]"
+                )
+            rich.print("Starting kernel deduplication process...")
+            stats = svc.deduplicate_kernels(auto_confirm=yes)
+        else:
+            older_younger = get_older_younger(older_than, younger_than)
+
+            criteria = SearchCriteria(
+                name=name,
+                backend=backend,
+                arch=arch,
+                older_than_timestamp=older_younger[0],
+                younger_than_timestamp=older_younger[1],
+            )
+            stats = svc.prune(
+                criteria,
+                delete_ir_only=not full,
+                auto_confirm=yes,
+            )
+
+        if stats is None:
+            rich.print("[yellow]Prune cancelled by user.[/yellow]")
+            return
+        if stats.pruned == 0:
+            rich.print("[yellow]No kernels matched the given filters.[/yellow]")
+            return
+
+        if not full:
+            rich.print(f"[green]Pruned IRs of {stats.pruned} kernel(s).[/green]")
+        else:
+            rich.print(f"[green]Pruned fully {stats.pruned} kernel(s).[/green]")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        rich.print(f"[red]Prune failed: {exc}[/red]")
+        log.exception("Prune command failed")
+    finally:
+        if svc:
+            svc.close()
 
 
 def run():
