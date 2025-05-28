@@ -242,7 +242,6 @@ func main() {
 You can also use the TKDK client API to retrieve details about the system's
 available GPUs:
 
-
 ```go
 package main
 
