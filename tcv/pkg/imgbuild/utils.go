@@ -82,9 +82,7 @@ func BuildTritonSummary(metadata []CacheMetadata) (*preflightcheck.TritonSummary
 	}
 
 	return &preflightcheck.TritonSummary{
-		Variant:    "multi",
-		EntryCount: len(metadata),
-		Targets:    targets,
+		Targets: targets,
 	}, nil
 }
 
