@@ -70,6 +70,7 @@ func main() {
 	var extractFlag bool
 	var baremetalFlag bool
 	var logLevel string
+	var noGPUFlag bool
 
 	logging.SetReportCaller(true)
 	logging.SetFormatter(logformat.Default)
@@ -94,6 +95,10 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			config.SetEnabledBaremetal(baremetalFlag)
 			logging.Infof("baremetalFlag %v", baremetalFlag)
+			if noGPUFlag {
+				logging.Info("GPU checks disabled: running in no-GPU mode (--no-gpu)")
+			}
+			config.SetEnabledGPU(!noGPUFlag)
 			if createFlag {
 				if err := createCacheImage(imageName, cacheDirName); err != nil {
 					logging.Errorf("Error creating image: %v\n", err)
@@ -122,6 +127,7 @@ func main() {
 	rootCmd.Flags().BoolVarP(&createFlag, "create", "c", false, "Create OCI image")
 	rootCmd.Flags().BoolVarP(&extractFlag, "extract", "e", false, "Extract a Triton cache from an OCI image")
 	rootCmd.Flags().StringVarP(&logLevel, "log-level", "l", "", "Set the logging verbosity level: debug, info, warning or error")
+	rootCmd.Flags().BoolVar(&noGPUFlag, "no-gpu", false, "Allow kernel extraction without GPU present (for testing purposes)")
 
 	// Ensure the image flag is required
 	ret := rootCmd.MarkFlagRequired("image")
@@ -133,8 +139,6 @@ func main() {
 		return
 	}
 	unshare.MaybeReexecUsingUserNamespace(false)
-
-	config.SetEnabledGPU(true) // ASSUME TRUE FOR NOW
 
 	// Execute the Cobra command
 	if err := rootCmd.Execute(); err != nil {
