@@ -179,7 +179,7 @@ def search(
     ),
     cache_dir: Optional[Path] = typer.Option(
         None,
-        help="Specify the Triton cache directory to index. Uses default if not provided.    ",
+        help="Specify the Triton cache directory to index. Uses default if not provided.",
     ),
 ):
     """
@@ -255,7 +255,7 @@ def prune(  # pylint: disable=too-many-arguments
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
     cache_dir: Optional[Path] = typer.Option(
         None,
-        help="Specify the Triton cache directory to index. Uses default if not provided.    ",
+        help="Specify the Triton cache directory to index. Uses default if not provided.",
     ),
 ):
     """
