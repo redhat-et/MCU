@@ -95,7 +95,7 @@ func getTCVConfig() TCVConfig {
 
 	// GPU: default to true unless explicitly set to "false"
 	if val, exists := os.LookupEnv("ENABLE_GPU"); exists {
-		b := strings.ToLower(val) == "true"
+		b := strings.EqualFold(val, "true")
 		gpu = &b
 	} else {
 		b := true // default to true
@@ -103,7 +103,7 @@ func getTCVConfig() TCVConfig {
 	}
 
 	if val, exists := os.LookupEnv("ENABLE_BAREMETAL"); exists {
-		b := strings.ToLower(val) == "true"
+		b := strings.EqualFold(val, "true")
 		bm = &b
 	} else {
 		b := false
