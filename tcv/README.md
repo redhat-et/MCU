@@ -233,7 +233,7 @@ import (
 )
 
 func main() {
-    enableGPU := false
+    enableGPU := false // for real use case should be true... or will default to true if not set
     enableBaremetal := false
 
     err := client.ExtractCache(client.Options{
