@@ -7,9 +7,7 @@ type SummaryTargetInfo struct {
 }
 
 type TritonSummary struct {
-	Variant    string              `json:"variant"`
-	EntryCount int                 `json:"entry_count"`
-	Targets    []SummaryTargetInfo `json:"targets"`
+	Targets []SummaryTargetInfo `json:"targets"`
 }
 
 type TritonCacheData struct {

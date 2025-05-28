@@ -28,6 +28,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/redhat-et/TKDK/tcv/pkg/constants"
 	"github.com/redhat-et/TKDK/tcv/pkg/preflightcheck"
 	"github.com/redhat-et/TKDK/tcv/pkg/utils"
 	logging "github.com/sirupsen/logrus"
@@ -37,10 +38,9 @@ type dockerBuilder struct{}
 
 // Docker implementation of the ImageBuilder interface.
 func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
-	wd, _ := os.Getwd()
-	dockerfilePath := fmt.Sprintf("%s/Dockerfile", wd)
-	tmpCacheDir := fmt.Sprintf("%s/io.triton.cache", wd)
-	tmpManifestDir := fmt.Sprintf("%s/io.triton.manifest", wd)
+	dockerfilePath := fmt.Sprintf("%s/Dockerfile", constants.TCVTmpDir)
+	tmpCacheDir := fmt.Sprintf("%s/io.triton.cache", constants.TCVTmpDir)
+	tmpManifestDir := fmt.Sprintf("%s/io.triton.manifest", constants.TCVTmpDir)
 	var allMetadata []CacheMetadata
 
 	// Copy cache contents into a directory within build context
@@ -103,13 +103,18 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 		return nil
 	})
 
+	// Ensure manifest directory exists
+	if err = os.MkdirAll(tmpManifestDir, 0755); err != nil {
+		return fmt.Errorf("failed to create manifest directory: %w", err)
+	}
+
 	manifestPath := filepath.Join(tmpManifestDir, "manifest.json")
 	err = writeCacheManifest(manifestPath, allMetadata)
 	if err != nil {
 		return fmt.Errorf("failed to write manifest: %w", err)
 	}
 
-	err = generateDockerfile(imageName, tmpCacheDir, tmpManifestDir, dockerfilePath)
+	err = generateDockerfile(imageName, constants.DockerfileCacheDir, constants.DockerfileManifestDir, dockerfilePath)
 	if err != nil {
 		return fmt.Errorf("failed to generate Dockerfile: %w", err)
 	}
@@ -124,7 +129,7 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 		return fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
-	tar, err := archive.TarWithOptions(wd, &archive.TarOptions{IncludeSourceDir: false})
+	tar, err := archive.TarWithOptions(constants.TCVTmpDir, &archive.TarOptions{IncludeSourceDir: false})
 	if err != nil {
 		return fmt.Errorf("error creating tar: %w", err)
 	}
@@ -143,7 +148,6 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 	labels := map[string]string{
 		"cache.triton.image/summary":          string(summaryJSON),
 		"cache.triton.image/entry-count":      strconv.Itoa(len(allMetadata)),
-		"cache.triton.image/variant":          "multi",
 		"cache.triton.image/cache-size-bytes": strconv.FormatInt(totalSize, 10),
 	}
 	buildOptions := types.ImageBuildOptions{
