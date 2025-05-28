@@ -233,15 +233,18 @@ import (
 )
 
 func main() {
-    err := client.ExtractCache(client.Options{
-        ImageName: "quay.io/mtahhan/01-vector-add-cache:latest",
-        CacheDir:  "/tmp/testcache",
-        EnableGPU: false,
-        LogLevel:  "debug",
-        EnableBaremetal: false,
-    })
-    if err != nil {
-        panic(err)
-    }
+	enableGPU := false
+	enableBaremetal := false
+
+	err := client.ExtractCache(client.Options{
+		ImageName:       "quay.io/mtahhan/01-vector-add-cache:latest",
+		CacheDir:        "/tmp/testcache",
+		EnableGPU:       &enableGPU,
+		LogLevel:        "debug",
+		EnableBaremetal: &enableBaremetal,
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 ```
