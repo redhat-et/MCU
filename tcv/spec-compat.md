@@ -39,9 +39,9 @@ The following is an example OCI manifest of images with
 `application/vnd.oci.image.layer.v1.tar+gzip` layer media type:
 
 ```bash
-$ skopeo inspect docker://quay.io/mtahhan/triton-cache:01-vector-add-latest
+$ skopeo inspect docker://quay.io/tkm/triton-cache:01-vector-add-latest
 {
-    "Name": "quay.io/mtahhan/triton-cache",
+    "Name": "quay.io/tkm/triton-cache",
     "Digest": "sha256:6b869186b227d5819441d796a55ebed19b961a6143e5c7bbcd05d69b78f4cd29",
     "RepoTags": [
         "01-vector-add-latest"
@@ -77,9 +77,9 @@ The following is an example Docker manifest of images with
 `application/vnd.docker.image.rootfs.diff.tar.gzip` layer media type:
 
 ```bash
-$ skopeo inspect docker://quay.io/mtahhan/triton-cache:01-vector-add-latest
+$ skopeo inspect docker://quay.io/tkm/triton-cache:01-vector-add-latest
 {
-    "Name": "quay.io/mtahhan/triton-cache",
+    "Name": "quay.io/tkm/triton-cache",
     "Digest": "sha256:b6d7703261642df0bf95175a64a01548eb4baf265c5755c30ede0fea03cd5d97",
     "RepoTags": [
         "01-vector-add-latest"
@@ -120,13 +120,13 @@ We assume that you have a Triton cache that you want to package as an image.
 `buildah ... from` command.
 
 ```bash
-buildah --name quay.io/mtahhan/triton-cache:01-vector-add-latest from scratch
+buildah --name quay.io/tkm/triton-cache:01-vector-add-latest from scratch
 ```
 
 1. Next, add the annotation described above via `buildah config` command
 
 ```bash
-buildah config --annotation "module.triton.image/variant=compat" quay.io/mtahhan/triton-cache:01-vector-add-latest
+buildah config --annotation "module.triton.image/variant=compat" quay.io/tkm/triton-cache:01-vector-add-latest
 ```
 
 > Note: This step is optional. See [Annotation](#annotation) section.
@@ -135,7 +135,7 @@ buildah config --annotation "module.triton.image/variant=compat" quay.io/mtahhan
 to create the layer.
 
 ```bash
-buildah copy quay.io/mtahhan/triton-cache:01-vector-add-latest 01-vector-add-cache/ ./io.triton.cache
+buildah copy quay.io/tkm/triton-cache:01-vector-add-latest vector-add-cache/ ./io.triton.cache
 612fd1391d341bcb9f738a4d0ed6a15095e68dfc3245d8a899af3ecb4b60b8b1
 ```
 
@@ -146,7 +146,7 @@ buildah copy quay.io/mtahhan/triton-cache:01-vector-add-latest 01-vector-add-cac
 via `buildah commit` command
 
 ```bash
-buildah commit quay.io/mtahhan/triton-cache:01-vector-add-latest docker://quay.io/mtahhan/triton-cache:01-vector-add-latest
+buildah commit quay.io/tkm/triton-cache:01-vector-add-latest docker://quay.io/tkm/triton-cache:01-vector-add-latest
 ```
 
 ## Appendix 2: build a *compat* image with Docker CLI
@@ -166,7 +166,7 @@ We assume that you have a Triton cache that you want to package as an image.
 $ cat Dockerfile
 FROM scratch
 LABEL org.opencontainers.image.title=01-vector-add-latest
-COPY 01-vector-add-cache ./io.triton.cache
+COPY vector-add-cache ./io.triton.cache
 ```
 
 > NOTE: you must have exactly one `COPY` instruction in the Dockerfile
@@ -176,11 +176,11 @@ COPY 01-vector-add-cache ./io.triton.cache
 1. Then, build your image via `docker build` command
 
 ```bash
-docker build -t quay.io/mtahhan/triton-cache:01-vector-add-latest .
+docker build -t quay.io/tkm/triton-cache:01-vector-add-latest .
 ```
 
 1. Finally, push the image to your registry via `docker push` command
 
 ```bash
-docker push quay.io/mtahhan/triton-cache:01-vector-add-latest
+docker push quay.io/tkm/triton-cache:01-vector-add-latest
 ```

@@ -47,4 +47,4 @@ RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-# [ podman | docker ] build --progress=plain -t quay.io/mtahhan/tcv -f images/amd64.dockerfile .
+# [ podman | docker ] build --progress=plain -t quay.io/tkm/tcv -f images/amd64.dockerfile .
