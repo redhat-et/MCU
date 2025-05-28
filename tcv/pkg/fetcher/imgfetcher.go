@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/redhat-et/TKDK/tcv/pkg/accelerator"
+	"github.com/redhat-et/TKDK/tcv/pkg/accelerator/devices"
 	"github.com/redhat-et/TKDK/tcv/pkg/config"
 	"github.com/redhat-et/TKDK/tcv/pkg/constants"
 	"github.com/redhat-et/TKDK/tcv/pkg/preflightcheck"
@@ -148,6 +149,7 @@ func (i *imgFetcher) FetchImg(imgName string) (v1.Image, error) {
 
 func (e *tritonCacheExtractor) ExtractCache(img v1.Image) error {
 	var extractedDirs []string
+	var devInfo []devices.TritonGPUInfo
 
 	// Fetch image manifest
 	manifest, err := img.Manifest()
@@ -155,14 +157,16 @@ func (e *tritonCacheExtractor) ExtractCache(img v1.Image) error {
 		return fmt.Errorf("failed to fetch manifest: %w", err)
 	}
 
-	devInfo, err := preflightcheck.GetAllGPUInfo(e.acc)
-	if err != nil {
-		return fmt.Errorf("failed to get GPU info: %w", err)
-	}
+	if config.IsGPUEnabled() {
+		devInfo, err = preflightcheck.GetAllGPUInfo(e.acc)
+		if err != nil {
+			return fmt.Errorf("failed to get GPU info: %w", err)
+		}
 
-	// Summary check first (labels only)
-	if err := preflightcheck.CompareTritonSummaryLabelToGPU(img, devInfo); err != nil {
-		return fmt.Errorf("summary check failed: %w", err)
+		// Summary check first (labels only)
+		if err := preflightcheck.CompareTritonSummaryLabelToGPU(img, devInfo); err != nil {
+			return fmt.Errorf("summary check failed: %w", err)
+		}
 	}
 
 	// Always cleanup temp dirs at the end
@@ -192,13 +196,15 @@ func (e *tritonCacheExtractor) ExtractCache(img v1.Image) error {
 
 	// Full manifest compatibility check (after extraction)
 	manifestPath := filepath.Join(constants.TCVManifestDir, constants.ManifestFileName)
-	if err := preflightcheck.CompareTritonCacheManifestToGPU(manifestPath, devInfo); err != nil {
-		for _, dir := range extractedDirs {
-			if err = os.RemoveAll(dir); err != nil {
-				logging.Warnf("Failed to clean up extracted kernel dir %s: %v", dir, err)
+	if config.IsGPUEnabled() {
+		if err := preflightcheck.CompareTritonCacheManifestToGPU(manifestPath, devInfo); err != nil {
+			for _, dir := range extractedDirs {
+				if err = os.RemoveAll(dir); err != nil {
+					logging.Warnf("Failed to clean up extracted kernel dir %s: %v", dir, err)
+				}
 			}
+			return fmt.Errorf("manifest check failed: %w", err)
 		}
-		return fmt.Errorf("manifest check failed: %w", err)
 	}
 
 	return nil
