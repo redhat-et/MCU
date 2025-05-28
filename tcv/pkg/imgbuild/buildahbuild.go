@@ -120,7 +120,10 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 		}
 	}()
 
-	imageWithTag := fmt.Sprintf("%s:%s", imageName, "latest")
+	imageWithTag := imageName
+	if !strings.Contains(imageName, ":") {
+		imageWithTag = fmt.Sprintf("%s:latest", imageName)
+	}
 
 	imageRef, err := is.Transport.ParseStoreReference(buildStore, imageWithTag)
 	if err != nil {
@@ -155,7 +158,6 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 		return fmt.Errorf("failed to marshal summary for label: %w", err)
 	}
 
-	builder.SetLabel("cache.triton.image/variant", "multi")
 	builder.SetLabel("cache.triton.image/entry-count", strconv.Itoa(len(allMetadata)))
 	builder.SetLabel("cache.triton.image/summary", string(summaryJSON))
 	builder.SetLabel("cache.triton.image/cache-size-bytes", strconv.FormatInt(totalSize, 10))

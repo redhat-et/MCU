@@ -125,7 +125,12 @@ func (i *imgFetcher) FetchImg(imgName string) (v1.Image, error) {
 		return nil, fmt.Errorf("failed to configure fetcher")
 	}
 
-	img, err := i.fetcher.FetchImg(imgName)
+	imageWithTag := imgName
+	if !strings.Contains(imgName, ":") {
+		imageWithTag = fmt.Sprintf("%s:latest", imgName)
+	}
+
+	img, err := i.fetcher.FetchImg(imageWithTag)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch image: %w", err)
 	}
