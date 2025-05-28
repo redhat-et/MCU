@@ -45,11 +45,12 @@ validation, and developer-friendly debugging workflows.
 
 <!-- markdownlint-disable  MD013 -->
 <!-- Teporarily disable MD013 - Line length to keep the table formatting  -->
-| Label                              | Description                                      |
-|------------------------------------|--------------------------------------------------|
-| `cache.triton.image/summary`       | JSON summary of supported kernels                |
-| `cache.triton.image/entry-count`   | Number of kernel entries in the image            |
-| `cache.triton.image/variant`       | Indicates variant: e.g., `multi`, `compat`, etc. |
+| Label                                 | Description                                      |
+|---------------------------------------|--------------------------------------------------|
+| `cache.triton.image/summary`          | JSON summary of supported kernels                |
+| `cache.triton.image/entry-count`      | Number of kernel entries in the image            |
+| `cache.triton.image/cache-size-bytes` | Cache dir size in bytes                          |
+
 <!-- markdownlint-enable MD013 -->
 
 ## Workflow Summary

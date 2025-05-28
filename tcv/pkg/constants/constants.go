@@ -16,6 +16,8 @@ const (
 	TritonCacheDirName       = "io.triton.cache/"
 	ManifestFileName         = "manifest.json"
 	ManifestDir              = "manifest"
+	DockerfileCacheDir       = "io.triton.cache"
+	DockerfileManifestDir    = "io.triton.manifest"
 )
 
 var (

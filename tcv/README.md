@@ -61,51 +61,55 @@ To extract the Triton Cache for the
 tutorial from [Triton](https://github.com/triton-lang/triton), run the following:
 
 ```bash
-./_output/bin/linux_amd64/tcv -e -i quay.io/mtahhan/01-vector-add-cache:latest
+./_output/bin/linux_amd64/tcv -e -i quay.io/tkm/vector-add-cache:rocm
 Img fetched successfully!!!!!!!!
 Img Digest: sha256:b6d7703261642df0bf95175a64a01548eb4baf265c5755c30ede0fea03cd5d97
 Img Size: 525
 bash-4.4#
 ```
 
-This will extract the cache directory from the `quay.io/mtahhan/01-vector-add-cache:latest`
+This will extract the cache directory from the `quay.io/tkm/vector-add-cache:rocm`
 container image and copy it to  `~/.triton/cache/`.
 
 To Create an OCI image for a Triton Cache using docker run the following:
 
 ```bash
-./_output/bin/linux_amd64/tcv -c -i quay.io/mtahhan/01-vector-add-cache -d example/01-vector-add-cache
-INFO[2025-03-28 06:44:28] baremetalFlag false
-INFO[2025-03-28 06:44:28] Using docker to build the image
-INFO[2025-03-28 06:44:28] Dockerfile generated successfully at /home/mtahhan/tcv/Dockerfile
-{"stream":"Step 1/6 : FROM scratch"}
+./_output/bin/linux_amd64/tcv -c -i quay.io/tkm/vector-add-cache:rocm -d example/vector-add-cache-rocm
+INFO[2025-05-28 11:09:33] baremetalFlag false
+INFO[2025-05-28 11:09:33] Using docker to build the image
+INFO[2025-05-28 11:09:33] Wrote manifest to /tmp/.tcv/io.triton.manifest/manifest.json
+INFO[2025-05-28 11:09:33] Dockerfile generated successfully at /tmp/.tcv/Dockerfile
+{"stream":"Step 1/7 : FROM scratch"}
 {"stream":"\n"}
 {"stream":" ---\u003e \n"}
-{"stream":"Step 2/6 : LABEL org.opencontainers.image.title=01-vector-add-cache"}
+{"stream":"Step 2/7 : LABEL org.opencontainers.image.title=vector-add-cache"}
 {"stream":"\n"}
-{"stream":" ---\u003e Running in 893fef022ec3\n"}
-{"stream":" ---\u003e 84dfa1409901\n"}
-{"stream":"Step 3/6 : COPY \"example/01-vector-add-cache/\" ./io.triton.cache/"}
+{"stream":" ---\u003e Running in fe2ead6429b6\n"}
+{"stream":" ---\u003e 729d29d1eab1\n"}
+{"stream":"Step 3/7 : COPY \"io.triton.cache/.\" ./io.triton.cache/"}
 {"stream":"\n"}
-{"stream":" ---\u003e a009d449e513\n"}
-{"stream":"Step 4/6 : LABEL cache.triton.image/entry-count=1"}
+{"stream":" ---\u003e e806e7b6def5\n"}
+{"stream":"Step 4/7 : COPY \"io.triton.manifest/manifest.json\" ./io.triton.manifest/manifest.json"}
 {"stream":"\n"}
-{"stream":" ---\u003e Running in eee936b013ac\n"}
-{"stream":" ---\u003e 68ed9b0860aa\n"}
-{"stream":"Step 5/6 : LABEL cache.triton.image/metadata=[{\"hash\":\"edbea4c0734897ca19ec52852fcc847e552b3b1cfff92cc3deff0b695cdd636f\",\"backend\":\"cuda\",\"arch\":\"75\",\"warp_size\":32,\"dummy_key\":\"f057a3304cf191347dfefc46ce6def3d0120a5abeb7373154bb72a8256c80413\"}]"}
+{"stream":" ---\u003e 68cbd692cef2\n"}
+{"stream":"Step 5/7 : LABEL cache.triton.image/cache-size-bytes=80415"}
 {"stream":"\n"}
-{"stream":" ---\u003e Running in ce100bca19f4\n"}
-{"stream":" ---\u003e c4fb6e41ee67\n"}
-{"stream":"Step 6/6 : LABEL cache.triton.image/variant=multi"}
+{"stream":" ---\u003e Running in 3f80c2250345\n"}
+{"stream":" ---\u003e 7eb9a67e385e\n"}
+{"stream":"Step 6/7 : LABEL cache.triton.image/entry-count=1"}
 {"stream":"\n"}
-{"stream":" ---\u003e Running in 25572b1371d2\n"}
-{"stream":" ---\u003e cdb197dc95ab\n"}
-{"aux":{"ID":"sha256:cdb197dc95ab2a4c1e6a40583fe22c26d65660c0681e3559ab70d1b9c1b2f79d"}}
-{"stream":"Successfully built cdb197dc95ab\n"}
-{"stream":"Successfully tagged quay.io/mtahhan/01-vector-add-cache:latest\n"}
-INFO[2025-03-28 06:44:42] Temporary directories successfully deleted.
-INFO[2025-03-28 06:44:42] Docker image built successfully
-INFO[2025-03-28 06:44:42] OCI image created successfully.
+{"stream":" ---\u003e Running in da8a4e1461d0\n"}
+{"stream":" ---\u003e 9f0b331cc5be\n"}
+{"stream":"Step 7/7 : LABEL cache.triton.image/summary={\"targets\":[{\"backend\":\"hip\",\"arch\":\"gfx90a\",\"warp_size\":64}]}"}
+{"stream":"\n"}
+{"stream":" ---\u003e Running in 4772e3c43256\n"}
+{"stream":" ---\u003e c144a34c9296\n"}
+{"aux":{"ID":"sha256:c144a34c9296b2a7ec322e041bf9fb8e29111ba9d071ef5e6e31618fb2e528e4"}}
+{"stream":"Successfully built c144a34c9296\n"}
+{"stream":"Successfully tagged quay.io/tkm/vector-add-cache:rocm\n"}
+INFO[2025-05-28 11:09:34] Temporary directories successfully deleted.
+INFO[2025-05-28 11:09:34] Docker image built successfully
+INFO[2025-05-28 11:09:34] OCI image created successfully.
 ```
 
 To see the new image:
@@ -113,35 +117,42 @@ To see the new image:
 ```bash
  docker images
 REPOSITORY                                                                                TAG                   IMAGE ID       CREATED          SIZE
-quay.io/mtahhan/01-vector-add-cache                                                       latest                32572653bbbd   5 minutes ago    0B
+quay.io/tkm/vector-add-cache                                                       latest                32572653bbbd   5 minutes ago    0B
 ```
 
 To inspect the docker image with Skopeo
 
 ```bash
-skopeo inspect docker://quay.io/mtahhan/01-vector-add-cache
+skopeo inspect docker-daemon:quay.io/tkm/vector-add-cache:rocm
 {
-    "Name": "quay.io/mtahhan/01-vector-add-cache",
-    "Digest": "sha256:9e64f49656f89d5d68a739dad2d8b333ab258a77f70efe2f8961b8752f0ef0fd",
+    "Name": "quay.io/tkm/vector-add-cache",
+    "Digest": "sha256:326c155c3d6de9d285b0280d141cb75f1fd48475b410e19f4aef0b395b400ced",
     "RepoTags": [],
-    "Created": "2025-03-28T10:44:42.611261047Z",
-    "DockerVersion": "27.3.1",
+    "Created": "2025-05-28T15:09:34.032834736Z",
+    "DockerVersion": "28.1.1",
     "Labels": {
+        "cache.triton.image/cache-size-bytes": "80415",
         "cache.triton.image/entry-count": "1",
-        "cache.triton.image/metadata": "[{\"hash\":\"edbea4c0734897ca19ec52852fcc847e552b3b1cfff92cc3deff0b695cdd636f\",\"backend\":\"cuda\",\"arch\":\"75\",\"warp_size\":32,\"dummy_key\":\"f057a3304cf191347dfefc46ce6def3d0120a5abeb7373154bb72a8256c80413\"}]",
-        "cache.triton.image/variant": "multi",
-        "org.opencontainers.image.title": "01-vector-add-cache"
+        "cache.triton.image/summary": "{\"targets\":[{\"backend\":\"hip\",\"arch\":\"gfx90a\",\"warp_size\":64}]}",
+        "org.opencontainers.image.title": "vector-add-cache"
     },
     "Architecture": "amd64",
     "Os": "linux",
     "Layers": [
-        "sha256:2bb77dbac0435c7f0c5e1524dba0954c99e250bac7fd3fc6b9ef57e742e43278"
+        "sha256:fe1632cee6d6de159c5c36233c73fbbaa9196af69d771fe016ae4b3a0b6ea698",
+        "sha256:a53fd74714b8956ec2d2e02c4c262e6800bc45b0a8f5e339923ea3baa2d1f1ff"
     ],
     "LayersData": [
         {
             "MIMEType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
-            "Digest": "sha256:2bb77dbac0435c7f0c5e1524dba0954c99e250bac7fd3fc6b9ef57e742e43278",
-            "Size": 82432,
+            "Digest": "sha256:fe1632cee6d6de159c5c36233c73fbbaa9196af69d771fe016ae4b3a0b6ea698",
+            "Size": 91648,
+            "Annotations": null
+        },
+        {
+            "MIMEType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+            "Digest": "sha256:a53fd74714b8956ec2d2e02c4c262e6800bc45b0a8f5e339923ea3baa2d1f1ff",
+            "Size": 2560,
             "Annotations": null
         }
     ],
@@ -155,39 +166,40 @@ skopeo inspect docker://quay.io/mtahhan/01-vector-add-cache
 The build output is shown below.
 
 ```bash
- ./_output/bin/linux_amd64/tcv -c -i quay.io/mtahhan/01-vector-add-cache -d example/01-vector-add-cache
-INFO[2025-03-28 10:20:11] baremetalFlag false
-INFO[2025-03-28 10:20:11] Using buildah to build the image
-INFO[2025-03-28 10:20:11] Image built! 9def3c99415d1716e94eb6a2b010b2010c80de81c78608612e4bec1c21d27e62
-INFO[2025-03-28 10:20:11] Temporary directories successfully deleted.
-INFO[2025-03-28 10:20:11] OCI image created successfully.
+./_output/bin/linux_amd64/tcv -c -i quay.io/tkm/vector-add-cache:rocm -d example/vector-add-cache-rocm
+INFO[2025-05-28 12:23:04] baremetalFlag false
+INFO[2025-05-28 12:23:04] Using buildah to build the image
+INFO[2025-05-28 12:23:04] Wrote manifest to /tmp/buildah-manifest-dir-2780945232/manifest.json
+INFO[2025-05-28 12:23:04] Image built! baadff55392c0ada6f0d358c255d63ca770fb20b87429a732480e00bbf8d044b
+INFO[2025-05-28 12:23:04] Temporary directories successfully deleted.
+INFO[2025-05-28 12:23:04] OCI image created successfully.
 ```
 
 To inspect the buildah image with Skopeo
 
 ```bash
-skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest
+skopeo inspect containers-storage:quay.io/tkm/vector-add-cache:rocm
 {
-    "Name": "quay.io/mtahhan/01-vector-add-cache",
-    "Digest": "sha256:2a5ce196b565d00b3e7afcf01bb9e6abdb52333f13b1da345201820553847817",
+    "Name": "quay.io/tkm/vector-add-cache",
+    "Digest": "sha256:3f8c7b3aeeffd9ee3f673486f3bc681a7f9ed39e21242628e6845755191d6bd4",
     "RepoTags": [],
-    "Created": "2025-03-28T10:20:11.890750347Z",
+    "Created": "2025-05-28T15:45:17.379786001Z",
     "DockerVersion": "",
     "Labels": {
+        "cache.triton.image/cache-size-bytes": "80415",
         "cache.triton.image/entry-count": "1",
-        "cache.triton.image/metadata": "[{\"hash\":\"edbea4c0734897ca19ec52852fcc847e552b3b1cfff92cc3deff0b695cdd636f\",\"backend\":\"cuda\",\"arch\":\"75\",\"warp_size\":32,\"dummy_key\":\"f057a3304cf191347dfefc46ce6def3d0120a5abeb7373154bb72a8256c80413\"}]",
-        "cache.triton.image/variant": "multi"
+        "cache.triton.image/summary": "{\"targets\":[{\"backend\":\"hip\",\"arch\":\"gfx90a\",\"warp_size\":64}]}"
     },
     "Architecture": "amd64",
     "Os": "linux",
     "Layers": [
-        "sha256:710625569a9e7ad0ba7af6faa63ced5ff17cbac17a9750f166465eb48a7d5071"
+        "sha256:ef89050f71ecc3dc925f14c12d2fd406c067f78987eed36a1176b19499c8ea20"
     ],
     "LayersData": [
         {
             "MIMEType": "application/vnd.oci.image.layer.v1.tar",
-            "Digest": "sha256:710625569a9e7ad0ba7af6faa63ced5ff17cbac17a9750f166465eb48a7d5071",
-            "Size": 82944,
+            "Digest": "sha256:ef89050f71ecc3dc925f14c12d2fd406c067f78987eed36a1176b19499c8ea20",
+            "Size": 93184,
             "Annotations": null
         }
     ],
@@ -198,18 +210,16 @@ skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest
 To inspect the image labels specifically run:
 
 ```bash
-skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest \
-  | jq -r '.Labels["cache.triton.image/metadata"]' \
-  | jq .
-[
-  {
-    "hash": "edbea4c0734897ca19ec52852fcc847e552b3b1cfff92cc3deff0b695cdd636f",
-    "backend": "cuda",
-    "arch": "75",
-    "warp_size": 32,
-    "dummy_key": "f057a3304cf191347dfefc46ce6def3d0120a5abeb7373154bb72a8256c80413"
-  }
-]
+skopeo inspect containers-storage:quay.io/tkm/vector-add-cache:rocm | jq -r '.Labels["cache.triton.image/summary"]' | jq .
+{
+  "targets": [
+    {
+      "backend": "hip",
+      "arch": "gfx90a",
+      "warp_size": 64
+    }
+  ]
+}
 ```
 
 ## Client API
