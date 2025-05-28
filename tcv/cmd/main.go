@@ -22,6 +22,7 @@ import (
 
 	"github.com/containers/buildah"
 	"github.com/containers/storage/pkg/unshare"
+	"github.com/redhat-et/TKDK/tcv/pkg/client"
 	"github.com/redhat-et/TKDK/tcv/pkg/config"
 	"github.com/redhat-et/TKDK/tcv/pkg/constants"
 	"github.com/redhat-et/TKDK/tcv/pkg/fetcher"
@@ -118,7 +119,14 @@ func main() {
 			}
 
 			if extractFlag {
-				if err := getCacheImage(imageName, cacheDirName); err != nil {
+				opts := client.Options{
+					ImageName:       imageName,
+					CacheDir:        cacheDirName,
+					EnableGPU:       !noGPUFlag,
+					LogLevel:        logLevel,
+					EnableBaremetal: baremetalFlag,
+				}
+				if err := client.ExtractCache(opts); err != nil {
 					logging.Errorf("Error extracting image: %v\n", err)
 					os.Exit(exitExtractError)
 				}
