@@ -154,6 +154,8 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     rich.print(table)
 
 
+# pylint: disable=too-many-positional-arguments
+# pylint: disable=too-many-arguments
 @app.command(name="list")
 def search(
     name: Optional[str] = typer.Option(
@@ -175,6 +177,10 @@ def search(
         "--younger-than",
         help="Show kernels younger than specified duration (e.g., '14d', '1w').",
     ),
+    cache_dir: Optional[Path] = typer.Option(
+        None,
+        help="Specify the Triton cache directory to index. Uses default if not provided.    ",)
+
 ):
     """
     Search for indexed kernels based on various SearchCriteria.
@@ -195,7 +201,7 @@ def search(
 
     svc = None
     try:
-        svc = IndexService()
+        svc = IndexService(cache_dir=cache_dir)
         rich.print(
             f"Searching for kernels with: Name='{name or 'any'}', "
             f"Backend='{backend or 'any'}', Arch='{arch or 'any'}', "
