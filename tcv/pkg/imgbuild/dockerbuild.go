@@ -165,7 +165,11 @@ func (d *dockerBuilder) CreateImage(imageName, cacheDir string) error {
 		return fmt.Errorf("error reading build output: %w", err)
 	}
 
-	imageWithTag := fmt.Sprintf("%s:%s", imageName, "latest")
+	imageWithTag := imageName
+	if !strings.Contains(imageName, ":") {
+		imageWithTag = fmt.Sprintf("%s:latest", imageName)
+	}
+
 	err = apiClient.ImageTag(context.Background(), imageName, imageWithTag)
 	if err != nil {
 		return fmt.Errorf("error tagging image: %w", err)

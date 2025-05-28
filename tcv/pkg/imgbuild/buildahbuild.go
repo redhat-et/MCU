@@ -120,7 +120,10 @@ func (b *buildahBuilder) CreateImage(imageName, cacheDir string) error {
 		}
 	}()
 
-	imageWithTag := fmt.Sprintf("%s:%s", imageName, "latest")
+	imageWithTag := imageName
+	if !strings.Contains(imageName, ":") {
+		imageWithTag = fmt.Sprintf("%s:latest", imageName)
+	}
 
 	imageRef, err := is.Transport.ParseStoreReference(buildStore, imageWithTag)
 	if err != nil {
