@@ -211,3 +211,27 @@ skopeo inspect containers-storage:quay.io/mtahhan/01-vector-add-cache:latest \
   }
 ]
 ```
+
+## Client API
+
+An example snippet of how to use the client API to extract a Triton Cache
+from a container image is shown below.
+
+```go
+import (
+    "github.com/redhat-et/TKDK/tcv/pkg/client"
+)
+
+func main() {
+    err := client.ExtractCache(client.Options{
+        ImageName: "quay.io/mtahhan/01-vector-add-cache:latest",
+        CacheDir:  "/tmp/testcache",
+        EnableGPU: false,
+        LogLevel:  "debug",
+        EnableBaremetal: false,
+    })
+    if err != nil {
+        panic(err)
+    }
+}
+```
