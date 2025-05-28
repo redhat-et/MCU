@@ -179,8 +179,8 @@ def search(
     ),
     cache_dir: Optional[Path] = typer.Option(
         None,
-        help="Specify the Triton cache directory to index. Uses default if not provided.    ",)
-
+        help="Specify the Triton cache directory to index. Uses default if not provided.    ",
+    ),
 ):
     """
     Search for indexed kernels based on various SearchCriteria.
@@ -253,6 +253,10 @@ def prune(  # pylint: disable=too-many-arguments
         help="Delete older duplicate kernels, keeping only the newest of each set.",
     ),
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
+    cache_dir: Optional[Path] = typer.Option(
+        None,
+        help="Specify the Triton cache directory to index. Uses default if not provided.    ",
+    ),
 ):
     """
     Delete intermediate‑representation files (default) or whole kernel
@@ -264,7 +268,7 @@ def prune(  # pylint: disable=too-many-arguments
 
     svc = None
     try:
-        svc = PruningService()
+        svc = PruningService(cache_dir=cache_dir)
         stats: Optional[PruneStats] = None
         if deduplicate:
             filter_options_used = [name, backend, arch, older_than, younger_than, full]
