@@ -23,6 +23,7 @@ import (
 	"github.com/containers/buildah"
 	"github.com/containers/storage/pkg/unshare"
 	"github.com/redhat-et/TKDK/tcv/pkg/config"
+	"github.com/redhat-et/TKDK/tcv/pkg/constants"
 	"github.com/redhat-et/TKDK/tcv/pkg/fetcher"
 	"github.com/redhat-et/TKDK/tcv/pkg/imgbuild"
 	"github.com/redhat-et/TKDK/tcv/pkg/logformat"
@@ -38,7 +39,17 @@ const (
 	exitLogError     = 3
 )
 
-func getCacheImage(imageName string) error {
+func getCacheImage(imageName, cacheDirName string) error {
+	if cacheDirName != "" {
+		constants.TritonCacheDir = cacheDirName
+		logging.Infof("Overriding TritonCacheDir: %s", constants.TritonCacheDir)
+	}
+
+	// Ensure target cache dir exists
+	if err := os.MkdirAll(constants.TritonCacheDir, 0755); err != nil {
+		return fmt.Errorf("failed to create target cache directory: %w", err)
+	}
+
 	f := fetcher.New()
 	return f.FetchAndExtractCache(imageName)
 }
@@ -107,7 +118,7 @@ func main() {
 			}
 
 			if extractFlag {
-				if err := getCacheImage(imageName); err != nil {
+				if err := getCacheImage(imageName, cacheDirName); err != nil {
 					logging.Errorf("Error extracting image: %v\n", err)
 					os.Exit(exitExtractError)
 				}
