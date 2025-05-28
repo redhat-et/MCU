@@ -118,13 +118,14 @@ func main() {
 				}
 			}
 
+			gpuEnabled := !noGPUFlag
 			if extractFlag {
 				opts := client.Options{
 					ImageName:       imageName,
 					CacheDir:        cacheDirName,
-					EnableGPU:       !noGPUFlag,
+					EnableGPU:       &gpuEnabled,
 					LogLevel:        logLevel,
-					EnableBaremetal: baremetalFlag,
+					EnableBaremetal: &baremetalFlag,
 				}
 				if err := client.ExtractCache(opts); err != nil {
 					logging.Errorf("Error extracting image: %v\n", err)

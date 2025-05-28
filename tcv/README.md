@@ -223,18 +223,49 @@ import (
 )
 
 func main() {
-	enableGPU := false
-	enableBaremetal := false
+    enableGPU := false
+    enableBaremetal := false
 
-	err := client.ExtractCache(client.Options{
-		ImageName:       "quay.io/mtahhan/01-vector-add-cache:latest",
-		CacheDir:        "/tmp/testcache",
-		EnableGPU:       &enableGPU,
-		LogLevel:        "debug",
-		EnableBaremetal: &enableBaremetal,
-	})
-	if err != nil {
-		panic(err)
-	}
+    err := client.ExtractCache(client.Options{
+        ImageName:       "quay.io/mtahhan/01-vector-add-cache:latest",
+        CacheDir:        "/tmp/testcache",
+        EnableGPU:       &enableGPU,
+        LogLevel:        "debug",
+        EnableBaremetal: &enableBaremetal,
+    })
+    if err != nil {
+        panic(err)
+    }
+}
+```
+
+You can also use the TKDK client API to retrieve details about the system's
+available GPUs:
+
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+
+    "github.com/redhat-et/TKDK/tcv/pkg/client"
+)
+
+func main() {
+    gpus, err := client.GetSystemGPUInfo()
+    if err != nil {
+        log.Fatalf("Error retrieving GPU info: %v", err)
+    }
+
+    output, err := json.MarshalIndent(gpus, "", "  ")
+    if err != nil {
+        log.Fatalf("Failed to format GPU info: %v", err)
+    }
+
+    fmt.Println("Detected GPU Devices:")
+    fmt.Println(string(output))
 }
 ```
