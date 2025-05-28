@@ -14,9 +14,9 @@ import (
 type Options struct {
 	ImageName       string
 	CacheDir        string
-	EnableGPU       bool
+	EnableGPU       *bool
 	LogLevel        string
-	EnableBaremetal bool
+	EnableBaremetal *bool
 }
 
 // ExtractCache pulls and extracts the cache image using the provided options
@@ -33,14 +33,18 @@ func ExtractCache(opts Options) error {
 		return fmt.Errorf("error configuring logging: %v", err)
 	}
 
-	config.SetEnabledGPU(opts.EnableGPU)
-	if !opts.EnableGPU {
-		logging.Debug("GPU checks disabled via client options")
+	if opts.EnableGPU != nil {
+		config.SetEnabledGPU(*opts.EnableGPU)
+		if !*opts.EnableGPU {
+			logging.Debug("GPU checks disabled via client options")
+		}
 	}
 
-	config.SetEnabledBaremetal(opts.EnableBaremetal)
-	if !opts.EnableBaremetal {
-		logging.Debug("Baremetal checks disabled via client options")
+	if opts.EnableBaremetal != nil {
+		config.SetEnabledBaremetal(*opts.EnableBaremetal)
+		if !*opts.EnableBaremetal {
+			logging.Debug("Baremetal checks disabled via client options")
+		}
 	}
 
 	cacheDir := opts.CacheDir
