@@ -14,7 +14,7 @@ def _test_pid_conds(conds, pid0=0, pid1=0, pid2=0):
     for i, (cond, pid) in enumerate(zip(conds, pids)):
         if cond=='': continue
         if   cond[:2] in ['<=', '>=', '!=']: op, threshold = cond[:2], int(cond[2:])
-        elif cond[:1] in ['<',  '>',  '=' ]: op, threshold = cond[:1], int(cond[1:])        
+        elif cond[:1] in ['<',  '>',  '=' ]: op, threshold = cond[:1], int(cond[1:])
         else: raise ValueError(f"Rules may only use these ops: '<','>','>=','<=','=', '!='. Invalid rule in '{cond}'.")
         op = '==' if op == '=' else op
         if not eval(f'{pid} {op} {threshold}'): return False
