@@ -25,7 +25,7 @@ class TestCodingUtils:
             offs = tu.offset_1d(sz=2, n_prev_chunks=n)
             mask = offs < 4
             vals = tl.load(i_ptr + offs, mask)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         partial_copy[(1,)](i, o, n=0)
         assert list(o) == [1,1,0,0]
@@ -44,14 +44,14 @@ class TestCodingUtils:
             offs = tu.offset_2d(offs1, offs2, stride0=4)
             mask = (offs1 < 4) & (offs2 < 4)
             vals = tl.load(i_ptr + offs, mask)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         partial_copy[(1,)](i, o, n1=0, n2=0)
         assert list(o) == [[1,1,0,0], [1,1,0,0], [0,0,0,0], [0,0,0,0]]
 
         partial_copy[(1,)](i, o, n1=1, n2=0)
         assert list(o) == [[1,1,0,0], [1,1,0,0], [1,1,0,0], [1,1,0,0]]
-    
+
     ## masks
 
     def test_mask_1d(self, triton_interpret):
@@ -63,14 +63,14 @@ class TestCodingUtils:
             offs = n*2 + tl.arage(0,2)
             mask = mask_1d(offs, 4)
             vals = tl.load(i_ptr + offs, mask)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         partial_copy[(1,)](i, o, n=0)
         assert list(o) == [1,1,0,0]
 
         partial_copy[(1,)](i, o, n=1)
         assert list(o) == [1,1,1,1]
-    
+
     def test_mask_2d(self, triton_interpret):
         i = torch.ones(4,4, device='cuda')
         o = torch.zeros(4,4, device='cuda')
@@ -82,7 +82,7 @@ class TestCodingUtils:
             offs = tl.expand_dims(offs1, 1)*4 + tl.expand_dims(offs2, 0)*1
             mask = tu.mask_2d(offs1, offs2, 4, 4)
             vals = tl.load(i_ptr + offs, mask)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         partial_copy[(1,)](i, o, n1=0, n2=0)
         assert list(o) == [[1,1,0,0], [1,1,0,0], [0,0,0,0], [0,0,0,0]]
@@ -101,7 +101,7 @@ class TestCodingUtils:
             offs = n*2 + tl.arange(0,2)
             mask = offs < 4
             vals = tu.load_1d(i_ptr, 2, n, 4)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         partial_copy[(1,)](i, o, n=0)
         assert list(o) == [1,1,0,0]
@@ -118,7 +118,7 @@ class TestCodingUtils:
             offs = tl.arage(0,4)
             mask = offs < 4
             vals = tu.load_full_1d(i_ptr, 4)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         copy[(1,)](i, o)
         assert list(o) == list(i)
@@ -134,14 +134,14 @@ class TestCodingUtils:
             offs = tl.expand_dims(offs1, 1)*4 + tl.expand_dims(offs2, 0)*1
             mask = (offs1 < 4) & (offs2 < 4)
             vals = tu.load_2d(i_ptr, 2, 2, n1, n2, 4, 4, 4, 1)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         partial_copy[(1,)](i, o, n1=0, n2=0)
         assert list(o) == [[1,1,0,0], [1,1,0,0], [0,0,0,0], [0,0,0,0]]
 
         partial_copy[(1,)](i, o, n1=1, n2=0)
         assert list(o) == [[1,1,0,0], [1,1,0,0], [1,1,0,0], [1,1,0,0]]
-    
+
     def test_load_full_2d(self, triton_interpret):
         i = torch.ones(4,4, device='cuda')
         o = torch.zeros(4,4, device='cuda')
@@ -153,7 +153,7 @@ class TestCodingUtils:
             offs = tl.expand_dims(offs1, 1)*4 + tl.expand_dims(offs2, 0)*1
             mask = (offs1 < 4) & (offs2 < 4)
             vals = tu.load_full_2d(i_ptr, 4, 4, 4, 1)
-            tl.store(o_ptr + offs, vals, mask)            
+            tl.store(o_ptr + offs, vals, mask)
 
         copy[(1,)](i, o)
         assert list(o) == list(i)

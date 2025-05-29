@@ -17,12 +17,12 @@ class TestDebuggingUtils:
 
     def test_assert_tensors_gpu_ready(self, triton_interpret):
         t1 = torch.ones(4, device='cuda')      # gpu, contiguous
-        t2 = torch.ones(4)                     # cpu, contiguous 
+        t2 = torch.ones(4)                     # cpu, contiguous
         t3 = torch.ones(4, device='cuda')[::2] # gpu, non-contiguous
         t4 = torch.ones(4)[::2]                # cpu, non-contiguous
 
         tu.assert_tensors_gpu_ready(t1)
-        
+
         if triton_interpret == '1':
             tu.assert_tensors_gpu_ready(t2)
         else:

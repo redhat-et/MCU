@@ -13,7 +13,7 @@ class TestLoading:
 
         @triton.jit
         def some_kernel(): pass
-        
+
         jit_fn_type = triton.runtime.interpreter.InterpretedFunction if triton_interpret == '1' else triton.runtime.jit.JITFunction
 
         assert isinstance(some_kernel, jit_fn_type), f'kernel was not jitted into expected type ({type(some_kernel)} instead of {jit_fn_type}), so triton loaded in wrong mode.'
