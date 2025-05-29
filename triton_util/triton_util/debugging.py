@@ -1,3 +1,9 @@
+"""Debugging utilities for Triton kernels.
+
+Includes conditional breakpoints and printing based on thread identifiers,
+plus tensor readiness checks for CUDA or interpreted environments.
+"""
+# pylint: disable=multiple-statements,line-too-long,import-outside-toplevel,eval-used,fixme,unused-variable
 import os
 import triton
 import triton.language as tl
@@ -42,12 +48,17 @@ def print_if(*txt, conds):
     if test_pid_conds(conds): print(*txt)
 
 @triton.jit
-def breakpoint_once(): breakpoint_if('=0,=0,=0')
+def breakpoint_once():
+    """Trigger a breakpoint."""
+    breakpoint_if('=0,=0,=0')
 
 @triton.jit
-def print_once(*txt): print_if(*txt,conds='=0,=0,=0')
+def print_once(*txt):
+    """Print a message."""
+    print_if(*txt,conds='=0,=0,=0')
 
 def assert_tensors_gpu_ready(*tensors):
+    """Assert that each tensor is contiguous and on the GPU (unless TRITON_INTERPRET=1)."""
     for t in tensors:
         assert t.is_contiguous(), "A tensor is not contiguous"
         if not os.environ.get('TRITON_INTERPRET') == '1': assert t.is_cuda, "A tensor is not on cuda"

@@ -1,5 +1,5 @@
-import inspect
-
+"""Test suite for triton_util coding utilities."""
+# pylint: disable=missing-function-docstring,unused-argument,undefined-variable
 import pytest
 
 import torch
@@ -10,7 +10,9 @@ import triton.language as tl
 import triton_util as tu
 
 class TestCodingUtils:
+    """Unit tests for triton_util offset, mask, load, and store utilities."""
     def test_cdiv(self):
+        """Test cdiv (ceiling division) function."""
         assert tu.cdiv(10, 2)==5
         assert tu.cdiv(10, 3)==4
 
@@ -60,7 +62,7 @@ class TestCodingUtils:
 
         @triton.jit
         def partial_copy(i_ptr, o_ptr, n):
-            offs = n*2 + tl.arage(0,2)
+            offs = n*2 + tl.arange(0,2)
             mask = mask_1d(offs, 4)
             vals = tl.load(i_ptr + offs, mask)
             tl.store(o_ptr + offs, vals, mask)
@@ -115,7 +117,7 @@ class TestCodingUtils:
 
         @triton.jit
         def copy(i_ptr, o_ptr):
-            offs = tl.arage(0,4)
+            offs = tl.arange(0,4)
             mask = offs < 4
             vals = tu.load_full_1d(i_ptr, 4)
             tl.store(o_ptr + offs, vals, mask)

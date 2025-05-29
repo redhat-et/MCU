@@ -3,10 +3,12 @@ name: Lint Python code with pylint
 on: # yamllint disable-line rule:truthy
   pull_request:
     paths:
-      - "**/*.py"
+      - tcm/**/*.py
+      - triton_util/**/*.py
   push:
     paths:
-      - "**/*.py"
+      - tcm/**/*.py
+      - triton_util/**/*.py
 
 jobs:
   pylint:
@@ -26,6 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pylint
           pip install -r ./tcm/requirements.txt
+          pip install -e ./triton_util[dev]
 
       - name: Run pylint
         run: |

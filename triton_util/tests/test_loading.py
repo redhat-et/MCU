@@ -1,3 +1,4 @@
+# pylint: disable=line-too-long,missing-module-docstring,missing-function-docstring,multiple-statements,too-few-public-methods,unused-import
 import os
 
 import pytest
