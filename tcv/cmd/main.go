@@ -22,7 +22,9 @@ import (
 
 	"github.com/containers/buildah"
 	"github.com/containers/storage/pkg/unshare"
+	"github.com/redhat-et/TKDK/tcv/pkg/client"
 	"github.com/redhat-et/TKDK/tcv/pkg/config"
+	"github.com/redhat-et/TKDK/tcv/pkg/constants"
 	"github.com/redhat-et/TKDK/tcv/pkg/fetcher"
 	"github.com/redhat-et/TKDK/tcv/pkg/imgbuild"
 	"github.com/redhat-et/TKDK/tcv/pkg/logformat"
@@ -38,7 +40,17 @@ const (
 	exitLogError     = 3
 )
 
-func getCacheImage(imageName string) error {
+func getCacheImage(imageName, cacheDirName string) error {
+	if cacheDirName != "" {
+		constants.TritonCacheDir = cacheDirName
+		logging.Infof("Overriding TritonCacheDir: %s", constants.TritonCacheDir)
+	}
+
+	// Ensure target cache dir exists
+	if err := os.MkdirAll(constants.TritonCacheDir, 0755); err != nil {
+		return fmt.Errorf("failed to create target cache directory: %w", err)
+	}
+
 	f := fetcher.New()
 	return f.FetchAndExtractCache(imageName)
 }
@@ -70,6 +82,7 @@ func main() {
 	var extractFlag bool
 	var baremetalFlag bool
 	var logLevel string
+	var noGPUFlag bool
 
 	logging.SetReportCaller(true)
 	logging.SetFormatter(logformat.Default)
@@ -94,6 +107,10 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			config.SetEnabledBaremetal(baremetalFlag)
 			logging.Infof("baremetalFlag %v", baremetalFlag)
+			if noGPUFlag {
+				logging.Info("GPU checks disabled: running in no-GPU mode (--no-gpu)")
+			}
+			config.SetEnabledGPU(!noGPUFlag)
 			if createFlag {
 				if err := createCacheImage(imageName, cacheDirName); err != nil {
 					logging.Errorf("Error creating image: %v\n", err)
@@ -101,8 +118,16 @@ func main() {
 				}
 			}
 
+			gpuEnabled := !noGPUFlag
 			if extractFlag {
-				if err := getCacheImage(imageName); err != nil {
+				opts := client.Options{
+					ImageName:       imageName,
+					CacheDir:        cacheDirName,
+					EnableGPU:       &gpuEnabled,
+					LogLevel:        logLevel,
+					EnableBaremetal: &baremetalFlag,
+				}
+				if err := client.ExtractCache(opts); err != nil {
 					logging.Errorf("Error extracting image: %v\n", err)
 					os.Exit(exitExtractError)
 				}
@@ -122,6 +147,7 @@ func main() {
 	rootCmd.Flags().BoolVarP(&createFlag, "create", "c", false, "Create OCI image")
 	rootCmd.Flags().BoolVarP(&extractFlag, "extract", "e", false, "Extract a Triton cache from an OCI image")
 	rootCmd.Flags().StringVarP(&logLevel, "log-level", "l", "", "Set the logging verbosity level: debug, info, warning or error")
+	rootCmd.Flags().BoolVar(&noGPUFlag, "no-gpu", false, "Allow kernel extraction without GPU present (for testing purposes)")
 
 	// Ensure the image flag is required
 	ret := rootCmd.MarkFlagRequired("image")
@@ -133,8 +159,6 @@ func main() {
 		return
 	}
 	unshare.MaybeReexecUsingUserNamespace(false)
-
-	config.SetEnabledGPU(true) // ASSUME TRUE FOR NOW
 
 	// Execute the Cobra command
 	if err := rootCmd.Execute(); err != nil {

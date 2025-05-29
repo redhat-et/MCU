@@ -221,3 +221,60 @@ skopeo inspect containers-storage:quay.io/tkm/vector-add-cache:rocm | jq -r '.La
   ]
 }
 ```
+
+## Client API
+
+An example snippet of how to use the client API to extract a Triton Cache
+from a container image is shown below.
+
+```go
+import (
+    "github.com/redhat-et/TKDK/tcv/pkg/client"
+)
+
+func main() {
+    enableGPU := false // for real use case should be true... or will default to true if not set
+    enableBaremetal := false
+
+    err := client.ExtractCache(client.Options{
+        ImageName:       "quay.io/mtahhan/01-vector-add-cache:latest",
+        CacheDir:        "/tmp/testcache",
+        EnableGPU:       &enableGPU,
+        LogLevel:        "debug",
+        EnableBaremetal: &enableBaremetal,
+    })
+    if err != nil {
+        panic(err)
+    }
+}
+```
+
+You can also use the TKDK client API to retrieve details about the system's
+available GPUs:
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+
+    "github.com/redhat-et/TKDK/tcv/pkg/client"
+)
+
+func main() {
+    gpus, err := client.GetSystemGPUInfo()
+    if err != nil {
+        log.Fatalf("Error retrieving GPU info: %v", err)
+    }
+
+    output, err := json.MarshalIndent(gpus, "", "  ")
+    if err != nil {
+        log.Fatalf("Failed to format GPU info: %v", err)
+    }
+
+    fmt.Println("Detected GPU Devices:")
+    fmt.Println(string(output))
+}
+```
