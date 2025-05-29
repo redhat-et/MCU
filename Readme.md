@@ -35,7 +35,7 @@ and utilities for loading, storing, and debugging GPU memory.
 **Triton-util was developed by [Umer Adil](mailto:umer.hayat.adil@gmail.com)**
 and generously contributed to TKDK.
 
-For more information please see the TCV [readme](./triton_util/README.md).
+For more information please see the triton util [readme](./triton_util/README.md).
 
 ## Getting Started
 
