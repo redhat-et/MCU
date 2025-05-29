@@ -28,10 +28,6 @@ For more information please see the TCV [readme](./tcv/README.md).
 Write cleaner, more intuitive Triton code with high-level abstractions
 and utilities for loading, storing, and debugging GPU memory.
 
-- Simplify index computations
-- Debug only the kernel you want
-- Stay close to the Triton core, no black-box magic
-
 **Triton-util was developed by [Umer Adil](mailto:umer.hayat.adil@gmail.com)**
 and generously contributed to TKDK.
 
