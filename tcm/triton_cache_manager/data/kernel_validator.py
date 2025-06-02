@@ -144,6 +144,7 @@ def deserialize_kernel(
         # pylint: disable=no-member
         kernel = Kernel(
             hash=hash_value,
+            cache_dir="cache_dir",
             backend=target.backend,
             arch=target.arch,
             warp_size=target.warp_size,
