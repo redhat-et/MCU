@@ -1,7 +1,5 @@
 """
-Service for indexing Triton kernels from cache into database.
-
-This module provides the main service for scanning the cache and populating the database.
+Service for search Triton kernels based on criteria.
 """
 
 from __future__ import annotations
@@ -18,9 +16,6 @@ class SearchService:
     def __init__(self, criteria: SearchCriteria):
         """
         Initialize the search service.
-
-        Args:
-            cache_dir: Path to the Triton cache directory. If None, uses the default.
         """
         self.db = Database()
         self.criteria = criteria

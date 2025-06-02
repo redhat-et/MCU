@@ -1,6 +1,6 @@
 # pylint: disable=c-extension-no-member,too-many-instance-attributes,too-many-locals
 """
-zsh:1: command not found: q
+SQLAlchemy ORM model definitions for the Triton kernel cache.
 """
 from __future__ import annotations
 
