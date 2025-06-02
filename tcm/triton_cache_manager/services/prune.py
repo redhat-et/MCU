@@ -15,6 +15,7 @@ from ..data.database import Database
 from ..models.criteria import SearchCriteria
 from ..data.db_models import KernelOrm, KernelFileOrm
 from ..utils.tcm_constants import IR_EXTS
+from ..utils.paths import get_cache_dir
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
     """
 
     def __init__(self, cache_dir: Path | None = None):
+        self.cache_dir = cache_dir or get_cache_dir()
         self.repo = CacheRepository(cache_dir)
         self.db = Database()
 

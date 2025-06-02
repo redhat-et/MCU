@@ -126,7 +126,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     table.add_column("Stages", style="dim", width=5)
     table.add_column("Shared", style="dim", width=8)
     table.add_column("Size", style="cyan", width=10)
-    table.add_column("Debug", style="dim", width=8)
+    table.add_column("Dir", style="dim", width=8)
 
     for row in rows:
         row_dict = dict(row)
@@ -148,7 +148,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
             str(row_dict.get("num_stages", "N/A")),
             shared_size_str,
             total_size_str,
-            str(row_dict.get("debug", "N/A")),
+            str(row_dict.get("cache_dir", "N/A")),
         )
 
     rich.print(table)

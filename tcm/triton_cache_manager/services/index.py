@@ -10,7 +10,7 @@ from pathlib import Path
 from ..data.cache_repo import CacheRepository
 from ..data.database import Database
 from ..models.criteria import SearchCriteria
-
+from ..utils.paths import get_cache_dir
 
 class IndexService:
     """
@@ -27,6 +27,7 @@ class IndexService:
         Args:
             cache_dir: Path to the Triton cache directory. If None, uses the default.
         """
+        self.cache_dir = cache_dir or get_cache_dir()
         self.repo = CacheRepository(cache_dir)
         self.db = Database()
 
@@ -43,7 +44,7 @@ class IndexService:
 
         updated_kernels = 0
         for kernel in self.repo.kernels():
-            self.db.insert_kernel(kernel)
+            self.db.insert_kernel(kernel, self.cache_dir)
             updated_kernels += 1
 
         return updated_kernels, current_kernels
