@@ -1,6 +1,6 @@
 # pylint: disable=c-extension-no-member,too-many-instance-attributes,too-many-locals
 """
-SQLAlchemy ORM model definitions for the Triton kernel cache.
+zsh:1: command not found: q
 """
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Float,
-    ForeignKey,
     Integer,
     String,
     inspect,
+    ForeignKeyConstraint,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import (
@@ -25,10 +25,9 @@ from sqlalchemy.orm import (
     relationship,
     Session as SqlaSession,
 )
-from sqlalchemy import ForeignKeyConstraint
 
-from ..models.kernel import Kernel, KernelFile
-from triton_cache_manager.models import kernel
+from ..models.kernel import Kernel
+
 
 log = logging.getLogger(__name__)
 
@@ -159,7 +158,7 @@ class KernelOrm(Base):
             KernelFileOrm.kernel_cache_dir == k_data.cache_dir,
         ).delete(synchronize_session="fetch")
         log.debug(
-            "Deleted existing files for kernel_hash %s and cache_dir",
+            "Deleted existing files for kernel_hash %s and cache_dir %s",
             k_data.hash,
             k_data.cache_dir,
         )

@@ -11,6 +11,7 @@ import typer
 import rich
 from rich.table import Table
 from ..services.index import IndexService
+from ..services.search import SearchService
 from ..utils.logger import configure_logging
 from ..utils.paths import get_db_path
 from ..utils.utils import (
@@ -192,6 +193,7 @@ def search(
     older_younger = get_older_younger(older_than, younger_than)
 
     criteria = SearchCriteria(
+        cache_dir=cache_dir,
         name=name,
         backend=backend,
         arch=arch,
@@ -201,13 +203,14 @@ def search(
 
     svc = None
     try:
-        svc = IndexService(cache_dir=cache_dir)
+        svc = SearchService(criteria=criteria)
         rich.print(
             f"Searching for kernels with: Name='{name or 'any'}', "
+            f"Cache_dir='{cache_dir or 'any'}', "
             f"Backend='{backend or 'any'}', Arch='{arch or 'any'}', "
             f"OlderThan='{older_than or 'N/A'}', YoungerThan='{younger_than or 'N/A'}'..."
         )
-        rows = svc.db.search(criteria)
+        rows = svc.search()
         _display_kernels_table(rows)
     except Exception as e:  # pylint: disable=broad-exception-caught
         rich.print(f"[red]An error occurred during search: {e}[/red]")
