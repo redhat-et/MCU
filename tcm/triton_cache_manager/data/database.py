@@ -87,7 +87,7 @@ class Database:
         except Exception:  # pylint: disable=broad-except
             session.rollback()
             log.error(
-                "DB Error: Failed to upsert kernel %s with cache_dir.",
+                "DB Error: Failed to upsert kernel %s with cache_dir %s.",
                 k_data.hash,
                 k_data.cache_dir,
                 exc_info=True,
@@ -112,6 +112,7 @@ class Database:
             active_filters = []
 
             equality_filter_configs = [
+                ("cache_dir", KernelOrm.cache_dir, str),
                 ("name", KernelOrm.name, None),
                 ("backend", KernelOrm.backend, None),
                 ("arch", KernelOrm.arch, str),
