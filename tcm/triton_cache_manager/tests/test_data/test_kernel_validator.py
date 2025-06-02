@@ -52,11 +52,11 @@ class TestKernelValidator(unittest.TestCase):
             "maxnreg": 1,
             "cluster_dims": [1, 1, 1],
             "debug": False,
-            "shared": 1234
+            "shared": 1234,
         }
         with patch("pathlib.Path.iterdir", return_value=self.mock_files):
             kernel = deserialize_kernel(
-                valid_data, "1234abcd", self.test_dir, self.plugins
+                valid_data, "1234abcd", "/path/cache", self.test_dir, self.plugins
             )
 
         self.assertIsNotNone(kernel)
@@ -80,7 +80,7 @@ class TestKernelValidator(unittest.TestCase):
 
         with patch("pathlib.Path.iterdir", return_value=self.mock_files):
             kernel = deserialize_kernel(
-                invalid_data, "1234abcd", self.test_dir, self.plugins
+                invalid_data, "1234abcd", "path/cache", self.test_dir, self.plugins
             )
 
         self.assertIsNone(kernel)
@@ -95,7 +95,7 @@ class TestKernelValidator(unittest.TestCase):
 
         with patch("pathlib.Path.iterdir", return_value=self.mock_files):
             kernel = deserialize_kernel(
-                unrelated_data, "1234abcd", self.test_dir, self.plugins
+                unrelated_data, "1234abcd", "path/cache", self.test_dir, self.plugins
             )
 
         self.assertIsNone(kernel)
