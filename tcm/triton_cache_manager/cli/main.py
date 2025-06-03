@@ -55,7 +55,7 @@ def index(
         rich.print(f"Starting indexing process for cache directory: {svc.repo.root}...")
         n = svc.reindex()
         rich.print(
-            f"[green]Kernels Numbers for {svc.cache_dir}\n\t before: {n[1]}\n\t now: {n[0]}[/green]"
+            f"[green]Number of kernels in {svc.cache_dir}\n\t before: {n[1]}\n\t now: {n[0]}[/green]"
         )
     except FileNotFoundError as e:
         missing_path = (
