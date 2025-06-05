@@ -12,10 +12,10 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Float,
-    ForeignKey,
     Integer,
     String,
     inspect,
+    ForeignKeyConstraint,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import (
@@ -27,6 +27,7 @@ from sqlalchemy.orm import (
 )
 
 from ..models.kernel import Kernel
+
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class KernelOrm(Base):
     __tablename__ = "kernels"
 
     hash: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    cache_dir: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     backend: Mapped[Optional[str]] = mapped_column(String, index=True)
     arch: Mapped[Optional[str]] = mapped_column(String, index=True)
     name: Mapped[Optional[str]] = mapped_column(String, index=True)
@@ -101,6 +103,7 @@ class KernelOrm(Base):
         """
         kernel_values = {
             "hash": k_data.hash,
+            "cache_dir": k_data.cache_dir,
             "backend": k_data.backend,
             "arch": str(k_data.arch),
             "name": k_data.name,
@@ -140,26 +143,41 @@ class KernelOrm(Base):
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
-            if col.name != "hash"
+            if col.name not in ("hash", "cache_dir")
         }
-        stmt = stmt.on_conflict_do_update(index_elements=["hash"], set_=update_dict)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["hash", "cache_dir"], set_=update_dict
+        )
         session.execute(stmt)
-        log.debug("Upserted kernel_hash: %s", k_data.hash)
+        log.debug(
+            "Upserted kernel_hash %s kernel_cache_dir %s", k_data.hash, k_data.cache_dir
+        )
 
         session.query(KernelFileOrm).filter(
-            KernelFileOrm.kernel_hash == k_data.hash
+            KernelFileOrm.kernel_hash == k_data.hash,
+            KernelFileOrm.kernel_cache_dir == k_data.cache_dir,
         ).delete(synchronize_session="fetch")
-        log.debug("Deleted existing files for kernel_hash: %s", k_data.hash)
+        log.debug(
+            "Deleted existing files for kernel_hash %s and cache_dir %s",
+            k_data.hash,
+            k_data.cache_dir,
+        )
 
         for f_dto in k_data.files:
             kernel_file_orm = KernelFileOrm(
                 kernel_hash=k_data.hash,
+                kernel_cache_dir=k_data.cache_dir,
                 type=f_dto.file_type,
                 rel_path=f_dto.path.name,
                 size=f_dto.size,
             )
             session.add(kernel_file_orm)
-        log.debug("Added %d files for kernel_hash: %s", len(k_data.files), k_data.hash)
+        log.debug(
+            "Added %d files for kernel_hash %s and cache_dir %s ",
+            len(k_data.files),
+            k_data.hash,
+            k_data.cache_dir,
+        )
 
 
 class KernelFileOrm(Base):  # pylint: disable=too-few-public-methods
@@ -170,9 +188,17 @@ class KernelFileOrm(Base):  # pylint: disable=too-few-public-methods
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
     )
-    kernel_hash: Mapped[str] = mapped_column(
-        String, ForeignKey("kernels.hash", ondelete="CASCADE")
+    kernel_hash: Mapped[str] = mapped_column(String)
+    kernel_cache_dir: Mapped[str] = mapped_column(String)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["kernel_hash", "kernel_cache_dir"],
+            ["kernels.hash", "kernels.cache_dir"],
+            ondelete="CASCADE",
+        ),
     )
+
     type: Mapped[Optional[str]] = mapped_column(String)
     rel_path: Mapped[Optional[str]] = mapped_column(String)
     size: Mapped[Optional[int]] = mapped_column(Integer)

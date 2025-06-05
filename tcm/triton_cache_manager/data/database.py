@@ -47,7 +47,7 @@ class Database:
         """Returns a new database session."""
         return self.SessionLocal()
 
-    def insert_kernel(self, k_data: Kernel) -> None:
+    def insert_kernel(self, k_data: Kernel, cache_dir: str) -> None:
         """
         Upserts a kernel and its associated files into the database.
 
@@ -55,15 +55,21 @@ class Database:
             k_data: A `Kernel` DTO containing the metadata.
         """
         session = self.get_session()
+        k_data.cache_dir = str(cache_dir)
         try:
             KernelOrm.upsert_from_dto(session, k_data)
             session.commit()
-            log.info("Kernel %s and its files upserted into DB.", k_data.hash)
+            log.info(
+                "Kernel %s with cache_dir %s and its files upserted into DB.",
+                k_data.hash,
+                k_data.cache_dir,
+            )
         except exc.IntegrityError as e:
             session.rollback()
             log.error(
-                "Failed to upsert kernel %s due to a constraint violation: %s",
+                "Failed to upsert kernel %s with cache_dir %s due to a constraint violation: %s",
                 k_data.hash,
+                k_data.cache_dir,
                 e,
                 exc_info=True,
             )
@@ -71,8 +77,9 @@ class Database:
         except exc.OperationalError as e:
             session.rollback()
             log.error(
-                "Failed to upsert kernel %s due to a db operation issue: %s",
+                "Failed to upsert kernel %s with cache_dir %s due to a db operation issue: %s",
                 k_data.hash,
+                k_data.cache_dir,
                 e,
                 exc_info=True,
             )
@@ -80,7 +87,10 @@ class Database:
         except Exception:  # pylint: disable=broad-except
             session.rollback()
             log.error(
-                "DB Error: Failed to upsert kernel %s.", k_data.hash, exc_info=True
+                "DB Error: Failed to upsert kernel %s with cache_dir %s.",
+                k_data.hash,
+                k_data.cache_dir,
+                exc_info=True,
             )
             raise
         finally:
@@ -102,6 +112,7 @@ class Database:
             active_filters = []
 
             equality_filter_configs = [
+                ("cache_dir", KernelOrm.cache_dir, str),
                 ("name", KernelOrm.name, None),
                 ("backend", KernelOrm.backend, None),
                 ("arch", KernelOrm.arch, str),

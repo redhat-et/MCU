@@ -108,6 +108,7 @@ def is_kernel_related(data: Dict[str, Any]) -> bool:
 def deserialize_kernel(
     data: Dict[str, Any],
     hash_value: str,
+    cache_dir: str,
     directory: Path,
     plugins: Dict[str, KernelBackendPlugin],
 ) -> Optional[Kernel]:
@@ -144,6 +145,7 @@ def deserialize_kernel(
         # pylint: disable=no-member
         kernel = Kernel(
             hash=hash_value,
+            cache_dir=cache_dir,
             backend=target.backend,
             arch=target.arch,
             warp_size=target.warp_size,

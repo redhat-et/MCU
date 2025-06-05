@@ -11,6 +11,7 @@ import typer
 import rich
 from rich.table import Table
 from ..services.index import IndexService
+from ..services.search import SearchService
 from ..utils.logger import configure_logging
 from ..utils.paths import get_db_path
 from ..utils.utils import (
@@ -53,7 +54,9 @@ def index(
         svc = IndexService(cache_dir=cache_dir)
         rich.print(f"Starting indexing process for cache directory: {svc.repo.root}...")
         n = svc.reindex()
-        rich.print(f"[green]Kernels Numbers\n\t before: {n[1]}\n\t now: {n[0]}[/green]")
+        rich.print(
+            f"[green]Number of kernels in {svc.cache_dir}\n\tbefore: {n[1]}\n\tnow: {n[0]}[/green]"
+        )
     except FileNotFoundError as e:
         missing_path = (
             e.filename if hasattr(e, "filename") else (cache_dir or "default location")
@@ -126,7 +129,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     table.add_column("Stages", style="dim", width=5)
     table.add_column("Shared", style="dim", width=8)
     table.add_column("Size", style="cyan", width=10)
-    table.add_column("Debug", style="dim", width=8)
+    table.add_column("Dir", style="dim", width=8)
 
     for row in rows:
         row_dict = dict(row)
@@ -148,7 +151,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
             str(row_dict.get("num_stages", "N/A")),
             shared_size_str,
             total_size_str,
-            str(row_dict.get("debug", "N/A")),
+            str(row_dict.get("cache_dir", "N/A")),
         )
 
     rich.print(table)
@@ -192,6 +195,7 @@ def search(
     older_younger = get_older_younger(older_than, younger_than)
 
     criteria = SearchCriteria(
+        cache_dir=cache_dir,
         name=name,
         backend=backend,
         arch=arch,
@@ -201,13 +205,14 @@ def search(
 
     svc = None
     try:
-        svc = IndexService(cache_dir=cache_dir)
+        svc = SearchService(criteria=criteria)
         rich.print(
             f"Searching for kernels with: Name='{name or 'any'}', "
+            f"Cache_dir='{cache_dir or 'any'}', "
             f"Backend='{backend or 'any'}', Arch='{arch or 'any'}', "
             f"OlderThan='{older_than or 'N/A'}', YoungerThan='{younger_than or 'N/A'}'..."
         )
-        rows = svc.db.search(criteria)
+        rows = svc.search()
         _display_kernels_table(rows)
     except Exception as e:  # pylint: disable=broad-exception-caught
         rich.print(f"[red]An error occurred during search: {e}[/red]")

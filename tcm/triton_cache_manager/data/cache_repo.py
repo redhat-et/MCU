@@ -121,7 +121,7 @@ class CacheRepository:
                 group_meta_file.name,
                 e,
             )
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             # This broad except is a fallback for truly unexpected errors during this specific step.
             log.error(
                 "Skipping kernel in '%s', unexpected error processing group "
@@ -152,7 +152,7 @@ class CacheRepository:
                 e,
             )
             return None
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             log.error(
                 "Skipping kernel, unexpected error processing metadata file '%s': %s",
                 meta_path_to_load,
@@ -160,7 +160,7 @@ class CacheRepository:
             )
             return None
 
-        kernel = deserialize_kernel(data, d.name, d, self.plugins)
+        kernel = deserialize_kernel(data, d.name, str(self.root), d, self.plugins)
         if kernel:
             return kernel
 

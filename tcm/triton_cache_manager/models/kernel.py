@@ -40,6 +40,7 @@ class Kernel:
 
     # pylint: disable=too-many-instance-attributes
     hash: str
+    cache_dir: str
     backend: str
     arch: int
     warp_size: int
