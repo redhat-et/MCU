@@ -21,6 +21,7 @@ from ..utils.utils import (
 )
 from ..models.criteria import SearchCriteria
 from ..services.prune import PruningService, PruneStats
+from ..services.warm import WarmupService
 
 log = logging.getLogger(__name__)
 app = typer.Typer(help="Triton Kernel Cache Manager CLI")
@@ -317,6 +318,47 @@ def prune(  # pylint: disable=too-many-arguments
     finally:
         if svc:
             svc.close()
+
+
+@app.command()
+def warm(
+    image: str = typer.Option(
+        "--image", "-i", help="The container image to use for warming the cache."
+    ),
+    output_file: Path = typer.Option(
+        "warmed_cache.tar.gz",
+        "--output",
+        "-o",
+        help="The path to save the packaged cache archive.",
+    ),
+    host_cache_dir: str = typer.Option(
+        "--host-cache-dir", help="Specify the vLLM cache directory to use on the host"
+    ),
+):
+    """
+    Warms up the Triton cache using a specified container image and
+    packages the result into a tarball.
+    """
+    svc = None
+    try:
+
+        rich.print(f"Starting cache warm for image: '{image}'...")
+        svc = WarmupService("testmodel", "hf_secret", "vllm_cache_dir", host_cache_dir)
+        success = svc.warmup(image, output_file)
+
+        if success:
+            rich.print(
+                f"[green]Cache warmup successful! Archive saved to: {output_file}[/green]"
+            )
+        else:
+            rich.print(
+                "[red]Cache warmup failed. Check the logs for more details.[/red]"
+            )
+            raise typer.Exit(code=1)
+
+    except Exception as e:
+        rich.print(f"[red]An unexpected error occurred during warmup: {e}[/red]")
+        raise typer.Exit(code=1)
 
 
 def run():
