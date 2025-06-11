@@ -246,7 +246,7 @@ go install github.com/sigstore/cosign/v2/cmd/cosign@latest
 2. Sign an image
 
 ```bash
-cosign sign -y quay.io/mtahhan/01-vector-add-cache@sha256:<digest>
+cosign sign -y quay.io/tkm/vector-add-cache@sha256:<digest>
 ⏎
 Generating ephemeral keys...
 Retrieving signed certificate...
