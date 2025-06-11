@@ -61,6 +61,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
         Returns:
             Tuple[pruned_kernel_count, reclaimed_bytes]
         """
+        criteria.cache_dir = self.cache_dir
         rows = self.db.search(criteria)
         hashes: List[str] = [row["hash"] for row in rows]
 
@@ -234,6 +235,10 @@ class PruningService:  # pylint: disable=too-few-public-methods
         k_dir = self.repo.root / h
         freed = 0
 
+        kernel_row: KernelOrm | None = session.get(
+            KernelOrm,
+            (h, str(self.cache_dir)),
+        )
         if ir_only:
             files = list(k_dir.iterdir()) if k_dir.exists() else []
             for p in files:
@@ -257,7 +262,6 @@ class PruningService:  # pylint: disable=too-few-public-methods
             for r in ir_rows:
                 session.delete(r)
 
-            kernel_row: KernelOrm | None = session.get(KernelOrm, h)
             if kernel_row:
                 kernel_row.total_size = sum(f.size or 0 for f in kernel_row.files)
         else:
@@ -269,7 +273,8 @@ class PruningService:  # pylint: disable=too-few-public-methods
                     shutil.rmtree(k_dir)
                 except OSError as err:
                     log.error("Failed to remove %s: %s", k_dir, err, exc_info=True)
-            if (k := session.get(KernelOrm, h)) is not None:
-                session.delete(k)
+
+            if kernel_row:
+                session.delete(kernel_row)
 
         return freed
