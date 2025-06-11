@@ -243,7 +243,7 @@ Use [Sigstore Cosign](https://docs.sigstore.dev/) to sign TCV-built images.
 go install github.com/sigstore/cosign/v2/cmd/cosign@latest
 ```
 
-1. Sign an image
+2. Sign an image
 
 ```bash
 cosign sign -y quay.io/mtahhan/01-vector-add-cache@sha256:<digest>
@@ -264,7 +264,7 @@ Your browser will now be opened to:
 Cosign will prompt you to authenticate and display legal terms regarding
 transparency logs.
 
-1. Confirm and Finish
+3. Confirm and Finish
     - Ephemeral keys will be generated
     - Signature will be pushed to the registry
     - You'll see a success message including the transparency log index
