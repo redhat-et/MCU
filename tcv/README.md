@@ -5,12 +5,24 @@
 A Triton kernel cache container packaging utility inspired by
 [WASM](https://github.com/solo-io/wasm/blob/master/spec/README.md).
 
-## Build
+## Features
+
+- Build container images containing Triton cache directories
+- Extract Triton GPU kernel cache from OCI images
+- Compatible with docker or buildah
+- Client API for retrieving and extracting images.
+- Container image signing support with Cosign
+
+## Build Instructions
+
+Install dependencies:
 
 ```bash
 sudo dnf install gpgme-devel
 sudo dnf install btrfs-progs-devel
 ```
+
+Build the binary:
 
 ```bash
 go build
@@ -51,7 +63,6 @@ directory for a Triton Kernel.
 
 There are two variants of the specification:
 
-- [spec.md](./spec.md)
 - [spec-compat.md](./spec-compat.md)
 
 ## Example
@@ -220,6 +231,50 @@ skopeo inspect containers-storage:quay.io/tkm/vector-add-cache:rocm | jq -r '.La
     }
   ]
 }
+```
+
+## Signing Container Images
+
+Use [Sigstore Cosign](https://docs.sigstore.dev/) to sign TCV-built images.
+
+1. Install Cosign
+
+```bash
+go install github.com/sigstore/cosign/v2/cmd/cosign@latest
+```
+
+1. Sign an image
+
+```bash
+cosign sign -y quay.io/mtahhan/01-vector-add-cache@sha256:<digest>
+⏎
+Generating ephemeral keys...
+Retrieving signed certificate...
+
+    The sigstore service, hosted by sigstore a Series of LF Projects, LLC, is provided pursuant to the Hosted Project Tools Terms of Use, available at https://lfprojects.org/policies/hosted-project-tools-terms-of-use/.
+    Note that if your submission includes personal data associated with this signed artifact, it will be part of an immutable record.
+    This may include the email address associated with the account with which you authenticate your contractual Agreement.
+    This information will be used for signing this artifact and will be stored in public transparency logs and cannot be removed later, and is subject to the Immutable Record notice at https://lfprojects.org/policies/hosted-project-tools-immutable-records/.
+
+By typing 'y', you attest that (1) you are not submitting the personal data of any other person; and (2) you understand and agree to the statement and the Agreement terms at the URLs listed above.
+Your browser will now be opened to:
+...
+```
+
+Cosign will prompt you to authenticate and display legal terms regarding
+transparency logs.
+
+1. Confirm and Finish
+    - Ephemeral keys will be generated
+    - Signature will be pushed to the registry
+    - You'll see a success message including the transparency log index
+
+Upon successful completion, you will see an output similar to:
+
+```bash
+Successfully verified SCT...
+tlog entry created with index: 215011903
+Pushing signature to: quay.io/mtahhan/01-vector-add-cache
 ```
 
 ## Client API
