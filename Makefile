@@ -13,6 +13,9 @@ all: tcv
 # More info on the awk command:
 # http://linuxcommand.org/lc3_adv_awk.php
 
+CONTAINER_TOOL_PATH := $(shell which docker 2>/dev/null || which podman)
+CONTAINER_TOOL ?= $(shell basename ${CONTAINER_TOOL_PATH})
+
 .PHONY: help
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -20,4 +23,8 @@ help: ## Display this help.
 ##@ Default
 tcv: ## Build tcv.
 	$(MAKE) -C tcv
+.PHONY: tcv
+
+tcv-image: ## Build tcv image.
+	$(CONTAINER_TOOL) build --progress=plain -t quay.io/tkm/tcv -f tcv/images/amd64.dockerfile .
 .PHONY: tcv
