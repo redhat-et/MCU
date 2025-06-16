@@ -325,6 +325,12 @@ def warm(
     image: str = typer.Option(
         "--image", "-i", help="The container image to use for warming the cache."
     ),
+    model: str = typer.Option(
+        "facebook/opt-125m",
+        "--model",
+        "-m",
+        help="The model to use for warming the cache.",
+    ),
     output_file: Path = typer.Option(
         "warmed_cache.tar.gz",
         "--output",
@@ -332,23 +338,39 @@ def warm(
         help="The path to save the packaged cache archive.",
     ),
     host_cache_dir: str = typer.Option(
-        "--host-cache-dir", help="Specify the vLLM cache directory to use on the host"
+        "./",
+        "--host-cache-dir",
+        help="Specify the vLLM cache directory to use on the host",
+    ),
+    hug_face_token: str = typer.Option(
+        None, "--hugging-face-token", help="Add HF Token"
+    ),
+    vllm_cache_dir: str = typer.Option(
+        "/root/.cache/vllm/",
+        "--vllm_cache_dir",
+        help="Specify the vLLM cache directory to use on the container",
+    ),
+    tarball: bool = typer.Option(
+        False, "--tarball", help="Create a tarball of the vLLM cache"
+    ),
+    rocm: bool = typer.Option(
+        False, "--rocm", help="Warm vLLM cache for rocm. Default cuda."
     ),
 ):
     """
     Warms up the Triton cache using a specified container image and
-    packages the result into a tarball.
+    optionally packages the result into a tarball.
     """
     svc = None
     try:
 
-        rich.print(f"Starting cache warm for image: '{image}'...")
-        svc = WarmupService("testmodel", "hf_secret", "vllm_cache_dir", host_cache_dir)
-        success = svc.warmup(image, output_file)
+        rich.print(f"Starting cache warm for '{model}'...")
+        svc = WarmupService(model, hug_face_token, vllm_cache_dir, host_cache_dir)
+        success = svc.warmup(image, output_file, tarball, rocm)
 
         if success:
             rich.print(
-                f"[green]Cache warmup successful! Archive saved to: {output_file}[/green]"
+                f"[green]Cache warmup successful! Saved to: {host_cache_dir}[/green]"
             )
         else:
             rich.print(
