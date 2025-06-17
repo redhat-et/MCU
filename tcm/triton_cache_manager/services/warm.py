@@ -9,7 +9,6 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from ..utils.paths import get_cache_dir
 from ..utils.utils import format_size
 
 log = logging.getLogger(__name__)
@@ -28,7 +27,7 @@ class WarmupService:
         """
         Initializes the WarmupService.
         """
-        self.vllm_cache_dir = vllm_cache_dir or get_cache_dir()
+        self.vllm_cache_dir = vllm_cache_dir or "/root/.cache/vllm"
         self.hface_secret = hface_secret
         self.vllm_cache_dir = vllm_cache_dir
         self.host_cache_dir = host_cache_dir
