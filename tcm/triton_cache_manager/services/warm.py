@@ -14,6 +14,7 @@ from ..utils.utils import format_size
 
 log = logging.getLogger(__name__)
 
+
 # pylint: disable=too-few-public-methods
 class WarmupService:
     """
@@ -51,10 +52,9 @@ class WarmupService:
         """
         log.info("Starting cache warmup process with image: '%s'", image)
 
-        # if not self._run_container(image):
-        #    log.error("Cache warming container failed to execute successfully.")
-        #    return False
-        self._run_container(image, rocm)
+        if not self._run_container(image, rocm):
+            log.error("Cache warming container failed to execute successfully.")
+            return False
 
         if tarball:
             log.info("Container completed successfully. Now packaging the cache...")
