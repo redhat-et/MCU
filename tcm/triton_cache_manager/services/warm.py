@@ -29,7 +29,6 @@ class WarmupService:
         """
         self.vllm_cache_dir = vllm_cache_dir or "/root/.cache/vllm"
         self.hface_secret = hface_secret
-        self.vllm_cache_dir = vllm_cache_dir
         self.host_cache_dir = host_cache_dir
         self.model = model
 
@@ -78,7 +77,7 @@ class WarmupService:
         dir_name = f"{self.host_cache_dir}/cache_{timestamp}"
         try:
             os.makedirs(dir_name)
-            print(f"Directory '{dir_name}' created successfully.")
+            log.info("Directory '%s' created successfully.", dir_name)
         except FileExistsError:
             log.error("Directory %s already exists.", dir_name)
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -109,6 +108,7 @@ class WarmupService:
         ]
 
         host_cache_dir = self._create_date_time_dir()
+        self.host_cache_dir = host_cache_dir
         if rocm:
             backend_cmd = [
                 "--ipc=host",
@@ -176,8 +176,7 @@ class WarmupService:
             shutil.Error: If there is an error during the archive creation.
         """
         output_file.parent.mkdir(parents=True, exist_ok=True)
-
-        base_name = output_file.with_suffix("").with_suffix("")
+        base_name = output_file.parent / output_file.stem
         archive_format = "gztar"
 
         log.info(
