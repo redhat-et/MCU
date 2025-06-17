@@ -14,7 +14,7 @@ from ..utils.utils import format_size
 
 log = logging.getLogger(__name__)
 
-
+# pylint: disable=too-few-public-methods
 class WarmupService:
     """
     Manages the cache warming process by running a containerized script
@@ -82,7 +82,7 @@ class WarmupService:
             print(f"Directory '{dir_name}' created successfully.")
         except FileExistsError:
             log.error("Directory %s already exists.", dir_name)
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             log.error("Error creating directory: %s", e)
 
         return dir_name
