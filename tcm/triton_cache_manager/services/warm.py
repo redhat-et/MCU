@@ -27,8 +27,6 @@ class WarmupService:
     ):
         """
         Initializes the WarmupService.
-
-        Args:
         """
         self.vllm_cache_dir = vllm_cache_dir or get_cache_dir()
         self.hface_secret = hface_secret
@@ -41,11 +39,13 @@ class WarmupService:
         Executes the full cache warming and packaging workflow.
 
         This method runs a Podman container to generate cache files and,
-        upon success, packages the cache directory into a tarball.
+        upon success, optionally packages the cache directory into a tarball.
 
         Args:
             image: The container image to use for warming the cache.
             output_file: The path to save the final packaged cache file.
+            tarball: True if user wants to compress the warmed cache
+            rocm: True if user uses a rocm GPU
 
         Returns:
             True if the process completes successfully, False otherwise.
@@ -93,7 +93,7 @@ class WarmupService:
 
         Args:
             image: The name of the container image to run.
-
+            rocm: True if user uses a rocm GPU
         Returns:
             True if the container exits with a status code of 0, False otherwise.
         """
@@ -176,10 +176,8 @@ class WarmupService:
         Raises:
             shutil.Error: If there is an error during the archive creation.
         """
-        # Ensure the parent directory for the output file exists
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # shutil.make_archive expects the base name of the archive (path without extension)
         base_name = output_file.with_suffix("").with_suffix("")
         archive_format = "gztar"
 
