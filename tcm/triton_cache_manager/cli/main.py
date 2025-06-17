@@ -322,9 +322,6 @@ def prune(  # pylint: disable=too-many-arguments
 
 @app.command()
 def warm(
-    image: str = typer.Option(
-        "--image", "-i", help="The container image to use for warming the cache."
-    ),
     model: str = typer.Option(
         "facebook/opt-125m",
         "--model",
@@ -361,6 +358,11 @@ def warm(
     Warms up the Triton cache using a specified container image and
     optionally packages the result into a tarball.
     """
+    if rocm:
+        image = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1"
+    else:
+        image = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm:0.0.1"
+
     svc = None
     try:
 
