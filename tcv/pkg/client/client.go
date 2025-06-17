@@ -93,3 +93,43 @@ func GetSystemGPUInfo() ([]devices.TritonGPUInfo, error) {
 
 	return info, nil
 }
+
+func PreflightCheck(imageName string) error {
+	// Initialize config
+	if _, err := config.Initialize(config.ConfDir); err != nil {
+		return fmt.Errorf("failed to initialize config: %w", err)
+	}
+
+	// Ensure GPU is enabled
+	if !config.IsGPUEnabled() {
+		logging.Debug("Forcing ENABLE_GPU=true for preflight check")
+		config.SetEnabledGPU(true)
+	}
+
+	// Create accelerator
+	acc, err := accelerator.New(config.GPU, true)
+	if err != nil {
+		return fmt.Errorf("failed to initialize GPU accelerator: %w", err)
+	}
+	accelerator.GetRegistry().MustRegister(acc)
+
+	// Fetch the image
+	img, err := fetcher.NewImgFetcher().FetchImg(imageName)
+	if err != nil {
+		return fmt.Errorf("failed to fetch image: %w", err)
+	}
+
+	// Get GPU device info
+	devInfo, err := preflightcheck.GetAllGPUInfo(acc)
+	if err != nil {
+		return fmt.Errorf("failed to get GPU info: %w", err)
+	}
+
+	// Run the summary label check
+	if err := preflightcheck.CompareTritonSummaryLabelToGPU(img, devInfo); err != nil {
+		return fmt.Errorf("preflight check failed: %w", err)
+	}
+
+	logging.Info("Preflight GPU compatibility check passed.")
+	return nil
+}
