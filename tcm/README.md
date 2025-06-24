@@ -80,7 +80,7 @@ The `index` command scans the specified Triton cache directory (or the default `
 
 ```bash
 tcm index [OPTIONS]
-````
+```
 
 **Options:**
 
@@ -188,7 +188,7 @@ tcm warm [OPTIONS]
     tcm warm --model Llama-3-8B --rocm --hugging-face-token hf_YOUR_TOKEN
     ```
 
------
+---
 
 ## Requirements
 
@@ -203,7 +203,7 @@ The core dependencies for TCM are listed in `requirements.txt`:
 
 These are automatically installed when you follow the installation steps.
 
------
+---
 
 ## Project Structure
 
