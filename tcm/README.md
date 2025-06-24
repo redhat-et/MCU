@@ -109,7 +109,7 @@ Search and display kernels that match one or more filters.
 tcm list [OPTIONS]
 ```
 
-#### Options
+#### Listing Options
 
 - `--name, -n TEXT`     Kernel name (exact match)
 - `--backend, -b TEXT`  Backend (`cuda`, `rocm`, …)
@@ -147,7 +147,7 @@ deduplication.
 tcm prune [OPTIONS]
 ```
 
-#### Options
+#### Pruning Options
 
 - `--name, -n TEXT`     Kernel name
 - `--backend, -b TEXT`  Backend
@@ -159,7 +159,7 @@ tcm prune [OPTIONS]
 - `-y, --yes`           Skip the confirmation prompt
 - `--cache-dir PATH`    Cache directory
 
-#### Examples
+#### Pruning Examples
 
 - IR files older than 90 days
 
@@ -188,7 +188,7 @@ it.
 tcm warm [OPTIONS]
 ```
 
-#### Options
+#### Warming Options
 
 - `--model, -m TEXT`         Hugging Face model (default `facebook/opt-125m`)
 - `--output, -o PATH`        Output tarball (default `warmed_cache.tar.gz`)
@@ -198,7 +198,7 @@ tcm warm [OPTIONS]
 - `--tarball`                Produce a gzipped tarball after warming
 - `--rocm`                   Warm for ROCm GPUs (default CUDA)
 
-#### Examples
+#### Warming Examples
 
 - Warm cache for a model and produce a tarball
 
