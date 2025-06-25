@@ -6,6 +6,8 @@ Triton Cache Manager (TCM) is a lightweight CLI for **indexing, searching, and
 managing Triton GPU‑kernel caches**. It helps you organise, prune, and pre‑warm
 caches to improve runtime efficiency and save disk space.
 
+<img src="./screenshot/tcm-screenshot.png" alt="tcm" width="75%" height="auto">
+
 ---
 
 ## Table of Contents
