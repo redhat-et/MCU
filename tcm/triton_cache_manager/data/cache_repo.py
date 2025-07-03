@@ -102,7 +102,7 @@ class CacheRepository:
                         log.debug(
                             "Derived actual metadata path %s in the same group file dir %s.",
                             candidate_actual_meta_path,
-                            self.root,
+                            path.parent,
                         )
                         return candidate_actual_meta_path
 
