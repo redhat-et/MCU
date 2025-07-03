@@ -82,7 +82,27 @@ class CacheRepository:
 
             for key, path_str in child_paths.items():
                 if key.endswith(".json"):
+                    # Try to get the json from the same path as the grp file first
+                    # This will fix an issue that occurs when we try to index Cache
+                    # from a container or a different host
+                    path_split = path_str.split("/")
+                    cache_key = path_split[len(path_split) - 2]
+                    kernel_name = path_split[len(path_split) - 1]
+                    metadata_path_str = f"{self.root}/{cache_key}/{kernel_name}"
+
+                    candidate_actual_meta_path = Path(metadata_path_str)
+
+                    if candidate_actual_meta_path.is_file():
+                        log.debug(
+                            "Derived actual metadata path %s in the same group file dir %s.",
+                            candidate_actual_meta_path,
+                            self.root,
+                        )
+                        return candidate_actual_meta_path
+
+                    # Second attempt, get the metadata dir from the group file
                     candidate_actual_meta_path = Path(path_str)
+
                     if candidate_actual_meta_path.is_file():
                         log.debug(
                             "Derived actual metadata path %s from group file '%s' using key '%s'.",
