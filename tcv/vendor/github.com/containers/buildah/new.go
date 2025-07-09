@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
+	"slices"
 	"strings"
 
 	"github.com/containers/buildah/define"
@@ -21,8 +23,6 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/openshift/imagebuilder"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -99,10 +99,8 @@ func newContainerIDMappingOptions(idmapOptions *define.IDMappingOptions) storage
 
 func containerNameExist(name string, containers []storage.Container) bool {
 	for _, container := range containers {
-		for _, cname := range container.Names {
-			if cname == name {
-				return true
-			}
+		if slices.Contains(container.Names, name) {
+			return true
 		}
 	}
 	return false
@@ -195,7 +193,8 @@ func newBuilder(ctx context.Context, store storage.Store, options BuilderOptions
 			return nil, fmt.Errorf("instantiating image for %q: %w", transports.ImageName(ref), err)
 		}
 		defer srcSrc.Close()
-		manifestBytes, manifestType, err := srcSrc.GetManifest(ctx, nil)
+		unparsedTop := image.UnparsedInstance(srcSrc, nil)
+		manifestBytes, manifestType, err := unparsedTop.Manifest(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("loading image manifest for %q: %w", transports.ImageName(ref), err)
 		}
@@ -203,6 +202,7 @@ func newBuilder(ctx context.Context, store storage.Store, options BuilderOptions
 			imageDigest = manifestDigest.String()
 		}
 		var instanceDigest *digest.Digest
+		unparsedInstance := unparsedTop // for instanceDigest
 		if manifest.MIMETypeIsMultiImage(manifestType) {
 			list, err := manifest.ListFromBlob(manifestBytes, manifestType)
 			if err != nil {
@@ -213,8 +213,9 @@ func newBuilder(ctx context.Context, store storage.Store, options BuilderOptions
 				return nil, fmt.Errorf("finding an appropriate image in manifest list %q: %w", transports.ImageName(ref), err)
 			}
 			instanceDigest = &instance
+			unparsedInstance = image.UnparsedInstance(srcSrc, instanceDigest)
 		}
-		src, err = image.FromUnparsedImage(ctx, systemContext, image.UnparsedInstance(srcSrc, instanceDigest))
+		src, err = image.FromUnparsedImage(ctx, systemContext, unparsedInstance)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating image for %q instance %q: %w", transports.ImageName(ref), instanceDigest, err)
 		}
@@ -243,11 +244,11 @@ func newBuilder(ctx context.Context, store storage.Store, options BuilderOptions
 
 	suffixDigitsModulo := 100
 	for {
-		var flags map[string]interface{}
+		var flags map[string]any
 		// check if we have predefined ProcessLabel and MountLabel
 		// this could be true if this is another stage in a build
 		if options.ProcessLabel != "" && options.MountLabel != "" {
-			flags = map[string]interface{}{
+			flags = map[string]any{
 				"ProcessLabel": options.ProcessLabel,
 				"MountLabel":   options.MountLabel,
 			}
