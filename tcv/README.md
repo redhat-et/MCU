@@ -25,31 +25,42 @@ sudo dnf install btrfs-progs-devel
 Build the binary:
 
 ```bash
-go build
+make build
+```
+
+After the binary is built, it can be found in an arch specific directory,
+something like `./_output/bin/linux_amd64/tcv`. To install the binary in
+the local `~/go/bin` directory, run (make sure `~/go/bin` is in $PATH):
+
+```bash
+make install
 ```
 
 ## Usage
 
+Below is the `tcv` usage:
+
 ```bash
-$ ./_output/bin/linux_amd64/tcv -h
+$ tcv -h
 A GPU Kernel runtime container image management utility
 
 Usage:
   tcv [flags]
 
 Flags:
+  -b, --baremetal          Run baremetal preflight checks
   -c, --create             Create OCI image
   -d, --dir string         Triton Cache Directory
   -e, --extract            Extract a Triton cache from an OCI image
   -h, --help               help for tcv
   -i, --image string       OCI image name
-  -l, --log-level string   Set the logging verbosity level (debug, info, warning or error)
+  -l, --log-level string   Set the logging verbosity level: debug, info, warning or error
+      --no-gpu             Allow kernel extraction without GPU present (for testing purposes)
 ```
 
-> NOTE: The create option is a work in progress. For now
-to create an OCI image containing a Triton cache directory
-please follow the instructions in
-[spec-compat.md](./spec-compat.md).
+> NOTE: The create option is a work in progress.
+> For now to create an OCI image containing a Triton cache directory please
+> follow the instructions in [spec-compat.md](./spec-compat.md).
 
 ## Dependencies
 
@@ -72,7 +83,7 @@ To extract the Triton Cache for the
 tutorial from [Triton](https://github.com/triton-lang/triton), run the following:
 
 ```bash
-./_output/bin/linux_amd64/tcv -e -i quay.io/tkm/vector-add-cache:rocm
+tcv -e -i quay.io/tkm/vector-add-cache:rocm
 Img fetched successfully!!!!!!!!
 Img Digest: sha256:b6d7703261642df0bf95175a64a01548eb4baf265c5755c30ede0fea03cd5d97
 Img Size: 525
@@ -85,7 +96,7 @@ container image and copy it to  `~/.triton/cache/`.
 To Create an OCI image for a Triton Cache using docker run the following:
 
 ```bash
-./_output/bin/linux_amd64/tcv -c -i quay.io/tkm/vector-add-cache:rocm -d example/vector-add-cache-rocm
+tcv -c -i quay.io/tkm/vector-add-cache:rocm -d example/vector-add-cache-rocm
 INFO[2025-05-28 11:09:33] baremetalFlag false
 INFO[2025-05-28 11:09:33] Using docker to build the image
 INFO[2025-05-28 11:09:33] Wrote manifest to /tmp/.tcv/io.triton.manifest/manifest.json
@@ -127,8 +138,8 @@ To see the new image:
 
 ```bash
  docker images
-REPOSITORY                                                                                TAG                   IMAGE ID       CREATED          SIZE
-quay.io/tkm/vector-add-cache                                                       latest                32572653bbbd   5 minutes ago    0B
+REPOSITORY                     TAG     IMAGE ID       CREATED          SIZE
+quay.io/tkm/vector-add-cache   latest  32572653bbbd   5 minutes ago    0B
 ```
 
 To inspect the docker image with Skopeo
@@ -177,7 +188,7 @@ skopeo inspect docker-daemon:quay.io/tkm/vector-add-cache:rocm
 The build output is shown below.
 
 ```bash
-./_output/bin/linux_amd64/tcv -c -i quay.io/tkm/vector-add-cache:rocm -d example/vector-add-cache-rocm
+tcv -c -i quay.io/tkm/vector-add-cache:rocm -d example/vector-add-cache-rocm
 INFO[2025-05-28 12:23:04] baremetalFlag false
 INFO[2025-05-28 12:23:04] Using buildah to build the image
 INFO[2025-05-28 12:23:04] Wrote manifest to /tmp/buildah-manifest-dir-2780945232/manifest.json

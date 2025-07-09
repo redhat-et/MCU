@@ -15,6 +15,7 @@ securely, TKDK has you covered.
 Organize, index, and monitor your Triton kernel caches. This tool
 provides detailed reports on cache usage, offering data-driven
 insights into compilation performance and cache effectiveness.
+For more information please see the TCM [readme](./tcm/README.md).
 
 ### Triton Cache Vault (TCV)
 
@@ -31,26 +32,27 @@ and utilities for loading, storing, and debugging GPU memory.
 **Triton-util was developed by [Umer Adil](mailto:umer.hayat.adil@gmail.com)**
 and generously contributed to TKDK.
 
-For more information please see the triton util [readme](./triton_util/README.md).
+For more information please see the Triton Util [readme](./triton_util/README.md).
 
 ## Getting Started
 
 1. Clone this repository:
 
- ```bash
- git clone https://github.com/redhat-et/tkdk.git
- cd tkdk
- ```
+    ```bash
+    git clone https://github.com/redhat-et/TKDK.git
+    cd TKDK
+    ```
 
 1. Follow setup instructions for each tool in its respective directory.
 
 ## Project Structure
 
 ```bash
-tkdk/
-├── tcm/         # Triton Cache Manager
-├── tcv/             # OCI packaging and signing tool
-└── README.md              # You're here!
+TKDK/
+├── tcm/           # Triton Cache Manager
+├── tcv/           # OCI packaging and signing tool
+├── triton_util/   # Triton Utilities
+└── README.md      # You're here!
 ```
 
 ## Security & Distribution
