@@ -57,7 +57,6 @@ class RuntimeStatsCollector:
         self._pending_records: List[CacheAccessRecord] = []
         self._db = Database()
         self._enabled = True
-        self._last_persist_time: float = 0.0
 
     def enable(self):
         """Enable statistics collection."""
@@ -135,7 +134,6 @@ class RuntimeStatsCollector:
                 session.close()
 
             self._pending_records.clear()
-            self._last_persist_time = time.time()
 
         except Exception as exc:  # pylint: disable=broad-except
             log.error("Failed to persist runtime stats: %s", exc, exc_info=False)
