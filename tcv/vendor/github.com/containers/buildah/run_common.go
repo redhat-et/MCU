@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,16 +47,20 @@ import (
 	"github.com/containers/storage/pkg/lockfile"
 	"github.com/containers/storage/pkg/mount"
 	"github.com/containers/storage/pkg/reexec"
+	"github.com/containers/storage/pkg/regexp"
 	"github.com/containers/storage/pkg/unshare"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
+
+const maxHostnameLen = 64
+
+var validHostnames = regexp.Delayed("[A-Za-z0-9][A-Za-z0-9.-]+")
 
 func (b *Builder) createResolvConf(rdir string, chownOpts *idtools.IDPair) (string, error) {
 	cfile := filepath.Join(rdir, "resolv.conf")
@@ -176,14 +181,8 @@ func (b *Builder) addHostsEntries(file, imageRoot string, entries etchosts.HostE
 
 // generateHostname creates a containers /etc/hostname file
 func (b *Builder) generateHostname(rdir, hostname string, chownOpts *idtools.IDPair) (string, error) {
-	var err error
-	hostnamePath := "/etc/hostname"
-
-	var hostnameBuffer bytes.Buffer
-	hostnameBuffer.Write([]byte(fmt.Sprintf("%s\n", hostname)))
-
-	cfile := filepath.Join(rdir, filepath.Base(hostnamePath))
-	if err = ioutils.AtomicWriteFile(cfile, hostnameBuffer.Bytes(), 0o644); err != nil {
+	cfile := filepath.Join(rdir, "hostname")
+	if err := ioutils.AtomicWriteFile(cfile, append([]byte(hostname), '\n'), 0o644); err != nil {
 		return "", fmt.Errorf("writing /etc/hostname into the container: %w", err)
 	}
 
@@ -193,7 +192,7 @@ func (b *Builder) generateHostname(rdir, hostname string, chownOpts *idtools.IDP
 		uid = chownOpts.UID
 		gid = chownOpts.GID
 	}
-	if err = os.Chown(cfile, uid, gid); err != nil {
+	if err := os.Chown(cfile, uid, gid); err != nil {
 		return "", err
 	}
 	if err := relabel(cfile, b.MountLabel, false); err != nil {
@@ -697,8 +696,9 @@ func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs [
 			return 1, fmt.Errorf("parsing container state %q from %s: %w", string(stateOutput), runtime, err)
 		}
 		switch state.Status {
-		case "running":
-		case "stopped":
+		case specs.StateCreating, specs.StateCreated, specs.StateRunning:
+			// all fine
+		case specs.StateStopped:
 			atomic.StoreUint32(&stopped, 1)
 		default:
 			return 1, fmt.Errorf("container status unexpectedly changed to %q", state.Status)
@@ -729,7 +729,7 @@ func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs [
 	return wstatus, nil
 }
 
-func runCollectOutput(logger *logrus.Logger, fds, closeBeforeReadingFds []int) string { //nolint:interfacer
+func runCollectOutput(logger *logrus.Logger, fds, closeBeforeReadingFds []int) string {
 	for _, fd := range closeBeforeReadingFds {
 		unix.Close(fd)
 	}
@@ -775,7 +775,7 @@ func runCollectOutput(logger *logrus.Logger, fds, closeBeforeReadingFds []int) s
 	return b.String()
 }
 
-func setNonblock(logger *logrus.Logger, fd int, description string, nonblocking bool) (bool, error) { //nolint:interfacer
+func setNonblock(logger *logrus.Logger, fd int, description string, nonblocking bool) (bool, error) {
 	mask, err := unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
 	if err != nil {
 		return false, err
@@ -865,13 +865,13 @@ func runCopyStdio(logger *logrus.Logger, stdio *sync.WaitGroup, copyPipes bool, 
 			return
 		}
 		if blocked {
-			defer setNonblock(logger, rfd, readDesc[rfd], false) // nolint:errcheck
+			defer setNonblock(logger, rfd, readDesc[rfd], false) //nolint:errcheck
 		}
-		setNonblock(logger, wfd, writeDesc[wfd], false) // nolint:errcheck
+		setNonblock(logger, wfd, writeDesc[wfd], false) //nolint:errcheck
 	}
 
 	if copyPipes {
-		setNonblock(logger, stdioPipe[unix.Stdin][1], writeDesc[stdioPipe[unix.Stdin][1]], true) // nolint:errcheck
+		setNonblock(logger, stdioPipe[unix.Stdin][1], writeDesc[stdioPipe[unix.Stdin][1]], true) //nolint:errcheck
 	}
 
 	runCopyStdioPassData(copyPipes, stdioPipe, finishCopy, relayMap, relayBuffer, readDesc, writeDesc)
@@ -1640,11 +1640,11 @@ func (b *Builder) runSetupRunMounts(mountPoint, bundlePath string, mounts []stri
 			if image != "" {
 				mountImages = append(mountImages, image)
 			}
-			if overlayDir != "" {
-				overlayDirs = append(overlayDirs, overlayDir)
-			}
 			if intermediateMount != "" {
 				intermediateMounts = append(intermediateMounts, intermediateMount)
+			}
+			if overlayDir != "" {
+				overlayDirs = append(overlayDirs, overlayDir)
 			}
 			finalMounts = append(finalMounts, *mountSpec)
 		case "tmpfs":
@@ -1659,12 +1659,18 @@ func (b *Builder) runSetupRunMounts(mountPoint, bundlePath string, mounts []stri
 					return nil, nil, err
 				}
 			}
-			mountSpec, intermediateMount, tl, err = b.getCacheMount(tokens, sources.StageMountPoints, idMaps, sources.WorkDir, bundleMountsDir)
+			mountSpec, image, intermediateMount, overlayDir, tl, err = b.getCacheMount(tokens, sources.SystemContext, sources.StageMountPoints, idMaps, sources.WorkDir, bundleMountsDir)
 			if err != nil {
 				return nil, nil, err
 			}
+			if image != "" {
+				mountImages = append(mountImages, image)
+			}
 			if intermediateMount != "" {
 				intermediateMounts = append(intermediateMounts, intermediateMount)
+			}
+			if overlayDir != "" {
+				overlayDirs = append(overlayDirs, overlayDir)
 			}
 			if tl != nil {
 				targetLocks = append(targetLocks, tl)
@@ -1706,15 +1712,39 @@ func (b *Builder) getBindMount(tokens []string, sys *types.SystemContext, contex
 		return nil, "", "", "", errors.New("context directory for current run invocation is not configured")
 	}
 	var optionMounts []specs.Mount
-	mount, image, intermediateMount, overlayMount, err := volumes.GetBindMount(sys, tokens, contextDir, b.store, b.MountLabel, stageMountPoints, workDir, tmpDir)
+	optionMount, image, intermediateMount, overlayMount, err := volumes.GetBindMount(sys, tokens, contextDir, b.store, b.MountLabel, stageMountPoints, workDir, tmpDir)
 	if err != nil {
 		return nil, "", "", "", err
 	}
-	optionMounts = append(optionMounts, mount)
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			if overlayMount != "" {
+				if err := overlay.RemoveTemp(overlayMount); err != nil {
+					b.Logger.Debug(err.Error())
+				}
+			}
+			if intermediateMount != "" {
+				if err := mount.Unmount(intermediateMount); err != nil {
+					b.Logger.Debugf("unmounting %q: %v", intermediateMount, err)
+				}
+				if err := os.Remove(intermediateMount); err != nil {
+					b.Logger.Debugf("removing should-be-empty directory %q: %v", intermediateMount, err)
+				}
+			}
+			if image != "" {
+				if _, err := b.store.UnmountImage(image, false); err != nil {
+					b.Logger.Debugf("unmounting image %q: %v", image, err)
+				}
+			}
+		}
+	}()
+	optionMounts = append(optionMounts, optionMount)
 	volumes, err := b.runSetupVolumeMounts(b.MountLabel, nil, optionMounts, idMaps)
 	if err != nil {
 		return nil, "", "", "", err
 	}
+	succeeded = true
 	return &volumes[0], image, intermediateMount, overlayMount, nil
 }
 
@@ -2053,12 +2083,30 @@ func setPdeathsig(cmd *exec.Cmd) {
 	cmd.SysProcAttr.Pdeathsig = syscall.SIGKILL
 }
 
-func relabel(path, mountLabel string, recurse bool) error {
-	if err := label.Relabel(path, mountLabel, recurse); err != nil {
+func relabel(path, mountLabel string, shared bool) error {
+	if err := label.Relabel(path, mountLabel, shared); err != nil {
 		if !errors.Is(err, syscall.ENOTSUP) {
 			return err
 		}
 		logrus.Debugf("Labeling not supported on %q", path)
 	}
 	return nil
+}
+
+// mapContainerNameToHostname returns the passed-in string with characters that
+// don't match validHostnames (defined above) stripped out.
+func mapContainerNameToHostname(containerName string) string {
+	match := validHostnames.FindStringIndex(containerName)
+	if match == nil {
+		return ""
+	}
+	trimmed := containerName[match[0]:]
+	match[1] -= match[0]
+	match[0] = 0
+	for match[1] != len(trimmed) && match[1] < match[0]+maxHostnameLen {
+		trimmed = trimmed[:match[1]] + trimmed[match[1]+1:]
+		match = validHostnames.FindStringIndex(trimmed)
+		match[1] = min(match[1], maxHostnameLen)
+	}
+	return trimmed[:match[1]]
 }

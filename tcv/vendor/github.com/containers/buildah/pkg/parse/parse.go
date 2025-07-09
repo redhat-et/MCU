@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -249,6 +250,18 @@ func parseSecurityOpts(securityOpts []string, commonOpts *define.CommonBuildOpti
 			commonOpts.ApparmorProfile = con[1]
 		case "seccomp":
 			commonOpts.SeccompProfilePath = con[1]
+		case "mask":
+			commonOpts.Masks = append(commonOpts.Masks, strings.Split(con[1], ":")...)
+		case "unmask":
+			unmasks := strings.Split(con[1], ":")
+			for _, unmask := range unmasks {
+				matches, _ := filepath.Glob(unmask)
+				if len(matches) > 0 {
+					commonOpts.Unmasks = append(commonOpts.Unmasks, matches...)
+					continue
+				}
+				commonOpts.Unmasks = append(commonOpts.Unmasks, unmask)
+			}
 		default:
 			return fmt.Errorf("invalid --security-opt 2: %q", opt)
 		}
@@ -693,11 +706,12 @@ func GetBuildOutput(buildOutput string) (define.BuildOutputOption, error) {
 				return define.BuildOutputOption{}, fmt.Errorf("duplicate %q not supported", arr[0])
 			}
 			typeSelected = true
-			if arr[1] == "local" {
+			switch arr[1] {
+			case "local":
 				isDir = true
-			} else if arr[1] == "tar" {
+			case "tar":
 				isDir = false
-			} else {
+			default:
 				return define.BuildOutputOption{}, fmt.Errorf("invalid type %q selected for build output options %q", arr[1], buildOutput)
 			}
 		case "dest":
@@ -839,7 +853,7 @@ func SBOMScanOptionsFromFlagSet(flags *pflag.FlagSet, _ func(name string) *pflag
 	if image != "" || len(commands) > 0 || mergeStrategy != "" {
 		options = &define.SBOMScanOptions{
 			Image:         image,
-			Commands:      append([]string{}, commands...),
+			Commands:      slices.Clone(commands),
 			MergeStrategy: define.SBOMMergeStrategy(mergeStrategy),
 		}
 	}
