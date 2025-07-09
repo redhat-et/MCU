@@ -121,42 +121,37 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     )
     table.add_column("Hash", style="dim", width=15, overflow="fold")
     table.add_column("Name", style="cyan", min_width=20, overflow="fold")
-    table.add_column("Modified", style="magenta", width=18)
+    table.add_column("Hits", style="green", min_width=5, overflow="fold")
+    table.add_column("Last Access", style="magenta", width=18)
     table.add_column("Backend", style="green", width=5)
     table.add_column("Arch", style="blue", width=5)
     table.add_column("Version", style="yellow", width=5)
-    table.add_column("Warp size", style="dim", width=5)
     table.add_column("Warps", style="dim", width=5)
     table.add_column("Stages", style="dim", width=5)
-    table.add_column("Shared", style="dim", width=8)
-    table.add_column("Size", style="cyan", width=10)
-    table.add_column("Dir", style="dim", width=8)
+    table.add_column("Dir", style="dim", width=15)
 
     for row in rows:
         row_dict = dict(row)
         total_size_bytes = row_dict.get("total_size", 0)
         total_size_str = format_size(total_size_bytes)
-        shared_size_bytes = row_dict.get("shared", 0)
-        shared_size_str = format_size(shared_size_bytes)
-        mod_time_unix = row_dict.get("modified_time")
-        mod_time_str = mod_time_handle(mod_time_unix)
+        last_time_unix = row_dict.get("last_access")
+        last_time_str = mod_time_handle(last_time_unix)
+        num_hits = row_dict.get("runtime_hits",0)
+        num_hits_str = str(num_hits)
         table.add_row(
             row_dict.get("hash", "N/A")[:12] + "...",
             row_dict.get("name", "N/A"),
-            mod_time_str,
+            num_hits_str,
+            last_time_str,
             row_dict.get("backend", "N/A"),
             row_dict.get("arch", "N/A"),
             row_dict.get("triton_version", "N/A"),
-            str(row_dict.get("warp_size", "N/A")),
             str(row_dict.get("num_warps", "N/A")),
-            str(row_dict.get("num_stages", "N/A")),
-            shared_size_str,
             total_size_str,
             str(row_dict.get("cache_dir", "N/A")),
         )
 
     rich.print(table)
-
 
 # pylint: disable=too-many-positional-arguments
 # pylint: disable=too-many-arguments
@@ -361,7 +356,7 @@ def warm(
     if rocm:
         image = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1"
     else:
-        image = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm:0.0.1"
+        image = "quay.io/rh-ee-asangior/vllm-0.9.2-tcm-warm:0.0.2"
 
     svc = None
     try:
