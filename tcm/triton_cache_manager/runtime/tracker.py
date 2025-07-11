@@ -37,13 +37,11 @@ class CacheAccessRecord:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         cache_key: str,
-        kernel_name: str,
         hit: bool,
         timestamp: float,
         cache_dir: Optional[Path] = None,
     ):
         self.cache_key = cache_key
-        self.kernel_name = kernel_name
         self.hit = hit
         self.timestamp = timestamp
         self.cache_dir = cache_dir or get_cache_dir()
@@ -69,7 +67,6 @@ class RuntimeStatsCollector:
     def record_access(
         self,
         cache_key: str,
-        kernel_name: str,
         hit: bool,
         cache_dir: Optional[Path] = None,
     ):
@@ -79,7 +76,7 @@ class RuntimeStatsCollector:
 
         with self._lock:
             self._pending_records.append(
-                CacheAccessRecord(cache_key, kernel_name, hit, time.time(), cache_dir)
+                CacheAccessRecord(cache_key, hit, time.time(), cache_dir)
             )
             self._persist_to_database()
 
@@ -186,11 +183,9 @@ class TCMTrackingCacheManager(CacheManager):
     def get_group(self, filename: str) -> Optional[Dict[str, str]]:
         """Intercepts group retrieval to track cache access."""
         group = self._base_manager.get_group(filename)
-        kernel_name = filename.split(".")[0]
 
         _runtime_collector.record_access(
             cache_key=self.full_cache_key,
-            kernel_name=kernel_name,
             hit=group is not None,
             cache_dir=self._cache_dir,
         )
