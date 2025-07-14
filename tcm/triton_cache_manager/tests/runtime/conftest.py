@@ -7,8 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from triton_cache_manager.runtime import tracker
 
-
+# pylint: disable=redefined-outer-name
 @pytest.fixture()
 def fake_kernel():
     """Small stand-in for KernelOrm rows"""
@@ -34,14 +35,13 @@ def mock_session(fake_kernel):
     sess.close.return_value = None
     return sess
 
-
+# pylint: disable=redefined-outer-name
 @pytest.fixture(autouse=True)
 def patch_database(monkeypatch, mock_session):
     """
     Replace tracker.Database() with a lambda that gives a fake
     containing get_session() --> mock_session
     """
-    from triton_cache_manager.runtime import tracker
 
     fake_db = MagicMock()
     fake_db.get_session.return_value = mock_session
