@@ -127,7 +127,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     table.add_column("Arch", style="blue", width=5)
     table.add_column("Version", style="yellow", width=5)
     table.add_column("Warps", style="dim", width=5)
-    table.add_column("Stages", style="dim", width=5)
+    table.add_column("Total Size", style="dim", width=5)
     table.add_column("Dir", style="dim", width=15)
 
     for row in rows:

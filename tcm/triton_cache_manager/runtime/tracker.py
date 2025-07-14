@@ -174,7 +174,7 @@ class TCMTrackingCacheManager(CacheManager):
             self._cache_dir = get_cache_dir()
 
     def get_file(self, filename: str) -> Optional[str]:
-        """Intercepts file retrieval to track hits/misses."""
+        """Passes through get_file operations to the base manager."""
         return self._base_manager.get_file(filename)
 
     def put(self, data: Any, filename: str, binary: bool = True) -> str:

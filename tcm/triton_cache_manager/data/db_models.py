@@ -78,9 +78,15 @@ class KernelOrm(Base):
     total_size: Mapped[Optional[int]] = mapped_column(Integer)
     kernel_metadata_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
     modified_time: Mapped[Optional[float]] = mapped_column(Float, index=True)
-    runtime_hits: Mapped[Optional[int]] = mapped_column(Integer, default=0, nullable=False)
-    runtime_misses: Mapped[Optional[int]] = mapped_column(Integer, default=0, nullable=False)
-    last_access_time: Mapped[Optional[float]] = mapped_column(Float, index=True, nullable=False)
+    runtime_hits: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    runtime_misses: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    last_access_time: Mapped[Optional[float]] = mapped_column(
+        Float, index=True, nullable=False, default=0.0
+    )
 
     files: Mapped[List["KernelFileOrm"]] = relationship(
         "KernelFileOrm",
