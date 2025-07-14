@@ -10,6 +10,8 @@ authors         = [{name = "Alessandro Sangiorgi", email = "asangior@redhat.com"
 requires-python = ">=3.9"
 
 dependencies = [
+  "triton",
+  "rich>=13.7",
   "typer[all]",
   "structlog",
   "pydantic>=2",
