@@ -11,6 +11,7 @@ from threading import Lock
 from pathlib import Path
 
 from triton.runtime.cache import CacheManager, FileCacheManager
+# pylint: disable=no-name-in-module
 from triton import knobs
 
 from triton_cache_manager.data.database import Database
