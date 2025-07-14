@@ -7,6 +7,7 @@ from triton_cache_manager.runtime.tracker import RuntimeStatsCollector
 
 
 def test_single_hit_flushes_and_clears():
+    """Test single cache hit"""
     collector = RuntimeStatsCollector()
 
     # deterministic timestamp
@@ -16,7 +17,8 @@ def test_single_hit_flushes_and_clears():
     collector.flush()
 
     # internal buffer must be empty after flush
-    assert collector._pending_records == []
+    # pylint: disable=protected-access
+    assert not collector._pending_records
 
 
 def test_updates_kernel(fake_kernel, mock_session):
