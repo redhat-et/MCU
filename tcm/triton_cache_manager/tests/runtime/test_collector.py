@@ -36,6 +36,36 @@ def test_updates_kernel(fake_kernel, mock_session):
     assert mock_session.commit.call_count == 2
 
 
+def create_query_side_effect(mock_kernel1, mock_kernel2):
+    """Helper function for query side effect"""
+    # pylint: disable=unused-argument
+    def query_side_effect(model):
+        query_mock = MagicMock()
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+
+        def filter_side_effect(*args):
+            # Extract the cache_key from the filter arguments
+            for arg in args:
+                if hasattr(arg, "left") and hasattr(arg.left, "key"):
+                    if arg.left.key == "hash" and hasattr(arg, "right"):
+                        if hasattr(arg.right, "value"):
+                            cache_key = arg.right.value
+                        else:
+                            cache_key = arg.right
+                        if cache_key == "key1":
+                            filter_mock.all.return_value = [mock_kernel1]
+                        elif cache_key == "key2":
+                            filter_mock.all.return_value = [mock_kernel2]
+                        break
+            return filter_mock
+
+        query_mock.filter = filter_side_effect
+        return query_mock
+
+    return query_side_effect
+
+
 # pylint: disable=protected-access, too-many-statements
 def test_data_persistence_with_multiple_records():
     """
@@ -61,33 +91,9 @@ def test_data_persistence_with_multiple_records():
     mock_kernel2.runtime_misses = 2
     mock_kernel2.last_access_time = None
 
-    #pylint: disable=unused-argument
-    def query_side_effect(model):
-        query_mock = MagicMock()
-        filter_mock = MagicMock()
-        query_mock.filter.return_value = filter_mock
-
-        def filter_side_effect(*args):
-            # Extract the cache_key from the filter arguments
-            for arg in args:
-                if hasattr(arg, "left") and hasattr(arg.left, "key"):
-                    if arg.left.key == "hash" and hasattr(arg, "right"):
-                        if hasattr(arg.right, "value"):
-                            cache_key = arg.right.value
-                        else:
-                            cache_key = arg.right
-
-                        if cache_key == "key1":
-                            filter_mock.all.return_value = [mock_kernel1]
-                        elif cache_key == "key2":
-                            filter_mock.all.return_value = [mock_kernel2]
-                        break
-            return filter_mock
-
-        query_mock.filter = filter_side_effect
-        return query_mock
-
-    mock_session.query.side_effect = query_side_effect
+    mock_session.query.side_effect = create_query_side_effect(
+        mock_kernel1, mock_kernel2
+    )
 
     # Patch the Database class to return our mock
     with patch("triton_cache_manager.runtime.tracker.Database", return_value=mock_db):
@@ -100,20 +106,12 @@ def test_data_persistence_with_multiple_records():
         test_cache_dir = Path("/test/cache")
 
         collector.record_access(cache_key="key1", hit=True, cache_dir=test_cache_dir)
-        collector.record_access(
-            cache_key="key1", hit=True, cache_dir=test_cache_dir
-        )
-        collector.record_access(
-            cache_key="key1", hit=False, cache_dir=test_cache_dir
-        )
+        collector.record_access(cache_key="key1", hit=True, cache_dir=test_cache_dir)
+        collector.record_access(cache_key="key1", hit=False, cache_dir=test_cache_dir)
 
         collector.record_access(cache_key="key2", hit=False, cache_dir=test_cache_dir)
-        collector.record_access(
-            cache_key="key2", hit=False, cache_dir=test_cache_dir
-        )
-        collector.record_access(
-            cache_key="key2", hit=True, cache_dir=test_cache_dir
-        )
+        collector.record_access(cache_key="key2", hit=False, cache_dir=test_cache_dir)
+        collector.record_access(cache_key="key2", hit=True, cache_dir=test_cache_dir)
 
         # Verify pending records before flush
         assert len(collector._pending_records) == 6
