@@ -21,7 +21,7 @@ def fake_kernel():
         last_access_time=0.0,
     )
 
-
+#pylint: disable=no-member
 @pytest.fixture()
 def mock_session(fake_kernel):
     """Session with just enough behaviour for the tracker"""
