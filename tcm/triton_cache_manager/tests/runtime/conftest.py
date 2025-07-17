@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from triton_cache_manager.runtime import tracker
 
+
 # pylint: disable=redefined-outer-name
 @pytest.fixture()
 def fake_kernel():
@@ -21,7 +22,8 @@ def fake_kernel():
         last_access_time=0.0,
     )
 
-#pylint: disable=no-member
+
+# pylint: disable=no-member
 @pytest.fixture()
 def mock_session(fake_kernel):
     """Session with just enough behaviour for the tracker"""
@@ -34,6 +36,7 @@ def mock_session(fake_kernel):
     sess.rollback.return_value = None
     sess.close.return_value = None
     return sess
+
 
 # pylint: disable=redefined-outer-name
 @pytest.fixture(autouse=True)
