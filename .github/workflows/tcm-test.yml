@@ -34,4 +34,4 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m unittest discover -s ./tcm/triton_cache_manager/tests -p "test_*.py"
+          pytest -v -q ./tcm/triton_cache_manager/tests
