@@ -1,3 +1,3 @@
 [tool.codespell]
-ignore-words-list = "ot,selectin"
+ignore-words-list = "ot,selectin,intoto"
 skip = './.*,vendor/*,go.sum'

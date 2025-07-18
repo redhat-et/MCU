@@ -1,4 +1,4 @@
-all: tcv
+all: mcv
 
 ##@ Help
 
@@ -21,10 +21,10 @@ help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Default
-tcv: ## Build tcv.
-	$(MAKE) -C tcv
-.PHONY: tcv
+mcv: ## Build mcv.
+	$(MAKE) -C mcv
+.PHONY: mcv
 
-tcv-image: ## Build tcv image.
-	$(CONTAINER_TOOL) build --progress=plain -t quay.io/tkm/tcv -f tcv/images/amd64.dockerfile .
-.PHONY: tcv
+mcv-image: ## Build mcv image.
+	$(CONTAINER_TOOL) build --progress=plain -t quay.io/tkm/mcv -f mcv/images/amd64.dockerfile .
+.PHONY: mcv
