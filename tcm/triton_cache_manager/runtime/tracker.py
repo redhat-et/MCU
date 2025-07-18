@@ -11,8 +11,6 @@ from threading import Lock
 from pathlib import Path
 
 from triton.runtime.cache import CacheManager, FileCacheManager
-# pylint: disable=no-name-in-module
-from triton import knobs
 
 from triton_cache_manager.data.database import Database
 from triton_cache_manager.data.db_models import KernelOrm
@@ -28,6 +26,7 @@ class StatsDict(TypedDict):  # pylint: disable=too-few-public-methods
     hits: int
     misses: int
     last_access: float
+
 
 # pylint: disable=too-few-public-methods
 class CacheAccessRecord:  # pylint: disable=too-many-instance-attributes
@@ -160,16 +159,12 @@ class TCMTrackingCacheManager(CacheManager):
 
         # Determine the base cache manager to wrap
         base_cache_cls = FileCacheManager
-        if knobs.cache.manager_class not in (TCMTrackingCacheManager, None):
-            base_cache_cls = knobs.cache.manager_class
 
         self._base_manager = base_cache_cls(key, override=override, dump=dump)
 
         # Try to determine cache directory from the base manager
         if hasattr(self._base_manager, "cache_dir"):
             self._cache_dir = Path(self._base_manager.cache_dir)
-        elif hasattr(knobs.cache, "dir"):
-            self._cache_dir = Path(knobs.cache.dir)
         else:
             self._cache_dir = get_cache_dir()
 
