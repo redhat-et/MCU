@@ -17,12 +17,12 @@ provides detailed reports on cache usage, offering data-driven
 insights into compilation performance and cache effectiveness.
 For more information please see the TCM [readme](./tcm/README.md).
 
-### Triton Cache Vault (TCV)
+### Model Cache Vault (MCV)
 
-Package Triton kernel caches into **OCI-compliant container images**.
+Package Model/GPU kernel caches into **OCI-compliant container images**.
 Secure your caches with cryptographic signing, enabling safe and
 efficient cache distribution and reuse across environments and teams.
-For more information please see the TCV [readme](./tcv/README.md).
+For more information please see the MCV [readme](./mcv/README.md).
 
 ### Triton Util
 
@@ -50,14 +50,14 @@ For more information please see the Triton Util [readme](./triton_util/README.md
 ```bash
 TKDK/
 ├── tcm/           # Triton Cache Manager
-├── tcv/           # OCI packaging and signing tool
+├── mcv/           # OCI packaging and signing tool
 ├── triton_util/   # Triton Utilities
 └── README.md      # You're here!
 ```
 
 ## Security & Distribution
 
-Triton Cache Vault ensures that your cache packages are:
+Model Cache Vault ensures that your cache packages are:
 
 - Packaged using OCI standards
 - Signed cryptographically for tamper-proof integrity

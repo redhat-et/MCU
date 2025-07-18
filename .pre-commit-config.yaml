@@ -27,4 +27,4 @@ repos:
     rev: v1.37.1
     hooks:
       - id: yamllint
-exclude: ^tcv/vendor/.*|^tcv/_output/.*|^venv/.*
+exclude: ^mcv/vendor/.*|^mcv/_output/.*|^venv/.*|^mcv/logo/.*|^mcv/example/vllm-cache/.*
