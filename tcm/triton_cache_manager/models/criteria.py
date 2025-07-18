@@ -17,3 +17,5 @@ class SearchCriteria:
     arch: Optional[str] = None
     older_than_timestamp: Optional[float] = None
     younger_than_timestamp: Optional[float] = None
+    cache_hit_lower: Optional[int] = None
+    cache_hit_higher: Optional[int] = None
