@@ -18,6 +18,7 @@ from ..utils.utils import (
     format_size,
     mod_time_handle,
     get_older_younger,
+    check_hits_num,
 )
 from ..models.criteria import SearchCriteria
 from ..services.prune import PruningService, PruneStats
@@ -179,12 +180,12 @@ def search(
     ),
     cache_hit_lower: Optional[int] = typer.Option(
         None,
-        "--",
+        "--cache-hit-lower",
         help="Show kernels with cache hits lower than specified number (e.g., '1', '10').",
     ),
     cache_hit_higher: Optional[int] = typer.Option(
         None,
-        "--",
+        "--cache-hit-higher",
         help="Show kernels with cache hits higher than specified number (e.g., '1', '10').",
     ),
     cache_dir: Optional[Path] = typer.Option(
@@ -197,6 +198,9 @@ def search(
     """
     if not _cache_db_exists():
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
+        return
+    if not check_hits_num(cache_hit_higher, cache_hit_lower):
+        rich.print("[red]Higher cache hit cannot be lower than lower cache hit[/red]")
         return
 
     older_younger = get_older_younger(older_than, younger_than)
@@ -260,12 +264,12 @@ def prune(  # pylint: disable=too-many-arguments
     ),
     cache_hit_lower: Optional[int] = typer.Option(
         None,
-        "--",
+        "--cache-hit-lower",
         help="Show kernels with cache hits lower than specified number (e.g., '1', '10').",
     ),
     cache_hit_higher: Optional[int] = typer.Option(
         None,
-        "--",
+        "--cache-hit-higher",
         help="Show kernels with cache hits higher than specified number (e.g., '1', '10').",
     ),
     full: bool = typer.Option(
@@ -289,7 +293,10 @@ def prune(  # pylint: disable=too-many-arguments
     if not _cache_db_exists():
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
         return
-
+    if not check_hits_num(cache_hit_higher, cache_hit_lower):
+        rich.print("[red]Lower cache hit cannot be higher than higher cache hit[/red]")
+        return
+ 
     svc = None
     try:
         svc = PruningService(cache_dir=cache_dir)
