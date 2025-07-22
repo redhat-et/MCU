@@ -200,7 +200,7 @@ def search(
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
         return
     if not check_hits_num(cache_hit_higher, cache_hit_lower):
-        rich.print("[red]Higher cache hit cannot be lower than lower cache hit[/red]")
+        rich.print("[red]Error: --cache-hit-lower cannot be greater than --cache-hit-higher[/red]")
         return
 
     older_younger = get_older_younger(older_than, younger_than)
@@ -294,7 +294,7 @@ def prune(  # pylint: disable=too-many-arguments
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
         return
     if not check_hits_num(cache_hit_higher, cache_hit_lower):
-        rich.print("[red]Lower cache hit cannot be higher than higher cache hit[/red]")
+        rich.print("[red]Error: --cache-hit-lower cannot be greater than --cache-hit-higher[/red]")
         return
 
     svc = None
