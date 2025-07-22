@@ -240,7 +240,7 @@ def search(
                 )
 
 
-# pylint: disable=too-many-positional-arguments
+# pylint: disable=too-many-positional-arguments, too-many-locals
 @app.command()
 def prune(  # pylint: disable=too-many-arguments
     name: Optional[str] = typer.Option(
@@ -296,7 +296,7 @@ def prune(  # pylint: disable=too-many-arguments
     if not check_hits_num(cache_hit_higher, cache_hit_lower):
         rich.print("[red]Lower cache hit cannot be higher than higher cache hit[/red]")
         return
- 
+
     svc = None
     try:
         svc = PruningService(cache_dir=cache_dir)
