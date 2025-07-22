@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class SearchCriteria:
     """Data structure to hold kernel search filter criteria."""
