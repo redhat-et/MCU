@@ -29,6 +29,7 @@ def create_mock_kernel_data(
     arch: str = "80",
     mod_time_offset_secs: int = 0,
     total_size_bytes: int = 1024,
+    runtime_hits: int = 0,
 ) -> dict:
     """Helper to create consistent mock kernel data dictionary."""
     base_timestamp = 1747681046.0
@@ -39,6 +40,7 @@ def create_mock_kernel_data(
         "arch": arch,
         "modified_time": base_timestamp + mod_time_offset_secs,
         "total_size": total_size_bytes,
+        "runtime_hits": runtime_hits,
     }
 
 
@@ -70,13 +72,17 @@ class TestPruningService(unittest.TestCase):
         self.pruning_service = PruningService(cache_dir=Path("/fake_cache_dir_param"))
 
         self.kernel1_data = create_mock_kernel_data(
-            "hash1", "kernel_one", mod_time_offset_secs=0
+            "hash1", "kernel_one", mod_time_offset_secs=0, runtime_hits=5
         )
         self.kernel2_data = create_mock_kernel_data(
-            "hash2", "kernel_two", backend="rocm", mod_time_offset_secs=-3600
+            "hash2",
+            "kernel_two",
+            backend="rocm",
+            mod_time_offset_secs=-3600,
+            runtime_hits=50,
         )
         self.kernel3_data = create_mock_kernel_data(
-            "hash3", "kernel_one", mod_time_offset_secs=-7200
+            "hash3", "kernel_one", mod_time_offset_secs=-7200, runtime_hits=150
         )
 
     def tearDown(self):
@@ -157,6 +163,37 @@ class TestPruningService(unittest.TestCase):
         mock_session.commit.assert_called_once()
 
         self.assertEqual(stats.pruned, 2)
+        self.assertAlmostEqual(stats.reclaimed, 1024 / (1024 * 1024))
+
+    @patch(
+        "triton_cache_manager.services.prune.PruningService._delete_kernel",
+        return_value=1024,
+    )
+    @patch("triton_cache_manager.services.prune.Confirm.ask")
+    def test_prune_filters_by_cache_hit_range_and_auto_confirms(
+        self, mock_rich_confirm_ask: MagicMock, mock_delete_kernel: MagicMock
+    ):
+        """Test pruning correctly filters by cache hit lower and higher bounds."""
+        criteria = SearchCriteria(cache_hit_lower=10, cache_hit_higher=100)
+        kernels_to_prune = [self.kernel2_data]
+        self.mock_db_instance.search.return_value = kernels_to_prune
+        self.mock_db_instance.estimate_space.return_value = 1024
+        mock_session = MagicMock()
+        self.mock_db_instance.get_session.return_value.__enter__.return_value = (
+            mock_session
+        )
+
+        stats = self.pruning_service.prune(
+            criteria, delete_ir_only=False, auto_confirm=True
+        )
+
+        self.mock_db_instance.search.assert_called_once_with(criteria)
+        self.mock_db_instance.estimate_space.assert_called_once_with(["hash2"], IR_EXTS)
+        mock_rich_confirm_ask.assert_not_called()
+        mock_delete_kernel.assert_called_once_with("hash2", mock_session, False)
+        mock_session.commit.assert_called_once()
+        self.assertIsInstance(stats, PruneStats)
+        self.assertEqual(stats.pruned, 1)
         self.assertAlmostEqual(stats.reclaimed, 1024 / (1024 * 1024))
 
     @patch("triton_cache_manager.services.prune.Confirm.ask")
