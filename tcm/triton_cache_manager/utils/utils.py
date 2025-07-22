@@ -116,3 +116,10 @@ def get_older_younger(
         )
         raise typer.Exit(1)
     return older_than_timestamp, younger_than_timestamp
+
+def check_hits_num(higher: int | None, lower: int | None) -> bool:
+    """Check if higher is less than lower"""
+    if higher is not None and lower is not None:
+        if higher > lower:
+            return False
+    return True
