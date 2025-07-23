@@ -133,11 +133,9 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
 
     for row in rows:
         row_dict = dict(row)
-        print(f"{row_dict}")
         total_size_bytes = row_dict.get("total_size", 0)
         total_size_str = format_size(total_size_bytes)
         last_time_unix = row_dict.get("last_access_time")
-        print(f"asdasd {last_time_unix}")
         last_time_str = mod_time_handle(last_time_unix)
         num_hits = row_dict.get("runtime_hits", 0)
         num_hits_str = str(num_hits)
