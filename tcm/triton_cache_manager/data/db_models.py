@@ -85,7 +85,7 @@ class KernelOrm(Base):
         Integer, default=0, nullable=False
     )
     last_access_time: Mapped[Optional[float]] = mapped_column(
-        Float, index=True, nullable=False, default=0.0
+        Float, index=True, nullable=False, default=time.time()
     )
 
     files: Mapped[List["KernelFileOrm"]] = relationship(
