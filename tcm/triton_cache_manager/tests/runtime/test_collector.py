@@ -37,6 +37,7 @@ def test_updates_kernel(fake_kernel, mock_session):
 
 def create_query_side_effect(mock_kernel1, mock_kernel2):
     """Helper function for query side effect"""
+
     # pylint: disable=unused-argument
     def query_side_effect(model):
         query_mock = MagicMock()
@@ -122,7 +123,7 @@ def test_data_persistence_with_multiple_records():
         assert mock_kernel1.runtime_hits == 2
         assert mock_kernel1.last_access_time > 0
 
-        # For key2: 5 + 1 hit, 2 
+        # For key2: 5 + 1 hit, 2
         assert mock_kernel2.runtime_hits == 6
         assert mock_kernel2.last_access_time > 0
 
