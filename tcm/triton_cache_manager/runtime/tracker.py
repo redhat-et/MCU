@@ -1,7 +1,7 @@
 """
 Runtime tracking functionality for Triton Cache Manager.
 
-This module provides cache hit/miss tracking that integrates with TCM's database.
+This module provides cache hit tracking that integrates with TCM's database.
 """
 
 from typing import Any, Dict, List, Optional, TypedDict
@@ -24,7 +24,6 @@ class StatsDict(TypedDict):  # pylint: disable=too-few-public-methods
     """Typed dictionary for kernel statistics."""
 
     hits: int
-    misses: int
     last_access: float
 
 
@@ -83,7 +82,7 @@ class RuntimeStatsCollector:
     @staticmethod
     def _create_stats_dict() -> StatsDict:
         """Create a properly typed stats dictionary."""
-        return StatsDict(hits=0, misses=0, last_access=0.0)
+        return StatsDict(hits=0, last_access=0.0)
 
     def _persist_to_database(self):
         """Persist pending records to the TCM database."""
@@ -101,8 +100,6 @@ class RuntimeStatsCollector:
                 stats = stats_by_key[record.cache_key]
                 if record.hit:
                     stats["hits"] += 1
-                else:
-                    stats["misses"] += 1
                 stats["last_access"] = max(stats["last_access"], record.timestamp)
                 cache_dir = record.cache_dir.parent
 
@@ -120,10 +117,8 @@ class RuntimeStatsCollector:
 
                     for kernel in kernels:
                         current_hits: int = kernel.runtime_hits or 0
-                        current_misses: int = kernel.runtime_misses or 0
 
                         kernel.runtime_hits = current_hits + stats["hits"]
-                        kernel.runtime_misses = current_misses + stats["misses"]
                         kernel.last_access_time = stats["last_access"]
 
                 session.commit()
