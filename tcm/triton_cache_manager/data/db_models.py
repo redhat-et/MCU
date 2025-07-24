@@ -81,9 +81,6 @@ class KernelOrm(Base):
     runtime_hits: Mapped[Optional[int]] = mapped_column(
         Integer, default=0, nullable=False
     )
-    runtime_misses: Mapped[Optional[int]] = mapped_column(
-        Integer, default=0, nullable=False
-    )
     last_access_time: Mapped[Optional[float]] = mapped_column(
         Float, index=True, nullable=False, default=time.time()
     )
