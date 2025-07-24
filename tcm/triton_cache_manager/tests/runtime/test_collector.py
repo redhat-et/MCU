@@ -29,9 +29,8 @@ def test_updates_kernel(fake_kernel, mock_session):
     collector.record_access("abcd1234", hit=False)
     collector.flush()
 
-    # the fake KernelOrm instance should now show 1 hit / 1 miss
+    # the fake KernelOrm instance should now show 1 hit
     assert fake_kernel.runtime_hits == 1
-    assert fake_kernel.runtime_misses == 1
     assert fake_kernel.last_access_time > 0
     assert mock_session.commit.call_count == 2
 
@@ -71,7 +70,7 @@ def test_data_persistence_with_multiple_records():
     """
     Tests that the collector correctly aggregates multiple records
     and that the flush method attempts to write the correct,
-    aggregated hit/miss to the database
+    aggregated hit to the database
     """
 
     mock_db = MagicMock()
@@ -83,12 +82,10 @@ def test_data_persistence_with_multiple_records():
 
     mock_kernel1 = MagicMock()
     mock_kernel1.runtime_hits = 0
-    mock_kernel1.runtime_misses = 0
     mock_kernel1.last_access_time = None
 
     mock_kernel2 = MagicMock()
     mock_kernel2.runtime_hits = 5
-    mock_kernel2.runtime_misses = 2
     mock_kernel2.last_access_time = None
 
     mock_session.query.side_effect = create_query_side_effect(
@@ -121,14 +118,12 @@ def test_data_persistence_with_multiple_records():
 
         assert mock_db.get_session.called
 
-        # For key1: 0 + 2 hits, 0 + 1 miss
+        # For key1: 0 + 2 hits
         assert mock_kernel1.runtime_hits == 2
-        assert mock_kernel1.runtime_misses == 1
         assert mock_kernel1.last_access_time > 0
 
-        # For key2: 5 + 1 hit, 2 + 2 misses
+        # For key2: 5 + 1 hit, 2 
         assert mock_kernel2.runtime_hits == 6
-        assert mock_kernel2.runtime_misses == 4
         assert mock_kernel2.last_access_time > 0
 
         mock_session.commit.assert_called_once()
