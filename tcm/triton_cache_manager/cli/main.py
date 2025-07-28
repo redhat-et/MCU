@@ -18,6 +18,7 @@ from ..utils.utils import (
     format_size,
     mod_time_handle,
     get_older_younger,
+    check_hits_num,
 )
 from ..models.criteria import SearchCriteria
 from ..services.prune import PruningService, PruneStats
@@ -134,9 +135,9 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
         row_dict = dict(row)
         total_size_bytes = row_dict.get("total_size", 0)
         total_size_str = format_size(total_size_bytes)
-        last_time_unix = row_dict.get("last_access")
+        last_time_unix = row_dict.get("last_access_time")
         last_time_str = mod_time_handle(last_time_unix)
-        num_hits = row_dict.get("runtime_hits",0)
+        num_hits = row_dict.get("runtime_hits", 0)
         num_hits_str = str(num_hits)
         table.add_row(
             row_dict.get("hash", "N/A")[:12] + "...",
@@ -152,6 +153,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
         )
 
     rich.print(table)
+
 
 # pylint: disable=too-many-positional-arguments
 # pylint: disable=too-many-arguments
@@ -176,6 +178,16 @@ def search(
         "--younger-than",
         help="Show kernels younger than specified duration (e.g., '14d', '1w').",
     ),
+    cache_hit_lower: Optional[int] = typer.Option(
+        None,
+        "--cache-hit-lower",
+        help="Show kernels with cache hits lower than specified number (e.g., '1', '10').",
+    ),
+    cache_hit_higher: Optional[int] = typer.Option(
+        None,
+        "--cache-hit-higher",
+        help="Show kernels with cache hits higher than specified number (e.g., '1', '10').",
+    ),
     cache_dir: Optional[Path] = typer.Option(
         None,
         help="Specify the Triton cache directory to index. Uses default if not provided.",
@@ -187,6 +199,9 @@ def search(
     if not _cache_db_exists():
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
         return
+    if not check_hits_num(cache_hit_higher, cache_hit_lower):
+        rich.print("[red]Error: --cache-hit-lower cannot be greater than --cache-hit-higher[/red]")
+        return
 
     older_younger = get_older_younger(older_than, younger_than)
 
@@ -197,6 +212,8 @@ def search(
         arch=arch,
         older_than_timestamp=older_younger[0],
         younger_than_timestamp=older_younger[1],
+        cache_hit_lower=cache_hit_lower,
+        cache_hit_higher=cache_hit_higher,
     )
 
     svc = None
@@ -223,7 +240,7 @@ def search(
                 )
 
 
-# pylint: disable=too-many-positional-arguments
+# pylint: disable=too-many-positional-arguments, too-many-locals
 @app.command()
 def prune(  # pylint: disable=too-many-arguments
     name: Optional[str] = typer.Option(
@@ -245,6 +262,16 @@ def prune(  # pylint: disable=too-many-arguments
         "--younger-than",
         help="Show kernels younger than specified duration (e.g., '14d', '1w').",
     ),
+    cache_hit_lower: Optional[int] = typer.Option(
+        None,
+        "--cache-hit-lower",
+        help="Show kernels with cache hits lower than specified number (e.g., '1', '10').",
+    ),
+    cache_hit_higher: Optional[int] = typer.Option(
+        None,
+        "--cache-hit-higher",
+        help="Show kernels with cache hits higher than specified number (e.g., '1', '10').",
+    ),
     full: bool = typer.Option(
         False, "--full", help="Remove the entire kernel directory."
     ),
@@ -265,6 +292,9 @@ def prune(  # pylint: disable=too-many-arguments
     """
     if not _cache_db_exists():
         rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
+        return
+    if not check_hits_num(cache_hit_higher, cache_hit_lower):
+        rich.print("[red]Error: --cache-hit-lower cannot be greater than --cache-hit-higher[/red]")
         return
 
     svc = None
@@ -289,6 +319,8 @@ def prune(  # pylint: disable=too-many-arguments
                 arch=arch,
                 older_than_timestamp=older_younger[0],
                 younger_than_timestamp=older_younger[1],
+                cache_hit_higher=cache_hit_higher,
+                cache_hit_lower=cache_hit_lower,
             )
             stats = svc.prune(
                 criteria,

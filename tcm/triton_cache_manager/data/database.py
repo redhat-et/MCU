@@ -125,6 +125,13 @@ class Database:
                         value = transformer(value)
                     active_filters.append(orm_column == value)
 
+            if criteria.cache_hit_lower is not None:
+                active_filters.append(KernelOrm.runtime_hits < criteria.cache_hit_lower)
+
+            if criteria.cache_hit_higher is not None:
+                active_filters.append(
+                    KernelOrm.runtime_hits > criteria.cache_hit_higher
+                )
             if criteria.older_than_timestamp is not None:
                 active_filters.append(
                     KernelOrm.modified_time < criteria.older_than_timestamp

@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import rich
 import typer
 
+
 def format_size(size_bytes: int | float) -> str:
     """
     Format a file size in a human-readable way.
@@ -116,3 +117,11 @@ def get_older_younger(
         )
         raise typer.Exit(1)
     return older_than_timestamp, younger_than_timestamp
+
+
+def check_hits_num(higher: int | None, lower: int | None) -> bool:
+    """Check if cache hit bounds are valid (higher should not be greater than lower)."""
+    if higher is not None and lower is not None:
+        if higher > lower:
+            return False
+    return True

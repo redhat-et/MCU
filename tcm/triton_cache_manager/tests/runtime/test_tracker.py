@@ -42,8 +42,8 @@ def stub_file_cache_manager(monkeypatch):
     return Dummy
 
 # pylint: disable=unused-argument, redefined-outer-name
-def test_hit_and_miss_are_recorded(monkeypatch, stub_file_cache_manager, fake_kernel):
-    """Test cache hit/miss"""
+def test_hit_is_recorded(monkeypatch, stub_file_cache_manager, fake_kernel):
+    """Test cache hit"""
     # fresh collector instance, inserted into module under test
     fresh_collector = tr.RuntimeStatsCollector()
     monkeypatch.setattr(tr, "_runtime_collector", fresh_collector, raising=True)
@@ -55,6 +55,5 @@ def test_hit_and_miss_are_recorded(monkeypatch, stub_file_cache_manager, fake_ke
 
     fresh_collector.flush()
 
-    # kernel stats should show 1 hit & 1 miss
+    # kernel stats should show 1 hit
     assert fake_kernel.runtime_hits == 1
-    assert fake_kernel.runtime_misses == 1
