@@ -1,5 +1,5 @@
 """
-Service for pruning Triton‑kernel cache artefacts based on criteria
+Service for pruning kernel cache artefacts based on criteria
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from ..data.cache_repo import CacheRepository
 from ..data.database import Database
 from ..models.criteria import SearchCriteria
 from ..data.db_models import KernelOrm, KernelFileOrm
-from ..utils.tcm_constants import IR_EXTS
+from ..utils.mcm_constants import IR_EXTS
 from ..utils.paths import get_cache_dir
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class PruneStats:
 
 class PruningService:  # pylint: disable=too-few-public-methods
     """
-    Remove files from the Triton cache and keep the DB consistent.
+    Remove files from the cache and keep the DB consistent.
     """
 
     def __init__(self, cache_dir: Path | None = None):

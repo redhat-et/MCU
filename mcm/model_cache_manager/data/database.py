@@ -1,6 +1,6 @@
 # pylint: disable=c-extension-no-member
 """
-Database service class for managing Triton kernel metadata.
+Database service class for managing kernel metadata.
 
 This module provides the `Database` class, which acts as a high-level API
 for interacting with the kernel cache database. It uses ORM models (SqlAlchemy).
@@ -17,14 +17,14 @@ from .db_models import Base, KernelOrm, KernelFileOrm, SqlaSession
 
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
-from ..utils.tcm_constants import IR_EXTS
+from ..utils.mcm_constants import IR_EXTS
 
 log = logging.getLogger(__name__)
 
 
 class Database:
     """
-    Manages database interactions for Triton kernel metadata.
+    Manages database interactions for kernel metadata.
     """
 
     def __init__(self) -> None:

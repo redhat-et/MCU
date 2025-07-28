@@ -1,7 +1,7 @@
 """
-Repository module for accessing and managing Triton kernel cache files.
+Repository module for accessing and managing kernel cache files.
 
-This module provides functionality to scan and parse the Triton cache directory.
+This module provides functionality to scan and parse the model cache directory.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 class CacheRepository:
     # pylint: disable=too-few-public-methods
     """
-    Repository for accessing and managing Triton kernel cache files.
+    Repository for accessing and managing kernel cache files.
 
     This class provides methods to iterate through kernels in the cache directory
     and extract their metadata and associated files.
@@ -32,7 +32,7 @@ class CacheRepository:
         Initialize the cache repository.
 
         Args:
-            root: Path to the Triton cache directory. If None, uses the default location.
+            root: Path to the model cache directory. If None, uses the default location.
 
         Raises:
             FileNotFoundError: If the cache directory doesn't exist.
