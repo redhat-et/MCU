@@ -1,5 +1,5 @@
 """
-CLI interface for the Triton Cache Manager.
+CLI interface for the Model Cache Manager.
 
 This module provides command-line commands to interact with the Triton kernel cache.
 """
@@ -25,7 +25,7 @@ from ..services.prune import PruningService, PruneStats
 from ..services.warm import WarmupService
 
 log = logging.getLogger(__name__)
-app = typer.Typer(help="Triton Kernel Cache Manager CLI")
+app = typer.Typer(help="Model Kernel Cache Manager CLI")
 
 
 @app.callback()
@@ -45,7 +45,7 @@ def base(
 def index(
     cache_dir: Optional[Path] = typer.Option(
         None,
-        help="Specify the Triton cache directory to index. Uses default if not provided.",
+        help="Specify the Model cache directory to index. Uses default if not provided.",
     )
 ):
     """
@@ -110,7 +110,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]]):
     if not rows:
         rich.print(
             "[yellow]No kernels found matching the criteria.\
-                   Have you used `tcm index` first?[/yellow]"
+                   Have you used `mcm index` first?[/yellow]"
         )
         return
 
@@ -190,14 +190,14 @@ def search(
     ),
     cache_dir: Optional[Path] = typer.Option(
         None,
-        help="Specify the Triton cache directory to index. Uses default if not provided.",
+        help="Specify the Model cache directory to index. Uses default if not provided.",
     ),
 ):
     """
     Search for indexed kernels based on various SearchCriteria.
     """
     if not _cache_db_exists():
-        rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
+        rich.print("[red]DB was not found. Have you used `mcm index` first?[/red]")
         return
     if not check_hits_num(cache_hit_higher, cache_hit_lower):
         rich.print("[red]Error: --cache-hit-lower cannot be greater than --cache-hit-higher[/red]")
@@ -283,7 +283,7 @@ def prune(  # pylint: disable=too-many-arguments
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
     cache_dir: Optional[Path] = typer.Option(
         None,
-        help="Specify the Triton cache directory to index. Uses default if not provided.",
+        help="Specify the Model cache directory to index. Uses default if not provided.",
     ),
 ):
     """
@@ -291,7 +291,7 @@ def prune(  # pylint: disable=too-many-arguments
     directories that satisfy the given filters.
     """
     if not _cache_db_exists():
-        rich.print("[red]DB was not found. Have you used `tcm index` first?[/red]")
+        rich.print("[red]DB was not found. Have you used `mcm index` first?[/red]")
         return
     if not check_hits_num(cache_hit_higher, cache_hit_lower):
         rich.print("[red]Error: --cache-hit-lower cannot be greater than --cache-hit-higher[/red]")
@@ -382,7 +382,7 @@ def warm(
     ),
 ):
     """
-    Warms up the Triton cache using a specified container image and
+    Warms up the Model cache using a specified container image and
     optionally packages the result into a tarball.
     """
     if rocm:
