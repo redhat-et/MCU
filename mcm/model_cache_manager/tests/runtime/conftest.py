@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from triton_cache_manager.runtime import tracker
+from model_cache_manager.runtime import tracker
 
 
 # pylint: disable=redefined-outer-name
