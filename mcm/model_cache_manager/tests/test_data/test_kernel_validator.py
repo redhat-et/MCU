@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Dict, cast
 from unittest.mock import Mock, patch
 
-from triton_cache_manager.data.kernel_validator import deserialize_kernel
-from triton_cache_manager.plugins.base import KernelBackendPlugin
+from model_cache_manager.data.kernel_validator import deserialize_kernel
+from model_cache_manager.plugins.base import KernelBackendPlugin
 
 
 class CudaPluginMock(Mock):

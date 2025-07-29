@@ -1,11 +1,11 @@
 """
-End-to-end test for TCMTrackingCacheManager with a stubbed
+End-to-end test for MCMTrackingCacheManager with a stubbed
 FileCacheManager so the real cache is not touched
 and Triton is not used directly
 """
 
 import pytest
-from triton_cache_manager.runtime import tracker as tr
+from model_cache_manager.runtime import tracker as tr
 
 
 @pytest.fixture()
