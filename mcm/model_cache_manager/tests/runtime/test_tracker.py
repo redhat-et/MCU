@@ -48,7 +48,7 @@ def test_hit_is_recorded(monkeypatch, stub_file_cache_manager, fake_kernel):
     fresh_collector = tr.RuntimeStatsCollector()
     monkeypatch.setattr(tr, "_runtime_collector", fresh_collector, raising=True)
 
-    mgr = tr.TCMTrackingCacheManager("abcd1234")
+    mgr = tr.MCMTrackingCacheManager("abcd1234")
 
     assert mgr.get_group("entry") == {"test": "tracker"}
     assert mgr.get_group("entry") is None
