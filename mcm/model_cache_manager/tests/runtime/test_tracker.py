@@ -18,7 +18,7 @@ def stub_file_cache_manager(monkeypatch):
     class Dummy:
         """A dummy FileCacheManager"""
         def __init__(self, *_, **__):
-            self.cache_dir = "/tmp/tcm"
+            self.cache_dir = "/tmp/mcm"
 
         def get_group(self, *_):
             """Returns a dummy item on the first call and None thereafter."""

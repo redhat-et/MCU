@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name            = "triton-cache-manager"
+name            = "model-cache-manager"
 version         = "0.1.0"
-description     = "Manage indexing, search and more for Triton kernel cache"
+description     = "Manage indexing, search and more for kernel caches"
 authors         = [{name = "Alessandro Sangiorgi", email = "asangior@redhat.com"}]
 requires-python = ">=3.9"
 
@@ -20,11 +20,11 @@ dependencies = [
 ]
 
 [project.scripts]
-tcm = "triton_cache_manager.cli.main:run"
+tcm = "model_cache_manager.cli.main:run"
 
 [tool.setuptools]
 package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["triton_cache_manager*"]
+include = ["model_cache_manager*"]
