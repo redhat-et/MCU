@@ -1,12 +1,12 @@
-# Triton Cache Manager (TCM)
+# Model Cache Manager (MCM)
 
-<img src="../logo/tcm.png" alt="tcm" width="20%" height="auto">
+<img src="../logo/mcm.png" alt="mcm" width="20%" height="auto">
 
-Triton Cache Manager (TCM) is a lightweight CLI for **indexing, searching, and
-managing Triton GPU‑kernel caches**. It helps you organise, prune, and pre‑warm
+Model Cache Manager (MCM) is a lightweight CLI for **indexing, searching, and
+managing GPU‑kernel caches**. It helps you organise, prune, and pre‑warm
 caches to improve runtime efficiency and save disk space.
 
-<img src="./screenshot/tcm-screenshot.png" alt="tcm" width="75%" height="auto">
+<img src="./screenshot/mcm-screenshot.png" alt="mcm" width="75%" height="auto">
 
 ---
 
@@ -27,7 +27,7 @@ caches to improve runtime efficiency and save disk space.
 
 ## Features
 
-TCM offers the following capabilities:
+MCM offers the following capabilities:
 
 - **Cache Indexing** – Scan a Triton cache directory and build a local
   database that records kernel name, backend, architecture, and file sizes.
@@ -52,7 +52,7 @@ TCM offers the following capabilities:
 
 - Python 3.9 or newer
 - Triton
-- [Podman](https://podman.io/) (needed for `tcm warm`)
+- [Podman](https://podman.io/) (needed for `mcm warm`)
 
 ### Installation Steps
 
@@ -62,8 +62,8 @@ TCM offers the following capabilities:
    pip install -e .
    ```
 
-   The command installs TCM and its dependencies (`typer`, `rich`, `sqlalchemy`,
-   and `pydantic`) and adds the `tcm` command to your PATH.
+   The command installs MCM and its dependencies (`typer`, `rich`, `sqlalchemy`,
+   and `pydantic`) and adds the `mcm` command to your PATH.
 
 ---
 
@@ -72,27 +72,27 @@ TCM offers the following capabilities:
 1. Index your cache
 
    ```bash
-   tcm index --cache-dir ~/.triton/cache   # or your custom path
+   mcm index --cache-dir ~/.triton/cache   # or your custom path
    ```
 
 2. List kernels by backend
 
    ```bash
-   tcm list --backend cuda
+   mcm list --backend cuda
    ```
 
 ---
 
 ## Usage
 
-The `tcm` CLI groups its functionality into sub‑commands.
+The `mcm` CLI groups its functionality into sub‑commands.
 
 ### Indexing the Cache
 
 The `index` sub‑command scans the cache and populates the database.
 
 ```bash
-tcm index [OPTIONS]
+mcm index [OPTIONS]
 ```
 
 #### Options
@@ -102,7 +102,7 @@ tcm index [OPTIONS]
 #### Example
 
 ```bash
-tcm index --cache-dir /path/to/my/cache
+mcm index --cache-dir /path/to/my/cache
 ```
 
 ### Listing Kernels
@@ -110,7 +110,7 @@ tcm index --cache-dir /path/to/my/cache
 Search and display kernels that match one or more filters.
 
 ```bash
-tcm list [OPTIONS]
+mcm list [OPTIONS]
 ```
 
 #### Listing Options
@@ -127,19 +127,19 @@ tcm list [OPTIONS]
 - List all CUDA kernels
 
   ```bash
-  tcm list --backend cuda
+  mcm list --backend cuda
   ```
 
 - Kernels named `my_custom_kernel` older than 30 days
 
   ```bash
-  tcm list --name my_custom_kernel --older-than 30d
+  mcm list --name my_custom_kernel --older-than 30d
   ```
 
 - ROCm kernels for architecture `gfx90a`
 
   ```bash
-  tcm list --backend rocm --arch gfx90a
+  mcm list --backend rocm --arch gfx90a
   ```
 
 ### Pruning Kernels
@@ -148,7 +148,7 @@ Remove kernels from the cache. Supports IR‑only, full deletion, and
 deduplication.
 
 ```bash
-tcm prune [OPTIONS]
+mcm prune [OPTIONS]
 ```
 
 #### Pruning Options
@@ -168,19 +168,19 @@ tcm prune [OPTIONS]
 - IR files older than 90 days
 
   ```bash
-  tcm prune --older-than 90d
+  mcm prune --older-than 90d
   ```
 
 - Fully remove all `unstable_kernel` entries
 
   ```bash
-  tcm prune --name unstable_kernel --full -y
+  mcm prune --name unstable_kernel --full -y
   ```
 
 - Deduplicate the cache
 
   ```bash
-  tcm prune --deduplicate -y
+  mcm prune --deduplicate -y
   ```
 
 ### Warming the Cache
@@ -189,7 +189,7 @@ Run a container that generates a vLLM cache for a model and optionally export
 it.
 
 ```bash
-tcm warm [OPTIONS]
+mcm warm [OPTIONS]
 ```
 
 #### Warming Options
@@ -207,7 +207,7 @@ tcm warm [OPTIONS]
 - Warm cache for a model and produce a tarball
 
   ```bash
-  tcm warm --model EleutherAI/gpt-neo-125M \
+  mcm warm --model EleutherAI/gpt-neo-125M \
            --tarball \
            --output my_gpt_neo_cache.tar.gz
   ```
@@ -215,7 +215,7 @@ tcm warm [OPTIONS]
 - Warm cache on a ROCm system
 
   ```bash
-  tcm warm --model Llama-3-8B --rocm \
+  mcm warm --model Llama-3-8B --rocm \
            --hugging-face-token hf_YOUR_TOKEN
   ```
 
@@ -223,7 +223,7 @@ tcm warm [OPTIONS]
 
 ## Requirements
 
-TCM depends on the following libraries (installed from `requirements.txt`):
+mcm depends on the following libraries (installed from `requirements.txt`):
 
 - `typer`
 - `rich`
@@ -236,9 +236,9 @@ TCM depends on the following libraries (installed from `requirements.txt`):
 
 ## Project Structure
 
-- `tcm/triton_cache_manager/cli` – CLI entry points
-- `tcm/triton_cache_manager/services` – Business logic
-- `tcm/triton_cache_manager/data` – Database access and cache repository
-- `tcm/triton_cache_manager/models` – DTOs and Pydantic models
-- `tcm/triton_cache_manager/plugins` – Backend‑specific handlers
-- `tcm/triton_cache_manager/utils` – Logging, paths, helpers
+- `mcm/model_cache_manager/cli` – CLI entry points
+- `mcm/model_cache_manager/services` – Business logic
+- `mcm/model_cache_manager/data` – Database access and cache repository
+- `mcm/model_cache_manager/models` – DTOs and Pydantic models
+- `mcm/model_cache_manager/plugins` – Backend‑specific handlers
+- `mcm/model_cache_manager/utils` – Logging, paths, helpers

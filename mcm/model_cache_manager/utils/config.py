@@ -1,5 +1,5 @@
 """
-Configuration settings for the Triton Cache Manager.
+Configuration settings for the Model Cache Manager.
 
 This module provides configuration settings including paths and defaults.
 """
@@ -14,13 +14,13 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # pylint: disable=too-few-public-methods
     """
-    Configuration settings for the Triton Cache Manager.
+    Configuration settings for the Model Cache Manager.
 
     This class defines the default paths and settings used throughout the application.
-    It supports overriding via environment variables prefixed with TCM_.
+    It supports overriding via environment variables prefixed with MCM_.
     """
 
-    triton_cache_dir: Path = Field(
+    model_cache_dir: Path = Field(
         default_factory=lambda: Path.home() / ".triton" / "cache"
     )
     data_dir: Path = Field(
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
                     else os.environ.get("LOCALAPPDATA", "C:/Temp")
                 )
             )
-            / "triton-cache-manager"
+            / "model-cache-manager"
         )
     )
     db_filename: str = "cache.db"
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     class Config:
         """Configuration for the Settings class."""
 
-        env_prefix = "TCM_"
+        env_prefix = "MCM_"
 
 
 settings = Settings()

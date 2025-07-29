@@ -1,5 +1,5 @@
 """
-Logging configuration for the Triton Cache Manager.
+Logging configuration for the Model Cache Manager.
 """
 
 import logging

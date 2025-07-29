@@ -10,12 +10,12 @@ securely, TKDK has you covered.
 
 ## Features
 
-### Triton Cache Manager (TCM)
+### Model Cache Manager (MCM)
 
-Organize, index, and monitor your Triton kernel caches. This tool
+Organize, index, and monitor your Model kernel caches. This tool
 provides detailed reports on cache usage, offering data-driven
 insights into compilation performance and cache effectiveness.
-For more information please see the TCM [readme](./tcm/README.md).
+For more information please see the MCM [readme](./mcm/README.md).
 
 ### Model Cache Vault (MCV)
 
@@ -49,7 +49,7 @@ For more information please see the Triton Util [readme](./triton_util/README.md
 
 ```bash
 TKDK/
-├── tcm/           # Triton Cache Manager
+├── mcm/           # Model Cache Manager
 ├── mcv/           # OCI packaging and signing tool
 ├── triton_util/   # Triton Utilities
 └── README.md      # You're here!

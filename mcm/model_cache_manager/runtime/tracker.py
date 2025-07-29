@@ -1,7 +1,7 @@
 """
 Runtime tracking functionality for Triton Cache Manager.
 
-This module provides cache hit tracking that integrates with TCM's database.
+This module provides cache hit tracking that integrates with MCM's database.
 """
 
 from typing import Any, Dict, List, Optional, TypedDict
@@ -12,9 +12,9 @@ from pathlib import Path
 
 from triton.runtime.cache import CacheManager, FileCacheManager
 
-from triton_cache_manager.data.database import Database
-from triton_cache_manager.data.db_models import KernelOrm
-from triton_cache_manager.utils.paths import get_cache_dir
+from model_cache_manager.data.database import Database
+from model_cache_manager.data.db_models import KernelOrm
+from model_cache_manager.utils.paths import get_cache_dir
 
 
 log = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class CacheAccessRecord:  # pylint: disable=too-many-instance-attributes
 
 
 class RuntimeStatsCollector:
-    """Collects and persists runtime cache statistics to TCM database."""
+    """Collects and persists runtime cache statistics to MCM database."""
 
     def __init__(self):
         self._lock = Lock()
@@ -85,7 +85,7 @@ class RuntimeStatsCollector:
         return StatsDict(hits=0, last_access=0.0)
 
     def _persist_to_database(self):
-        """Persist pending records to the TCM database."""
+        """Persist pending records to the MCM database."""
         if not self._pending_records:
             return
         cache_dir: Optional[Path] = None
@@ -146,8 +146,8 @@ class RuntimeStatsCollector:
 _runtime_collector = RuntimeStatsCollector()
 
 
-class TCMTrackingCacheManager(CacheManager):
-    """Cache manager that tracks runtime statistics for TCM."""
+class MCMTrackingCacheManager(CacheManager):
+    """Cache manager that tracks runtime statistics for MCM."""
 
     def __init__(self, key: str, override: bool = False, dump: bool = False):
         self.full_cache_key = key

@@ -1,11 +1,11 @@
 """
-Path utility functions for the Triton Cache Manager.
+Path utility functions for the Model Cache Manager.
 
 This module provides functions to get standard paths used by the application.
 """
 
 from pathlib import Path
-from triton_cache_manager.utils.config import settings
+from model_cache_manager.utils.config import settings
 
 
 def get_cache_dir() -> Path:
@@ -15,7 +15,7 @@ def get_cache_dir() -> Path:
     Returns:
         Path to the Triton cache directory.
     """
-    return settings.triton_cache_dir
+    return settings.model_cache_dir
 
 
 def get_db_path() -> Path:
