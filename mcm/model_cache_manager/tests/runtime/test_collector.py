@@ -4,7 +4,7 @@ Unit tests for RuntimeStatsCollector.
 
 from pathlib import Path
 from unittest.mock import patch, MagicMock, Mock
-from triton_cache_manager.runtime.tracker import RuntimeStatsCollector
+from model_cache_manager.runtime.tracker import RuntimeStatsCollector
 
 
 def test_single_hit_flushes_and_clears():
@@ -12,7 +12,7 @@ def test_single_hit_flushes_and_clears():
     collector = RuntimeStatsCollector()
 
     # deterministic timestamp
-    with patch("triton_cache_manager.runtime.tracker.time.time", return_value=42.0):
+    with patch("model_cache_manager.runtime.tracker.time.time", return_value=42.0):
         collector.record_access("abcd1234", hit=True)
 
     collector.flush()
@@ -94,7 +94,7 @@ def test_data_persistence_with_multiple_records():
     )
 
     # Patch the Database class to return our mock
-    with patch("triton_cache_manager.runtime.tracker.Database", return_value=mock_db):
+    with patch("model_cache_manager.runtime.tracker.Database", return_value=mock_db):
         collector = RuntimeStatsCollector()
 
         # Temporarily mock _persist_to_database to prevent auto-persistence

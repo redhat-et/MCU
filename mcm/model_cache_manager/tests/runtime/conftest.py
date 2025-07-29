@@ -1,6 +1,6 @@
 """
 Shared fixtures that stub out the DB layer used by
-triton_cache_manager.runtime.tracker
+model_cache_manager.runtime.tracker
 """
 
 from types import SimpleNamespace
@@ -16,7 +16,7 @@ def fake_kernel():
     """Small stand-in for KernelOrm rows"""
     return SimpleNamespace(
         hash="abcd1234",
-        cache_dir="/tmp/tcm",
+        cache_dir="/tmp/mcm",
         runtime_hits=0,
         runtime_misses=0,
         last_access_time=0.0,

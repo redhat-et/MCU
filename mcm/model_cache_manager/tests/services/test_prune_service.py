@@ -10,12 +10,12 @@ from unittest.mock import (
 from pathlib import Path
 import logging
 
-from triton_cache_manager.services.prune import PruningService, PruneStats
-from triton_cache_manager.models.criteria import SearchCriteria
-from triton_cache_manager.utils.tcm_constants import IR_EXTS
+from model_cache_manager.services.prune import PruningService, PruneStats
+from model_cache_manager.models.criteria import SearchCriteria
+from model_cache_manager.utils.mcm_constants import IR_EXTS
 
-from triton_cache_manager.data.cache_repo import CacheRepository
-from triton_cache_manager.data.database import Database
+from model_cache_manager.data.cache_repo import CacheRepository
+from model_cache_manager.data.database import Database
 
 logging.disable(logging.CRITICAL)
 
@@ -58,11 +58,11 @@ class TestPruningService(unittest.TestCase):
         self.mock_db_instance = MagicMock(spec=Database)
 
         self.patch_cache_repo = patch(
-            "triton_cache_manager.services.prune.CacheRepository",
+            "model_cache_manager.services.prune.CacheRepository",
             return_value=self.mock_cache_repo_instance,
         )
         self.patch_db = patch(
-            "triton_cache_manager.services.prune.Database",
+            "model_cache_manager.services.prune.Database",
             return_value=self.mock_db_instance,
         )
 
@@ -91,10 +91,10 @@ class TestPruningService(unittest.TestCase):
         self.patch_db.stop()
 
     @patch(
-        "triton_cache_manager.services.prune.PruningService._delete_kernel",
+        "model_cache_manager.services.prune.PruningService._delete_kernel",
         return_value=1024,
     )
-    @patch("triton_cache_manager.services.prune.Confirm.ask")
+    @patch("model_cache_manager.services.prune.Confirm.ask")
     def test_prune_identifies_all_kernels_with_no_criteria_and_auto_confirm(
         self, mock_rich_confirm_ask: MagicMock, mock_delete_kernel: MagicMock
     ):
@@ -129,10 +129,10 @@ class TestPruningService(unittest.TestCase):
         self.assertAlmostEqual(stats.reclaimed, 2048 / (1024 * 1024))
 
     @patch(
-        "triton_cache_manager.services.prune.PruningService._delete_kernel",
+        "model_cache_manager.services.prune.PruningService._delete_kernel",
         return_value=512,
     )
-    @patch("triton_cache_manager.services.prune.Confirm.ask")
+    @patch("model_cache_manager.services.prune.Confirm.ask")
     def test_prune_identifies_kernels_by_name_and_auto_confirm(
         self, mock_rich_confirm_ask: MagicMock, mock_delete_kernel: MagicMock
     ):
@@ -166,10 +166,10 @@ class TestPruningService(unittest.TestCase):
         self.assertAlmostEqual(stats.reclaimed, 1024 / (1024 * 1024))
 
     @patch(
-        "triton_cache_manager.services.prune.PruningService._delete_kernel",
+        "model_cache_manager.services.prune.PruningService._delete_kernel",
         return_value=1024,
     )
-    @patch("triton_cache_manager.services.prune.Confirm.ask")
+    @patch("model_cache_manager.services.prune.Confirm.ask")
     def test_prune_filters_by_cache_hit_range_and_auto_confirms(
         self, mock_rich_confirm_ask: MagicMock, mock_delete_kernel: MagicMock
     ):
@@ -196,7 +196,7 @@ class TestPruningService(unittest.TestCase):
         self.assertEqual(stats.pruned, 1)
         self.assertAlmostEqual(stats.reclaimed, 1024 / (1024 * 1024))
 
-    @patch("triton_cache_manager.services.prune.Confirm.ask")
+    @patch("model_cache_manager.services.prune.Confirm.ask")
     def test_prune_no_kernels_match_criteria(self, mock_rich_confirm_ask: MagicMock):
         """Test prune operation when no kernels match the given criteria."""
         criteria = SearchCriteria(name="non_existent_kernel")
@@ -216,8 +216,8 @@ class TestPruningService(unittest.TestCase):
         self.assertEqual(stats.reclaimed, 0.0)
         self.assertFalse(stats.aborted)
 
-    @patch("triton_cache_manager.services.prune.Confirm.ask", return_value=False)
-    @patch("triton_cache_manager.services.prune.PruningService._delete_kernel")
+    @patch("model_cache_manager.services.prune.Confirm.ask", return_value=False)
+    @patch("model_cache_manager.services.prune.PruningService._delete_kernel")
     def test_prune_user_cancels_operation_when_prompted(
         self, mock_delete_kernel: MagicMock, mock_rich_confirm_ask: MagicMock
     ):
