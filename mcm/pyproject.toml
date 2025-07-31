@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tcm = "model_cache_manager.cli.main:run"
+mcm = "model_cache_manager.cli.main:run"
 
 [tool.setuptools]
 package-dir = {"" = "."}
