@@ -5,14 +5,12 @@ on: # yamllint disable-line rule:truthy
     paths:
       - mcm/**/*.py
       - triton_util/**/*.py
-    paths-ignore:
-      - mcv/**
+      - "!mcv/**"
   push:
     paths:
       - mcm/**/*.py
       - triton_util/**/*.py
-    paths-ignore:
-      - mcv/**
+      - "!mcv/**"
 
 jobs:
   pylint:
