@@ -36,7 +36,7 @@ class Settings:
         )
         self.db_filename = "cache.db"
         self.log_level = "INFO"
-        
+
         # Override with environment variables if present
         if "MCM_MODEL_CACHE_DIR" in os.environ:
             self.model_cache_dir = Path(os.environ["MCM_MODEL_CACHE_DIR"])

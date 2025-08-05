@@ -16,7 +16,7 @@ class SearchService:
     def __init__(self, criteria: SearchCriteria, mode: str = "triton"):
         """
         Initialize the search service.
-        
+
         Args:
             criteria: Search criteria for filtering kernels
             mode: Cache mode - 'triton' for standard Triton cache, 'vllm' for vLLM cache

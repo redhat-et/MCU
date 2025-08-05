@@ -43,7 +43,7 @@ class TestVllmCacheRepository(unittest.TestCase):
             mock_home.return_value = self.temp_dir
             default_vllm_cache = self.temp_dir / ".cache" / "vllm"
             default_vllm_cache.mkdir(parents=True, exist_ok=True)
-            
+
             repo = VllmCacheRepository()
             self.assertEqual(repo.root, default_vllm_cache)
 
@@ -58,15 +58,15 @@ class TestVllmCacheRepository(unittest.TestCase):
         # Create mock vLLM structure
         torch_compile_dir = self.vllm_cache_root / "torch_compilecache"
         torch_compile_dir.mkdir()
-        
+
         hash_dir1 = torch_compile_dir / "hash123abc"
         hash_dir2 = torch_compile_dir / "hash456def"
         hash_dir1.mkdir()
         hash_dir2.mkdir()
-        
+
         repo = VllmCacheRepository(self.vllm_cache_root)
         dirs = list(repo._find_torch_compile_cache_dirs())
-        
+
         self.assertEqual(len(dirs), 2)
         hash_names = [hash_name for hash_name, _ in dirs]
         self.assertIn("hash123abc", hash_names)
@@ -76,7 +76,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         """Test finding rank directories when none exist."""
         hash_dir = self.vllm_cache_root / "test_hash"
         hash_dir.mkdir()
-        
+
         repo = VllmCacheRepository(self.vllm_cache_root)
         rank_dirs = list(repo._find_rank_dirs(hash_dir))
         self.assertEqual(len(rank_dirs), 0)
@@ -85,21 +85,21 @@ class TestVllmCacheRepository(unittest.TestCase):
         """Test finding rank directories when they exist."""
         hash_dir = self.vllm_cache_root / "test_hash"
         hash_dir.mkdir()
-        
+
         # Create rank directories with triton_cache subdirs
         rank1 = hash_dir / "rank0_0"
         rank2 = hash_dir / "rank1_0"
         rank1.mkdir()
         rank2.mkdir()
-        
+
         triton_cache1 = rank1 / "triton_cache"
         triton_cache2 = rank2 / "triton_cache"
         triton_cache1.mkdir()
         triton_cache2.mkdir()
-        
+
         repo = VllmCacheRepository(self.vllm_cache_root)
         rank_dirs = list(repo._find_rank_dirs(hash_dir))
-        
+
         self.assertEqual(len(rank_dirs), 2)
         self.assertIn(triton_cache1, rank_dirs)
         self.assertIn(triton_cache2, rank_dirs)
@@ -108,14 +108,14 @@ class TestVllmCacheRepository(unittest.TestCase):
         """Test finding rank directories when they don't have triton_cache subdirs."""
         hash_dir = self.vllm_cache_root / "test_hash"
         hash_dir.mkdir()
-        
+
         # Create rank directories without triton_cache subdirs
         rank1 = hash_dir / "rank0_0"
         rank1.mkdir()
-        
+
         repo = VllmCacheRepository(self.vllm_cache_root)
         rank_dirs = list(repo._find_rank_dirs(hash_dir))
-        
+
         self.assertEqual(len(rank_dirs), 0)
 
     @patch('model_cache_manager.data.cache_repo.CacheRepository')
@@ -124,10 +124,10 @@ class TestVllmCacheRepository(unittest.TestCase):
         mock_cache_repo = MagicMock()
         mock_cache_repo.kernels.return_value = []
         mock_cache_repo_class.return_value = mock_cache_repo
-        
+
         repo = VllmCacheRepository(self.vllm_cache_root)
         kernels = list(repo.kernels())
-        
+
         self.assertEqual(len(kernels), 0)
 
     @patch('model_cache_manager.data.cache_repo.CacheRepository')
@@ -136,40 +136,40 @@ class TestVllmCacheRepository(unittest.TestCase):
         # Create vLLM directory structure
         torch_compile_dir = self.vllm_cache_root / "torch_compilecache"
         torch_compile_dir.mkdir()
-        
+
         hash_dir = torch_compile_dir / "hash123abc"
         hash_dir.mkdir()
-        
+
         rank_dir = hash_dir / "rank0_0"
         rank_dir.mkdir()
-        
+
         triton_cache = rank_dir / "triton_cache"
         triton_cache.mkdir()
-        
+
         # Mock the CacheRepository to return fake kernels
         mock_kernel1 = MagicMock(spec=Kernel)
         mock_kernel1.hash = "kernel_hash_1"
         mock_kernel1.name = "test_kernel_1"
-        
+
         mock_kernel2 = MagicMock(spec=Kernel)
         mock_kernel2.hash = "kernel_hash_2"
         mock_kernel2.name = "test_kernel_2"
-        
+
         mock_cache_repo = MagicMock()
         mock_cache_repo.kernels.return_value = [mock_kernel1, mock_kernel2]
         mock_cache_repo_class.return_value = mock_cache_repo
-        
+
         repo = VllmCacheRepository(self.vllm_cache_root)
         kernels = list(repo.kernels())
-        
+
         # Should have 2 kernels, each with vllm_hash and vllm_cache_root
         self.assertEqual(len(kernels), 2)
-        
+
         vllm_hash, vllm_cache_root, kernel = kernels[0]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(vllm_cache_root, str(self.vllm_cache_root))
         self.assertEqual(kernel, mock_kernel1)
-        
+
         vllm_hash, vllm_cache_root, kernel = kernels[1]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(vllm_cache_root, str(self.vllm_cache_root))
@@ -181,19 +181,19 @@ class TestVllmCacheRepository(unittest.TestCase):
         # Create vLLM directory structure with multiple hash dirs
         torch_compile_dir = self.vllm_cache_root / "torch_compilecache"
         torch_compile_dir.mkdir()
-        
+
         hash_dir1 = torch_compile_dir / "hash123abc"
         hash_dir2 = torch_compile_dir / "hash456def"
         hash_dir1.mkdir()
         hash_dir2.mkdir()
-        
+
         # Create rank dirs for each hash
         for hash_dir in [hash_dir1, hash_dir2]:
             rank_dir = hash_dir / "rank0_0"
             rank_dir.mkdir()
             triton_cache = rank_dir / "triton_cache"
             triton_cache.mkdir()
-        
+
         # Mock kernels for each cache repo call
         def side_effect(triton_cache_path):
             if "hash123abc" in str(triton_cache_path):
@@ -205,17 +205,17 @@ class TestVllmCacheRepository(unittest.TestCase):
                 mock_kernel.hash = f"kernel_from_{triton_cache_path.parent.parent.name}"
                 return [mock_kernel]
             return []
-        
+
         mock_cache_repo = MagicMock()
         mock_cache_repo.kernels.side_effect = lambda: side_effect(mock_cache_repo_class.call_args[0][0])
         mock_cache_repo_class.return_value = mock_cache_repo
-        
+
         repo = VllmCacheRepository(self.vllm_cache_root)
         kernels = list(repo.kernels())
-        
+
         # Should have kernels from both hash directories
         self.assertEqual(len(kernels), 2)
-        
+
         vllm_hashes = [vllm_hash for vllm_hash, _, _ in kernels]
         self.assertIn("hash123abc", vllm_hashes)
         self.assertIn("hash456def", vllm_hashes)

@@ -47,9 +47,9 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         mock_db_instance = MagicMock()
         mock_vllm_repo.return_value = mock_repo_instance
         mock_vllm_db.return_value = mock_db_instance
-        
+
         service = IndexService(cache_dir=self.cache_dir, mode="vllm")
-        
+
         self.assertEqual(service.mode, "vllm")
         self.assertEqual(service.cache_dir, self.cache_dir)
         mock_vllm_repo.assert_called_once_with(self.cache_dir)
@@ -63,9 +63,9 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         mock_db_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
         mock_db.return_value = mock_db_instance
-        
+
         service = IndexService(cache_dir=self.cache_dir, mode="triton")
-        
+
         self.assertEqual(service.mode, "triton")
         mock_repo.assert_called_once_with(self.cache_dir)
         mock_db.assert_called_once()
@@ -77,24 +77,24 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         # Mock kernels from vLLM repo
         mock_kernel1 = create_mock_kernel("hash1", "kernel1")
         mock_kernel2 = create_mock_kernel("hash2", "kernel2")
-        
+
         mock_repo_instance = MagicMock()
         mock_repo_instance.kernels.return_value = [
             ("vllm_hash1", "/cache/root", mock_kernel1),
             ("vllm_hash2", "/cache/root", mock_kernel2),
         ]
         mock_vllm_repo.return_value = mock_repo_instance
-        
+
         mock_db_instance = MagicMock()
         mock_db_instance.search.return_value = []  # No existing kernels
         mock_vllm_db.return_value = mock_db_instance
-        
+
         service = IndexService(cache_dir=self.cache_dir, mode="vllm")
         updated, current = service.reindex()
-        
+
         self.assertEqual(updated, 2)
         self.assertEqual(current, 0)
-        
+
         # Verify kernels were inserted with vLLM parameters
         self.assertEqual(mock_db_instance.insert_kernel.call_count, 2)
         mock_db_instance.insert_kernel.assert_any_call(mock_kernel1, "/cache/root", "vllm_hash1")
@@ -106,21 +106,21 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         """Test reindex method in triton mode (backward compatibility)."""
         mock_kernel1 = create_mock_kernel("hash1", "kernel1")
         mock_kernel2 = create_mock_kernel("hash2", "kernel2")
-        
+
         mock_repo_instance = MagicMock()
         mock_repo_instance.kernels.return_value = [mock_kernel1, mock_kernel2]
         mock_repo.return_value = mock_repo_instance
-        
+
         mock_db_instance = MagicMock()
         mock_db_instance.search.return_value = []
         mock_db.return_value = mock_db_instance
-        
+
         service = IndexService(cache_dir=self.cache_dir, mode="triton")
         updated, current = service.reindex()
-        
+
         self.assertEqual(updated, 2)
         self.assertEqual(current, 0)
-        
+
         # Verify kernels were inserted with triton parameters
         self.assertEqual(mock_db_instance.insert_kernel.call_count, 2)
         mock_db_instance.insert_kernel.assert_any_call(mock_kernel1, str(self.cache_dir))
@@ -135,10 +135,10 @@ class TestSearchServiceVllmMode(unittest.TestCase):
         """Test SearchService initialization in vLLM mode."""
         mock_db_instance = MagicMock()
         mock_vllm_db.return_value = mock_db_instance
-        
+
         criteria = SearchCriteria(name="test_kernel")
         service = SearchService(criteria=criteria, mode="vllm")
-        
+
         self.assertEqual(service.mode, "vllm")
         mock_vllm_db.assert_called_once()
 
@@ -147,10 +147,10 @@ class TestSearchServiceVllmMode(unittest.TestCase):
         """Test SearchService initialization in triton mode."""
         mock_db_instance = MagicMock()
         mock_db.return_value = mock_db_instance
-        
+
         criteria = SearchCriteria(name="test_kernel")
         service = SearchService(criteria=criteria, mode="triton")
-        
+
         self.assertEqual(service.mode, "triton")
         mock_db.assert_called_once()
 
@@ -161,15 +161,15 @@ class TestSearchServiceVllmMode(unittest.TestCase):
             {"hash": "hash1", "name": "kernel1"},
             {"hash": "hash2", "name": "kernel2"},
         ]
-        
+
         mock_db_instance = MagicMock()
         mock_db_instance.search.return_value = mock_results
         mock_vllm_db.return_value = mock_db_instance
-        
+
         criteria = SearchCriteria(name="test_kernel")
         service = SearchService(criteria=criteria, mode="vllm")
         results = service.search()
-        
+
         self.assertEqual(results, mock_results)
         mock_db_instance.search.assert_called_once_with(criteria)
 
@@ -196,9 +196,9 @@ class TestPruningServiceVllmMode(unittest.TestCase):
         mock_db_instance = MagicMock()
         mock_vllm_repo.return_value = mock_repo_instance
         mock_vllm_db.return_value = mock_db_instance
-        
+
         service = PruningService(cache_dir=self.cache_dir, mode="vllm")
-        
+
         self.assertEqual(service.mode, "vllm")
         self.assertEqual(service.cache_dir, self.cache_dir)
         mock_vllm_repo.assert_called_once_with(self.cache_dir)
@@ -212,9 +212,9 @@ class TestPruningServiceVllmMode(unittest.TestCase):
         mock_db_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
         mock_db.return_value = mock_db_instance
-        
+
         service = PruningService(cache_dir=self.cache_dir, mode="triton")
-        
+
         self.assertEqual(service.mode, "triton")
         mock_repo.assert_called_once_with(self.cache_dir)
         mock_db.assert_called_once()
@@ -228,24 +228,24 @@ class TestPruningServiceVllmMode(unittest.TestCase):
             {"hash": "hash1", "name": "kernel1"},
             {"hash": "hash2", "name": "kernel2"},
         ]
-        
+
         mock_repo_instance = MagicMock()
         mock_vllm_repo.return_value = mock_repo_instance
-        
+
         mock_db_instance = MagicMock()
         mock_db_instance.search.return_value = mock_search_results
         mock_db_instance.estimate_space.return_value = 2048
         mock_db_instance.get_session.return_value.__enter__.return_value = MagicMock()
         mock_vllm_db.return_value = mock_db_instance
-        
+
         service = PruningService(cache_dir=self.cache_dir, mode="vllm")
-        
+
         with patch.object(service, '_delete_kernel', return_value=1024) as mock_delete, \
              patch.object(service, '_confirm', return_value=True) as mock_confirm:
-            
+
             criteria = SearchCriteria(older_than_timestamp=1000000.0)
             result = service.prune(criteria, auto_confirm=True)
-            
+
             self.assertIsNotNone(result)
             self.assertEqual(result.pruned, 2)
             mock_db_instance.search.assert_called_once()

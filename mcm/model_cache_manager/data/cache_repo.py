@@ -31,11 +31,11 @@ def _get_plugins():
 def _read_json(path: Path, ctx: str) -> Optional[dict]:
     """
     Read and parse JSON file with consistent error handling.
-    
+
     Args:
         path: Path to the JSON file to read
         ctx: Context string for error messages (e.g., "metadata", "group")
-        
+
     Returns:
         Parsed JSON data or None if reading/parsing failed
     """
@@ -53,18 +53,18 @@ def _read_json(path: Path, ctx: str) -> Optional[dict]:
 def _resolve_group_metadata(cache_root: Path, kernel_dir: Path) -> Optional[Path]:
     """
     Resolve the actual metadata file path from group metadata.
-    
+
     Args:
         cache_root: Root cache directory
         kernel_dir: Directory containing the kernel files
-        
+
     Returns:
         Path to the actual metadata file, or None if not found
     """
     grp_files = [f for f in kernel_dir.glob("*.json") if f.name.startswith("__grp__")]
     if not grp_files:
         return None
-    
+
     grp = grp_files[0]
     group_data = _read_json(grp, "group")
     if not group_data:
@@ -100,11 +100,11 @@ def _resolve_group_metadata(cache_root: Path, kernel_dir: Path) -> Optional[Path
 def iter_triton_kernels(cache_root: Path, plugins: dict) -> Iterable[Kernel]:
     """
     Iterate over Triton kernels in a cache directory.
-    
+
     Args:
         cache_root: Root directory containing kernel subdirectories
         plugins: Dictionary of backend plugins
-        
+
     Yields:
         Valid Kernel objects with metadata parsed from cache files
     """
@@ -162,7 +162,7 @@ class CacheRepository:
 class VllmCacheRepository:
     """
     Repository for accessing and managing vLLM kernel cache files.
-    
+
     This class provides methods to iterate through kernels in the vLLM cache directory
     structure and extract their metadata and associated files.
     """
@@ -184,7 +184,7 @@ class VllmCacheRepository:
     def _find_torch_compile_cache_dirs(self) -> Iterable[tuple[str, Path]]:
         """
         Find torch compile cache directories in the vLLM cache root.
-        
+
         Yields:
             Tuples of (vllm_hash, path_to_hash_directory)
         """
@@ -200,10 +200,10 @@ class VllmCacheRepository:
     def _find_rank_dirs(self, hash_dir: Path) -> Iterable[Path]:
         """
         Find rank directories within a vLLM hash directory.
-        
+
         Args:
             hash_dir: Path to the vLLM hash directory
-            
+
         Yields:
             Paths to rank directories (rank<x>_<y>)
         """

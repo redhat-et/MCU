@@ -27,14 +27,14 @@ def create_mock_kernel(
         mock_file1.path = Path("/test/kernel.ptx")
         mock_file1.file_type = "ptx"
         mock_file1.size = 1024
-        
+
         mock_file2 = Mock(spec=KernelFile)
         mock_file2.path = Path("/test/kernel.json")
         mock_file2.file_type = "json"
         mock_file2.size = 512
-        
+
         files = [mock_file1, mock_file2]
-    
+
     kernel = Mock(spec=Kernel)
     kernel.hash = hash_val
     kernel.name = name
@@ -69,7 +69,7 @@ def create_mock_kernel(
     kernel.waves_per_eu = None
     kernel.kpack = None
     kernel.matrix_instr_nonkdim = None
-    
+
     return kernel
 
 
@@ -79,9 +79,9 @@ class TestBaseKernelMixin(unittest.TestCase):
     def test_get_common_kernel_values(self):
         """Test _get_common_kernel_values method."""
         mock_kernel = create_mock_kernel()
-        
+
         values = BaseKernelMixin._get_common_kernel_values(mock_kernel)
-        
+
         self.assertEqual(values["backend"], "cuda")
         self.assertEqual(values["arch"], "80")
         self.assertEqual(values["name"], "test_kernel")
@@ -101,24 +101,24 @@ class TestVllmKernelOrm(unittest.TestCase):
         """Test upsert_from_dto method."""
         vllm_cache_root = "/test/vllm/cache"
         vllm_hash = "test_vllm_hash"
-        
+
         with patch('model_cache_manager.data.db_models.sqlite_insert') as mock_insert, \
              patch('model_cache_manager.data.db_models.VllmKernelFileOrm') as mock_file_orm:
-            
+
             mock_stmt = MagicMock()
             mock_insert.return_value = mock_stmt
             mock_stmt.on_conflict_do_update.return_value = mock_stmt
-            
+
             VllmKernelOrm.upsert_from_dto(
-                self.mock_session, 
-                self.mock_kernel, 
-                vllm_cache_root, 
+                self.mock_session,
+                self.mock_kernel,
+                vllm_cache_root,
                 vllm_hash
             )
-            
+
             # Verify sqlite_insert was called
             mock_insert.assert_called_once_with(VllmKernelOrm)
-            
+
             # Verify kernel values were set correctly
             call_args = mock_insert.call_args[1] if mock_insert.call_args[1] else mock_stmt.values.call_args[0][0]
             if hasattr(mock_stmt.values, 'call_args') and mock_stmt.values.call_args:
@@ -126,7 +126,7 @@ class TestVllmKernelOrm(unittest.TestCase):
                 self.assertEqual(kernel_values["vllm_cache_root"], vllm_cache_root)
                 self.assertEqual(kernel_values["vllm_hash"], vllm_hash)
                 self.assertEqual(kernel_values["triton_cache_key"], "test_hash")
-            
+
             # Verify session operations
             self.mock_session.execute.assert_called_once()
             self.mock_session.query.assert_called_once()
@@ -139,16 +139,16 @@ class TestVllmKernelOrm(unittest.TestCase):
         vllm_kernel.vllm_hash = "test_hash"
         vllm_kernel.triton_cache_key = "triton_key"
         vllm_kernel.kernel_metadata_json = {"test": "metadata"}
-        
+
         with patch('model_cache_manager.data.db_models.inspect') as mock_inspect:
             mock_mapper = MagicMock()
             mock_column_attr = MagicMock()
             mock_column_attr.key = "kernel_metadata_json"
             mock_mapper.column_attrs = [mock_column_attr]
             mock_inspect.return_value.mapper = mock_mapper
-            
+
             result = vllm_kernel.to_dict()
-            
+
             # Should have metadata instead of kernel_metadata_json
             self.assertIn("metadata", result)
             self.assertNotIn("kernel_metadata_json", result)
@@ -167,10 +167,10 @@ class TestVllmDatabase(unittest.TestCase):
         mock_engine = MagicMock()
         mock_session_local = MagicMock()
         mock_create_engine_session.return_value = (mock_engine, mock_session_local)
-        
+
         with patch('model_cache_manager.data.database.Base') as mock_base:
             db = VllmDatabase()
-            
+
             mock_create_engine_session.assert_called_once_with("vllm")
             self.assertEqual(db.engine, mock_engine)
             self.assertEqual(db.SessionLocal, mock_session_local)
@@ -184,16 +184,16 @@ class TestVllmDatabase(unittest.TestCase):
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
         mock_create_engine_session.return_value = (mock_engine, mock_session_local)
-        
+
         with patch('model_cache_manager.data.database.Base'), \
              patch('model_cache_manager.data.database.VllmKernelOrm') as mock_kernel_orm:
-            
+
             db = VllmDatabase()
             vllm_cache_root = "/test/cache"
             vllm_hash = "test_hash"
-            
+
             db.insert_kernel(self.mock_kernel, vllm_cache_root, vllm_hash)
-            
+
             mock_kernel_orm.upsert_from_dto.assert_called_once_with(
                 mock_session, self.mock_kernel, vllm_cache_root, vllm_hash
             )
@@ -208,7 +208,7 @@ class TestVllmDatabase(unittest.TestCase):
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
         mock_create_engine_session.return_value = (mock_engine, mock_session_local)
-        
+
         # Mock query results
         mock_kernel_orm = MagicMock()
         mock_kernel_orm.to_dict.return_value = {"hash": "test_hash", "name": "test_kernel"}
@@ -217,21 +217,21 @@ class TestVllmDatabase(unittest.TestCase):
         mock_query.order_by.return_value = mock_query
         mock_query.all.return_value = [mock_kernel_orm]
         mock_session.query.return_value = mock_query
-        
+
         with patch('model_cache_manager.data.database.Base'), \
              patch('model_cache_manager.data.database.VllmKernelOrm') as mock_vllm_kernel_orm:
-            
+
             db = VllmDatabase()
-            
+
             criteria = SearchCriteria(
                 cache_dir="/test/cache",
                 name="test_kernel",
                 backend="cuda",
                 arch="80"
             )
-            
+
             results = db.search(criteria)
-            
+
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["hash"], "test_hash")
             mock_session.query.assert_called_with(mock_vllm_kernel_orm)
@@ -245,32 +245,32 @@ class TestVllmDatabase(unittest.TestCase):
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
         mock_create_engine_session.return_value = (mock_engine, mock_session_local)
-        
+
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.all.return_value = []
         mock_session.query.return_value = mock_query
-        
+
         with patch('model_cache_manager.data.database.Base'), \
              patch('model_cache_manager.data.database.VllmKernelOrm') as mock_vllm_kernel_orm, \
              patch('model_cache_manager.data.database.and_') as mock_and:
-            
+
             # Mock the column attributes to avoid comparison issues
             mock_vllm_kernel_orm.modified_time = MagicMock()
             mock_vllm_kernel_orm.runtime_hits = MagicMock()
-            
+
             db = VllmDatabase()
-            
+
             criteria = SearchCriteria(
                 older_than_timestamp=1000000.0,
                 younger_than_timestamp=2000000.0,
                 cache_hit_lower=5,
                 cache_hit_higher=100
             )
-            
+
             results = db.search(criteria)
-            
+
             # Verify basic operations occurred
             self.assertIsInstance(results, list)
             mock_session.close.assert_called_once()
@@ -281,11 +281,11 @@ class TestVllmDatabase(unittest.TestCase):
         mock_engine = MagicMock()
         mock_session_local = MagicMock()
         mock_create_engine_session.return_value = (mock_engine, mock_session_local)
-        
+
         with patch('model_cache_manager.data.database.Base'):
             db = VllmDatabase()
             db.close()
-            
+
             mock_engine.dispose.assert_called_once()
 
 

@@ -24,7 +24,7 @@ def get_cache_dir(mode: str = 'triton') -> Path:
 def get_db_path(mode: str = "triton") -> Path:
     """
     Get the path to the database file.
-    
+
     Args:
         mode: Cache mode - 'triton' for standard cache, 'vllm' for vLLM cache
 
