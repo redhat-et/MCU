@@ -7,11 +7,9 @@ This module provides configuration settings including paths and defaults.
 import platform
 import os
 from pathlib import Path
-from pydantic import Field
-from pydantic_settings import BaseSettings
 
 
-class Settings(BaseSettings):
+class Settings:
     # pylint: disable=too-few-public-methods
     """
     Configuration settings for the Model Cache Manager.
@@ -20,11 +18,10 @@ class Settings(BaseSettings):
     It supports overriding via environment variables prefixed with MCM_.
     """
 
-    model_cache_dir: Path = Field(
-        default_factory=lambda: Path.home() / ".triton" / "cache"
-    )
-    data_dir: Path = Field(
-        default_factory=lambda: (
+    def __init__(self):
+        self.model_cache_dir = Path.home() / ".triton" / "cache"
+        self.model_cache_dir_vllm = Path.home() / ".cache" / "vllm"
+        self.data_dir = (
             Path.home()
             / (
                 ".local/share"
@@ -37,14 +34,18 @@ class Settings(BaseSettings):
             )
             / "model-cache-manager"
         )
-    )
-    db_filename: str = "cache.db"
-    log_level: str = "INFO"
-
-    class Config:
-        """Configuration for the Settings class."""
-
-        env_prefix = "MCM_"
+        self.db_filename = "cache.db"
+        self.log_level = "INFO"
+        
+        # Override with environment variables if present
+        if "MCM_MODEL_CACHE_DIR" in os.environ:
+            self.model_cache_dir = Path(os.environ["MCM_MODEL_CACHE_DIR"])
+        if "MCM_DATA_DIR" in os.environ:
+            self.data_dir = Path(os.environ["MCM_DATA_DIR"])
+        if "MCM_DB_FILENAME" in os.environ:
+            self.db_filename = os.environ["MCM_DB_FILENAME"]
+        if "MCM_LOG_LEVEL" in os.environ:
+            self.log_level = os.environ["MCM_LOG_LEVEL"]
 
 
 settings = Settings()

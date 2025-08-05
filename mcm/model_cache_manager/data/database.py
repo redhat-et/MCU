@@ -12,8 +12,8 @@ from typing import Any, Dict, List, Set, Iterable
 import collections
 from sqlalchemy import and_, exc, or_, func
 
-from .db_config import engine, SessionLocal, DB_PATH
-from .db_models import Base, KernelOrm, KernelFileOrm, SqlaSession
+from .db_config import engine, SessionLocal, DB_PATH, create_engine_and_session
+from .db_models import Base, KernelOrm, KernelFileOrm, VllmKernelOrm, SqlaSession
 
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
@@ -319,3 +319,165 @@ class Database:
         if self.engine:
             self.engine.dispose()
             log.info("Database engine connection pool disposed.")
+
+
+class VllmDatabase:
+    """
+    Manages database interactions for vLLM kernel metadata.
+    """
+
+    def __init__(self) -> None:
+        """Initializes DB engine, session factory, and ensures schema exists."""
+        self.engine, self.SessionLocal = create_engine_and_session("vllm")  # pylint: disable=invalid-name
+        self._ensure_schema()
+        log.info("vLLM Database service interface initialized successfully.")
+
+    def estimate_space(self, hashes: Iterable[str], f_ext: Set[str] | None) -> int:
+        """Sum the sizes of artefacts that would be deleted."""
+        size = 0
+        with self.get_session() as s:
+            q = s.query(func.sum(KernelFileOrm.size)).filter(
+                KernelFileOrm.kernel_hash.in_(hashes)
+            )
+
+            if f_ext:
+                q = q.filter(
+                    or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
+                )
+
+            size = q.scalar() or 0
+        return size
+    def _ensure_schema(self) -> None:
+        """Ensures database schema (tables, indexes) exists."""
+        try:
+            Base.metadata.create_all(bind=self.engine)
+            log.info("Database schema verified/created at %s.", DB_PATH)
+        except Exception as e:  # pylint: disable=broad-except
+            log.error("Fatal error creating database schema: %s", e, exc_info=True)
+            raise
+
+    def get_session(self) -> SqlaSession:
+        """Returns a new database session."""
+        return self.SessionLocal()
+
+    def insert_kernel(self, k_data: Kernel, vllm_cache_root: str, vllm_hash: str) -> None:
+        """
+        Upserts a vLLM kernel and its associated files into the database.
+
+        Args:
+            k_data: A `Kernel` DTO containing the metadata.
+            vllm_cache_root: Root path of the vLLM cache
+            vllm_hash: Hash identifier for the vLLM cache group
+        """
+        session = self.get_session()
+        try:
+            VllmKernelOrm.upsert_from_dto(session, k_data, vllm_cache_root, vllm_hash)
+            session.commit()
+            log.info(
+                "vLLM Kernel %s with vllm_cache_root %s vllm_hash %s upserted into DB.",
+                k_data.hash,
+                vllm_cache_root,
+                vllm_hash,
+            )
+        except exc.IntegrityError as e:
+            session.rollback()
+            log.error(
+                "Failed to upsert vLLM kernel %s with vllm_cache_root %s vllm_hash %s due to a constraint violation: %s",
+                k_data.hash,
+                vllm_cache_root,
+                vllm_hash,
+                e,
+                exc_info=True,
+            )
+            raise
+        except exc.OperationalError as e:
+            session.rollback()
+            log.error(
+                "Failed to upsert vLLM kernel %s with vllm_cache_root %s vllm_hash %s due to a db operation issue: %s",
+                k_data.hash,
+                vllm_cache_root,
+                vllm_hash,
+                e,
+                exc_info=True,
+            )
+            raise
+        except Exception:  # pylint: disable=broad-except
+            session.rollback()
+            log.error(
+                "DB Error: Failed to upsert vLLM kernel %s with vllm_cache_root %s vllm_hash %s.",
+                k_data.hash,
+                vllm_cache_root,
+                vllm_hash,
+                exc_info=True,
+            )
+            raise
+        finally:
+            session.close()
+
+    def search(self, criteria: SearchCriteria) -> List[Dict[str, Any]]:
+        """
+        Searches for vLLM kernels matching criteria.
+
+        Args:
+            criteria: `SearchCriteria` object with filter values.
+
+        Returns:
+            A list of dictionaries, each representing a matching kernel.
+        """
+        session = self.get_session()
+        try:
+            query = session.query(VllmKernelOrm)
+            active_filters = []
+
+            equality_filter_configs = [
+                ("cache_dir", VllmKernelOrm.vllm_cache_root, str),
+                ("name", VllmKernelOrm.name, None),
+                ("backend", VllmKernelOrm.backend, None),
+                ("arch", VllmKernelOrm.arch, str),
+            ]
+
+            for crit_attr, orm_column, transformer in equality_filter_configs:
+                value = getattr(criteria, crit_attr, None)
+                if value is not None:
+                    if transformer:
+                        value = transformer(value)
+                    active_filters.append(orm_column == value)
+
+            if criteria.cache_hit_lower is not None:
+                active_filters.append(VllmKernelOrm.runtime_hits < criteria.cache_hit_lower)
+
+            if criteria.cache_hit_higher is not None:
+                active_filters.append(
+                    VllmKernelOrm.runtime_hits > criteria.cache_hit_higher
+                )
+            if criteria.older_than_timestamp is not None:
+                active_filters.append(
+                    VllmKernelOrm.modified_time < criteria.older_than_timestamp
+                )
+
+            if criteria.younger_than_timestamp is not None:
+                active_filters.append(
+                    VllmKernelOrm.modified_time > criteria.younger_than_timestamp
+                )
+
+            if active_filters:
+                query = query.filter(and_(*active_filters))
+            query = query.order_by(VllmKernelOrm.modified_time.desc())
+            results_orm = query.all()
+            log.debug(
+                "vLLM DB Search: Found %d results for criteria: %s.",
+                len(results_orm),
+                criteria,
+            )
+            return [kernel_orm.to_dict() for kernel_orm in results_orm]
+        except Exception:  # pylint: disable=broad-except
+            log.error("vLLM DB Search: Failed for criteria %s.", criteria, exc_info=True)
+            return []
+        finally:
+            session.close()
+
+    def close(self) -> None:
+        """Closes the database engine's connection pool."""
+        if self.engine:
+            self.engine.dispose()
+            log.info("vLLM Database engine connection pool disposed.")
