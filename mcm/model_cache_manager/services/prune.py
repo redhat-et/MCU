@@ -69,11 +69,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
         """
         criteria.cache_dir = self.cache_dir
         rows = self.db.search(criteria)
-        row_hash = None
-        if self.mode != 'vllm':
-            row_hash = "hash"
-        else:
-            row_hash = "triton_cache_key"
+        row_hash = "triton_cache_key" if self.mode == "vllm" else "hash"
         hashes: List[str] = [row[row_hash] for row in rows]
 
         if not hashes:
