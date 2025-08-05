@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Optional, List, Any, Tuple, Dict
 from dataclasses import dataclass
 from rich.prompt import Confirm
-from ..data.cache_repo import CacheRepository
-from ..data.database import Database
+from ..data.cache_repo import CacheRepository, VllmCacheRepository
+from ..data.database import Database, VllmDatabase
 from ..models.criteria import SearchCriteria
 from ..data.db_models import KernelOrm, KernelFileOrm
 from ..utils.mcm_constants import IR_EXTS
@@ -35,10 +35,16 @@ class PruningService:  # pylint: disable=too-few-public-methods
     Remove files from the cache and keep the DB consistent.
     """
 
-    def __init__(self, cache_dir: Path | None = None):
-        self.cache_dir = cache_dir or get_cache_dir()
-        self.repo = CacheRepository(cache_dir)
-        self.db = Database()
+    def __init__(self, cache_dir: Path | None = None, mode: str = "triton"):
+        self.mode = mode
+        if mode == "vllm":
+            self.cache_dir = cache_dir or get_cache_dir(mode=mode)
+            self.repo = VllmCacheRepository(self.cache_dir)
+            self.db = VllmDatabase()
+        else:
+            self.cache_dir = cache_dir or get_cache_dir(mode=mode)
+            self.repo = CacheRepository(self.cache_dir)
+            self.db = Database()
 
     def prune(
         self,
@@ -63,7 +69,12 @@ class PruningService:  # pylint: disable=too-few-public-methods
         """
         criteria.cache_dir = self.cache_dir
         rows = self.db.search(criteria)
-        hashes: List[str] = [row["hash"] for row in rows]
+        row_hash = None
+        if self.mode != 'vllm':
+            row_hash = "hash"
+        else:
+            row_hash = "triton_cache_key"
+        hashes: List[str] = [row[row_hash] for row in rows]
 
         if not hashes:
             log.info("No kernels matched pruning criteria – nothing to do.")
