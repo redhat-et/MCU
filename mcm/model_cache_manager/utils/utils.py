@@ -131,16 +131,16 @@ def check_hits_num(higher: int | None, lower: int | None) -> bool:
 def detect_cache_mode(cache_dir: Path) -> str:
     """
     Auto-detect cache mode based on directory structure.
-    
+
     Args:
         cache_dir: Path to the cache directory
-        
+
     Returns:
         'vllm' if vLLM cache structure detected, 'triton' otherwise
     """
     if not cache_dir.exists():
         return "triton"
-    
+
     # Check for vLLM cache structure:
     # $VLLM_CACHE_ROOT/torch_compile_cache/<hash>/rank<x>_<y>/
     # Look for torch_compile_cache subdirectory
@@ -156,12 +156,12 @@ def detect_cache_mode(cache_dir: Path) -> str:
                         triton_cache = rank_dir / "triton_cache"
                         if triton_cache.exists():
                             return "vllm"
-    
+
     # Check for direct triton cache structure
     # Look for triton kernel files in the directory
     for item in cache_dir.rglob("*.json"):
         # Triton kernels typically have .json metadata files
         if item.parent.name.startswith("triton_"):
             return "triton"
-    
+
     return "triton"  # Default to triton mode

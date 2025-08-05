@@ -21,7 +21,7 @@ class TestVllmCLI(unittest.TestCase):
         self.temp_dir = Path(tempfile.mkdtemp())
         self.vllm_cache_dir = self.temp_dir / "vllm_cache"
         self.triton_cache_dir = self.temp_dir / "triton_cache"
-        
+
         # Create directories
         self.vllm_cache_dir.mkdir(parents=True)
         self.triton_cache_dir.mkdir(parents=True)
@@ -38,17 +38,17 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance.repo.root = self.vllm_cache_dir
         mock_service_instance.cache_dir = self.vllm_cache_dir
         mock_index_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "index", 
-            "--mode", "vllm", 
+            "index",
+            "--mode", "vllm",
             "--cache-dir", str(self.vllm_cache_dir)
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Starting indexing process", result.stdout)
         mock_index_service.assert_called_once_with(
-            cache_dir=self.vllm_cache_dir, 
+            cache_dir=self.vllm_cache_dir,
             mode="vllm"
         )
 
@@ -60,17 +60,17 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance.repo.root = self.triton_cache_dir
         mock_service_instance.cache_dir = self.triton_cache_dir
         mock_index_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "index", 
-            "--mode", "triton", 
+            "index",
+            "--mode", "triton",
             "--cache-dir", str(self.triton_cache_dir)
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Starting indexing process", result.stdout)
         mock_index_service.assert_called_once_with(
-            cache_dir=self.triton_cache_dir, 
+            cache_dir=self.triton_cache_dir,
             mode="triton"
         )
 
@@ -84,17 +84,17 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance.repo.root = self.vllm_cache_dir
         mock_service_instance.cache_dir = self.vllm_cache_dir
         mock_index_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "index", 
+            "index",
             "--cache-dir", str(self.vllm_cache_dir)
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Auto-detected cache mode: vllm", result.stdout)
         mock_detect.assert_called_once_with(self.vllm_cache_dir)
         mock_index_service.assert_called_once_with(
-            cache_dir=self.vllm_cache_dir, 
+            cache_dir=self.vllm_cache_dir,
             mode="vllm"
         )
 
@@ -108,12 +108,12 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance.repo.root = self.triton_cache_dir
         mock_service_instance.cache_dir = self.triton_cache_dir
         mock_index_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "index", 
+            "index",
             "--cache-dir", str(self.triton_cache_dir)
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Auto-detected cache mode: triton", result.stdout)
         mock_detect.assert_called_once_with(self.triton_cache_dir)
@@ -121,11 +121,11 @@ class TestVllmCLI(unittest.TestCase):
     def test_index_command_invalid_mode(self):
         """Test index command with invalid mode."""
         result = self.runner.invoke(app, [
-            "index", 
-            "--mode", "invalid", 
+            "index",
+            "--mode", "invalid",
             "--cache-dir", str(self.vllm_cache_dir)
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Invalid mode 'invalid'", result.stdout)
 
@@ -137,12 +137,12 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance = MagicMock()
         mock_service_instance.search.return_value = []
         mock_search_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "list", 
+            "list",
             "--mode", "vllm"
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         mock_search_service.assert_called_once()
         # Check that mode was passed correctly
@@ -159,14 +159,14 @@ class TestVllmCLI(unittest.TestCase):
             {"hash": "hash1", "name": "kernel1", "backend": "cuda"}
         ]
         mock_search_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "list", 
+            "list",
             "--mode", "vllm",
             "--backend", "cuda",
             "--name", "test_kernel"
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         mock_search_service.assert_called_once()
 
@@ -174,12 +174,12 @@ class TestVllmCLI(unittest.TestCase):
     def test_list_command_no_db_vllm_mode(self, mock_db_exists):
         """Test list command when vLLM database doesn't exist."""
         mock_db_exists.return_value = False
-        
+
         result = self.runner.invoke(app, [
-            "list", 
+            "list",
             "--mode", "vllm"
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("DB was not found for vllm mode", result.stdout)
         self.assertIn("mcm index --mode vllm", result.stdout)
@@ -192,17 +192,17 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance = MagicMock()
         mock_service_instance.prune.return_value = MagicMock(pruned=2, reclaimed=1.5)
         mock_prune_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "prune", 
+            "prune",
             "--mode", "vllm",
             "--older-than", "7d",
             "--yes"
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         mock_prune_service.assert_called_once_with(
-            cache_dir=None, 
+            cache_dir=None,
             mode="vllm"
         )
 
@@ -216,13 +216,13 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance = MagicMock()
         mock_service_instance.prune.return_value = MagicMock(pruned=1, reclaimed=0.5)
         mock_prune_service.return_value = mock_service_instance
-        
+
         result = self.runner.invoke(app, [
-            "prune", 
+            "prune",
             "--cache-dir", str(self.vllm_cache_dir),
             "--yes"
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Auto-detected cache mode: vllm", result.stdout)
         mock_detect.assert_called_once()
@@ -230,12 +230,12 @@ class TestVllmCLI(unittest.TestCase):
     def test_prune_command_invalid_cache_hit_bounds(self):
         """Test prune command with invalid cache hit bounds."""
         result = self.runner.invoke(app, [
-            "prune", 
+            "prune",
             "--mode", "triton",
             "--cache-hit-lower", "100",
             "--cache-hit-higher", "50"
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         # The validation might happen at different points, but the command should complete
         # The actual validation message might vary based on when it's checked
@@ -244,20 +244,20 @@ class TestVllmCLI(unittest.TestCase):
     def test_index_command_file_not_found_error(self, mock_index_service):
         """Test index command when cache directory doesn't exist."""
         mock_index_service.side_effect = FileNotFoundError("Cache directory not found")
-        
+
         result = self.runner.invoke(app, [
-            "index", 
+            "index",
             "--mode", "vllm",
             "--cache-dir", "/nonexistent/path"
         ])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Cache directory not found", result.stdout)
 
     def test_help_shows_mode_parameter(self):
         """Test that help shows the --mode parameter."""
         result = self.runner.invoke(app, ["index", "--help"])
-        
+
         self.assertEqual(result.exit_code, 0)
         self.assertIn("--mode", result.stdout)
         self.assertIn("vllm", result.stdout)
