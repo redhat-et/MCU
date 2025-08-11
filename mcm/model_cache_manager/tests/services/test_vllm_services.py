@@ -223,10 +223,10 @@ class TestPruningServiceVllmMode(unittest.TestCase):
     @patch('model_cache_manager.services.prune.VllmDatabase')
     def test_prune_basic_functionality_vllm(self, mock_vllm_db, mock_vllm_repo):
         """Test basic prune functionality in vLLM mode."""
-        # Mock search results
+        # Mock search results - use triton_cache_key for vLLM mode
         mock_search_results = [
-            {"hash": "hash1", "name": "kernel1"},
-            {"hash": "hash2", "name": "kernel2"},
+            {"triton_cache_key": "hash1", "name": "kernel1"},
+            {"triton_cache_key": "hash2", "name": "kernel2"},
         ]
 
         mock_repo_instance = MagicMock()
