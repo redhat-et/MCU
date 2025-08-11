@@ -129,7 +129,7 @@ class TestVllmCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Invalid mode 'invalid'", result.stdout)
 
-    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
+    @patch('model_cache_manager.cli.main.ensure_db')
     @patch('model_cache_manager.cli.main.SearchService')
     def test_list_command_vllm_mode(self, mock_search_service, mock_ensure_db):
         """Test list command with vLLM mode."""
@@ -154,7 +154,7 @@ class TestVllmCLI(unittest.TestCase):
         call_args = mock_search_service.call_args
         self.assertEqual(call_args[1]["mode"], "vllm")
 
-    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
+    @patch('model_cache_manager.cli.main.ensure_db')
     @patch('model_cache_manager.cli.main.SearchService')
     def test_list_command_with_filters_vllm(self, mock_search_service, mock_ensure_db):
         """Test list command with filters in vLLM mode."""
@@ -196,7 +196,7 @@ class TestVllmCLI(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 1)
 
-    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
+    @patch('model_cache_manager.cli.main.ensure_db')
     @patch('model_cache_manager.cli.main.PruningService')
     def test_prune_command_vllm_mode(self, mock_prune_service, mock_ensure_db):
         """Test prune command with vLLM mode."""
@@ -224,7 +224,7 @@ class TestVllmCLI(unittest.TestCase):
         )
 
     @patch('model_cache_manager.cli.cli_helpers.detect_cache_mode')
-    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
+    @patch('model_cache_manager.cli.main.ensure_db')
     @patch('model_cache_manager.cli.main.PruningService')
     def test_prune_command_auto_detection(self, mock_prune_service, mock_ensure_db, mock_detect):
         """Test prune command with auto-detection."""
