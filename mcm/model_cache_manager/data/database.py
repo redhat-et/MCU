@@ -13,7 +13,7 @@ import collections
 from sqlalchemy import and_, exc, or_, func
 
 from .db_config import engine, SessionLocal, DB_PATH, create_engine_and_session
-from .db_models import Base, KernelOrm, KernelFileOrm, VllmKernelOrm, SqlaSession
+from .db_models import Base, KernelOrm, KernelFileOrm, VllmKernelOrm, VllmKernelFileOrm, SqlaSession
 
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
@@ -336,13 +336,13 @@ class VllmDatabase:
         """Sum the sizes of artefacts that would be deleted."""
         size = 0
         with self.get_session() as s:
-            q = s.query(func.sum(KernelFileOrm.size)).filter(
-                KernelFileOrm.kernel_hash.in_(hashes)
+            q = s.query(func.sum(VllmKernelFileOrm.size)).filter(
+                VllmKernelFileOrm.triton_cache_key.in_(hashes)
             )
 
             if f_ext:
                 q = q.filter(
-                    or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
+                    or_(*[VllmKernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
                 )
 
             size = q.scalar() or 0

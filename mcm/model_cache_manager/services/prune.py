@@ -135,7 +135,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
         else:
             kernels_to_prune_identifiers: List[str] = []
             hash_field = "hash"
-            
+
         total_reclaimed_bytes_estimate = 0
 
         kernel_info_map: Dict[str, Dict[str, Any]] = {}
@@ -168,8 +168,8 @@ class PruningService:  # pylint: disable=too-few-public-methods
 
         Args:
             session: The SQLAlchemy session.
-            identifiers_to_delete: List of kernel identifiers to delete 
-                                   (either hash strings for triton mode or 
+            identifiers_to_delete: List of kernel identifiers to delete
+                                   (either hash strings for triton mode or
                                    (vllm_hash, triton_cache_key) tuples for vllm mode).
 
         Returns:
@@ -186,7 +186,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
                 identifier_str = f"vllm_hash={vllm_hash}, triton_cache_key={triton_cache_key}"
             else:
                 identifier_str = str(identifier)
-                
+
             try:
                 if self.mode == "vllm" and isinstance(identifier, tuple):
                     vllm_hash, triton_cache_key = identifier
@@ -325,7 +325,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
     def _delete_vllm_kernel(self, vllm_hash: str, triton_cache_key: str, session, ir_only: bool) -> int:
         """
         Delete vLLM kernel files on disk and update db. Returns bytes freed.
-        
+
         Args:
             vllm_hash: The vLLM hash (used for directory structure)
             triton_cache_key: The Triton cache key (used for DB lookups)
