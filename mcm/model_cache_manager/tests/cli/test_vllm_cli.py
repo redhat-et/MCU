@@ -136,6 +136,7 @@ class TestVllmCLI(unittest.TestCase):
         mock_ensure_db.return_value = None
         mock_service_instance = MagicMock()
         mock_service_instance.search.return_value = []
+        mock_service_instance.close.return_value = None
         mock_search_service.return_value = mock_service_instance
 
         result = self.runner.invoke(app, [
@@ -143,6 +144,10 @@ class TestVllmCLI(unittest.TestCase):
             "--mode", "vllm"
         ])
 
+        if result.exit_code != 0:
+            print(f"Error output: {result.stdout}")
+            if result.exception:
+                print(f"Exception: {result.exception}")
         self.assertEqual(result.exit_code, 0)
         mock_search_service.assert_called_once()
         # Check that mode was passed correctly
@@ -158,6 +163,7 @@ class TestVllmCLI(unittest.TestCase):
         mock_service_instance.search.return_value = [
             {"hash": "hash1", "name": "kernel1", "backend": "cuda"}
         ]
+        mock_service_instance.close.return_value = None
         mock_search_service.return_value = mock_service_instance
 
         result = self.runner.invoke(app, [
@@ -167,6 +173,10 @@ class TestVllmCLI(unittest.TestCase):
             "--name", "test_kernel"
         ])
 
+        if result.exit_code != 0:
+            print(f"Error output: {result.stdout}")
+            if result.exception:
+                print(f"Exception: {result.exception}")
         self.assertEqual(result.exit_code, 0)
         mock_search_service.assert_called_once()
 
@@ -193,6 +203,7 @@ class TestVllmCLI(unittest.TestCase):
         mock_ensure_db.return_value = None
         mock_service_instance = MagicMock()
         mock_service_instance.prune.return_value = MagicMock(pruned=2, reclaimed=1.5)
+        mock_service_instance.close.return_value = None
         mock_prune_service.return_value = mock_service_instance
 
         result = self.runner.invoke(app, [
@@ -202,6 +213,10 @@ class TestVllmCLI(unittest.TestCase):
             "--yes"
         ])
 
+        if result.exit_code != 0:
+            print(f"Error output: {result.stdout}")
+            if result.exception:
+                print(f"Exception: {result.exception}")
         self.assertEqual(result.exit_code, 0)
         mock_prune_service.assert_called_once_with(
             cache_dir=None,
@@ -217,6 +232,7 @@ class TestVllmCLI(unittest.TestCase):
         mock_ensure_db.return_value = None
         mock_service_instance = MagicMock()
         mock_service_instance.prune.return_value = MagicMock(pruned=1, reclaimed=0.5)
+        mock_service_instance.close.return_value = None
         mock_prune_service.return_value = mock_service_instance
 
         result = self.runner.invoke(app, [
@@ -225,6 +241,10 @@ class TestVllmCLI(unittest.TestCase):
             "--yes"
         ])
 
+        if result.exit_code != 0:
+            print(f"Error output: {result.stdout}")
+            if result.exception:
+                print(f"Exception: {result.exception}")
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Auto-detected cache mode: vllm", result.stdout)
         mock_detect.assert_called_once()
@@ -258,13 +278,16 @@ class TestVllmCLI(unittest.TestCase):
 
     def test_help_shows_mode_parameter(self):
         """Test that help shows the --mode parameter."""
+        import re
         result = self.runner.invoke(app, ["index", "--help"])
 
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("--mode", result.stdout)
-        self.assertIn("vllm", result.stdout)
-        self.assertIn("triton", result.stdout)
-        self.assertIn("Auto-detected", result.stdout)
+        # Remove ANSI escape codes for CI compatibility
+        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
+        self.assertIn("--mode", clean_output)
+        self.assertIn("vllm", clean_output)
+        self.assertIn("triton", clean_output)
+        self.assertIn("Auto-detected", clean_output)
 
 
 if __name__ == "__main__":
