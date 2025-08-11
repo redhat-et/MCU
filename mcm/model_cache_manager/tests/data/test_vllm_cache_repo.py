@@ -56,7 +56,7 @@ class TestVllmCacheRepository(unittest.TestCase):
     def test_find_torch_compile_cache_dirs_with_dirs(self):
         """Test finding torch compile cache directories when they exist."""
         # Create mock vLLM structure
-        torch_compile_dir = self.vllm_cache_root / "torch_compilecache"
+        torch_compile_dir = self.vllm_cache_root / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
         hash_dir1 = torch_compile_dir / "hash123abc"
@@ -130,11 +130,11 @@ class TestVllmCacheRepository(unittest.TestCase):
 
         self.assertEqual(len(kernels), 0)
 
-    @patch('model_cache_manager.data.cache_repo.CacheRepository')
-    def test_kernels_with_structure_and_kernels(self, mock_cache_repo_class):
+    @patch('model_cache_manager.data.cache_repo.iter_triton_kernels')
+    def test_kernels_with_structure_and_kernels(self, mock_iter_triton_kernels):
         """Test kernels method with vLLM structure containing kernels."""
         # Create vLLM directory structure
-        torch_compile_dir = self.vllm_cache_root / "torch_compilecache"
+        torch_compile_dir = self.vllm_cache_root / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
         hash_dir = torch_compile_dir / "hash123abc"
@@ -146,7 +146,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         triton_cache = rank_dir / "triton_cache"
         triton_cache.mkdir()
 
-        # Mock the CacheRepository to return fake kernels
+        # Mock the iter_triton_kernels function to return fake kernels
         mock_kernel1 = MagicMock(spec=Kernel)
         mock_kernel1.hash = "kernel_hash_1"
         mock_kernel1.name = "test_kernel_1"
@@ -155,9 +155,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         mock_kernel2.hash = "kernel_hash_2"
         mock_kernel2.name = "test_kernel_2"
 
-        mock_cache_repo = MagicMock()
-        mock_cache_repo.kernels.return_value = [mock_kernel1, mock_kernel2]
-        mock_cache_repo_class.return_value = mock_cache_repo
+        mock_iter_triton_kernels.return_value = [mock_kernel1, mock_kernel2]
 
         repo = VllmCacheRepository(self.vllm_cache_root)
         kernels = list(repo.kernels())
@@ -175,11 +173,11 @@ class TestVllmCacheRepository(unittest.TestCase):
         self.assertEqual(vllm_cache_root, str(self.vllm_cache_root))
         self.assertEqual(kernel, mock_kernel2)
 
-    @patch('model_cache_manager.data.cache_repo.CacheRepository')
-    def test_kernels_multiple_hash_dirs(self, mock_cache_repo_class):
+    @patch('model_cache_manager.data.cache_repo.iter_triton_kernels')
+    def test_kernels_multiple_hash_dirs(self, mock_iter_triton_kernels):
         """Test kernels method with multiple hash directories."""
         # Create vLLM directory structure with multiple hash dirs
-        torch_compile_dir = self.vllm_cache_root / "torch_compilecache"
+        torch_compile_dir = self.vllm_cache_root / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
         hash_dir1 = torch_compile_dir / "hash123abc"
@@ -194,21 +192,19 @@ class TestVllmCacheRepository(unittest.TestCase):
             triton_cache = rank_dir / "triton_cache"
             triton_cache.mkdir()
 
-        # Mock kernels for each cache repo call
-        def side_effect(triton_cache_path):
+        # Mock kernels for each cache directory call
+        def side_effect(triton_cache_path, plugins):
             if "hash123abc" in str(triton_cache_path):
                 mock_kernel = MagicMock(spec=Kernel)
-                mock_kernel.hash = f"kernel_from_{triton_cache_path.parent.parent.name}"
+                mock_kernel.hash = f"kernel_from_hash123abc"
                 return [mock_kernel]
             elif "hash456def" in str(triton_cache_path):
                 mock_kernel = MagicMock(spec=Kernel)
-                mock_kernel.hash = f"kernel_from_{triton_cache_path.parent.parent.name}"
+                mock_kernel.hash = f"kernel_from_hash456def"
                 return [mock_kernel]
             return []
 
-        mock_cache_repo = MagicMock()
-        mock_cache_repo.kernels.side_effect = lambda: side_effect(mock_cache_repo_class.call_args[0][0])
-        mock_cache_repo_class.return_value = mock_cache_repo
+        mock_iter_triton_kernels.side_effect = side_effect
 
         repo = VllmCacheRepository(self.vllm_cache_root)
         kernels = list(repo.kernels())

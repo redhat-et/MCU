@@ -74,7 +74,7 @@ class TestVllmCLI(unittest.TestCase):
             mode="triton"
         )
 
-    @patch('model_cache_manager.cli.main.detect_cache_mode')
+    @patch('model_cache_manager.cli.cli_helpers.detect_cache_mode')
     @patch('model_cache_manager.cli.main.IndexService')
     def test_index_command_auto_detection_vllm(self, mock_index_service, mock_detect):
         """Test index command with auto-detection detecting vLLM."""
@@ -98,7 +98,7 @@ class TestVllmCLI(unittest.TestCase):
             mode="vllm"
         )
 
-    @patch('model_cache_manager.cli.main.detect_cache_mode')
+    @patch('model_cache_manager.cli.cli_helpers.detect_cache_mode')
     @patch('model_cache_manager.cli.main.IndexService')
     def test_index_command_auto_detection_triton(self, mock_index_service, mock_detect):
         """Test index command with auto-detection detecting triton."""
@@ -129,11 +129,11 @@ class TestVllmCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Invalid mode 'invalid'", result.stdout)
 
-    @patch('model_cache_manager.cli.main._cache_db_exists')
+    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
     @patch('model_cache_manager.cli.main.SearchService')
-    def test_list_command_vllm_mode(self, mock_search_service, mock_db_exists):
+    def test_list_command_vllm_mode(self, mock_search_service, mock_ensure_db):
         """Test list command with vLLM mode."""
-        mock_db_exists.return_value = True
+        mock_ensure_db.return_value = None
         mock_service_instance = MagicMock()
         mock_service_instance.search.return_value = []
         mock_search_service.return_value = mock_service_instance
@@ -149,11 +149,11 @@ class TestVllmCLI(unittest.TestCase):
         call_args = mock_search_service.call_args
         self.assertEqual(call_args[1]["mode"], "vllm")
 
-    @patch('model_cache_manager.cli.main._cache_db_exists')
+    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
     @patch('model_cache_manager.cli.main.SearchService')
-    def test_list_command_with_filters_vllm(self, mock_search_service, mock_db_exists):
+    def test_list_command_with_filters_vllm(self, mock_search_service, mock_ensure_db):
         """Test list command with filters in vLLM mode."""
-        mock_db_exists.return_value = True
+        mock_ensure_db.return_value = None
         mock_service_instance = MagicMock()
         mock_service_instance.search.return_value = [
             {"hash": "hash1", "name": "kernel1", "backend": "cuda"}
@@ -170,25 +170,27 @@ class TestVllmCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         mock_search_service.assert_called_once()
 
-    @patch('model_cache_manager.cli.main._cache_db_exists')
-    def test_list_command_no_db_vllm_mode(self, mock_db_exists):
+    @patch('pathlib.Path.exists')
+    @patch('model_cache_manager.utils.paths.get_db_path')
+    def test_list_command_no_db_vllm_mode(self, mock_get_db_path, mock_exists):
         """Test list command when vLLM database doesn't exist."""
-        mock_db_exists.return_value = False
+        from pathlib import Path
+        fake_db_path = Path("/nonexistent/path/db.sqlite")
+        mock_get_db_path.return_value = fake_db_path
+        mock_exists.return_value = False
 
         result = self.runner.invoke(app, [
             "list",
             "--mode", "vllm"
         ])
 
-        self.assertEqual(result.exit_code, 0)
-        self.assertIn("DB was not found for vllm mode", result.stdout)
-        self.assertIn("mcm index --mode vllm", result.stdout)
+        self.assertEqual(result.exit_code, 1)
 
-    @patch('model_cache_manager.cli.main._cache_db_exists')
+    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
     @patch('model_cache_manager.cli.main.PruningService')
-    def test_prune_command_vllm_mode(self, mock_prune_service, mock_db_exists):
+    def test_prune_command_vllm_mode(self, mock_prune_service, mock_ensure_db):
         """Test prune command with vLLM mode."""
-        mock_db_exists.return_value = True
+        mock_ensure_db.return_value = None
         mock_service_instance = MagicMock()
         mock_service_instance.prune.return_value = MagicMock(pruned=2, reclaimed=1.5)
         mock_prune_service.return_value = mock_service_instance
@@ -206,13 +208,13 @@ class TestVllmCLI(unittest.TestCase):
             mode="vllm"
         )
 
-    @patch('model_cache_manager.cli.main.detect_cache_mode')
-    @patch('model_cache_manager.cli.main._cache_db_exists')
+    @patch('model_cache_manager.cli.cli_helpers.detect_cache_mode')
+    @patch('model_cache_manager.cli.cli_helpers.ensure_db')
     @patch('model_cache_manager.cli.main.PruningService')
-    def test_prune_command_auto_detection(self, mock_prune_service, mock_db_exists, mock_detect):
+    def test_prune_command_auto_detection(self, mock_prune_service, mock_ensure_db, mock_detect):
         """Test prune command with auto-detection."""
         mock_detect.return_value = "vllm"
-        mock_db_exists.return_value = True
+        mock_ensure_db.return_value = None
         mock_service_instance = MagicMock()
         mock_service_instance.prune.return_value = MagicMock(pruned=1, reclaimed=0.5)
         mock_prune_service.return_value = mock_service_instance

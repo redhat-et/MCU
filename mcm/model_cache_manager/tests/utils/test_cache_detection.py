@@ -37,9 +37,9 @@ class TestCacheDetection(unittest.TestCase):
 
     def test_detect_cache_mode_vllm_structure(self):
         """Test detection with vLLM cache structure returns vllm."""
-        # Create vLLM structure: cache_dir/torch_compilecache/hash/rank0_0/triton_cache
+        # Create vLLM structure: cache_dir/torch_compile_cache/hash/rank0_0/triton_cache
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
         hash_dir = torch_compile_dir / "abc123def456"
         rank_dir = hash_dir / "rank0_0"
         triton_cache = rank_dir / "triton_cache"
@@ -52,7 +52,7 @@ class TestCacheDetection(unittest.TestCase):
     def test_detect_cache_mode_vllm_structure_multiple_hashes(self):
         """Test detection with vLLM structure having multiple hash directories."""
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
 
         # Create multiple hash directories
         hash_dir1 = torch_compile_dir / "hash1"
@@ -73,7 +73,7 @@ class TestCacheDetection(unittest.TestCase):
     def test_detect_cache_mode_vllm_structure_without_triton_cache(self):
         """Test detection with vLLM structure but no triton_cache subdirectory."""
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
         hash_dir = torch_compile_dir / "abc123def456"
         rank_dir = hash_dir / "rank0_0"
 
@@ -84,9 +84,9 @@ class TestCacheDetection(unittest.TestCase):
         self.assertEqual(result, "triton")
 
     def test_detect_cache_mode_vllm_structure_no_rank_dirs(self):
-        """Test detection with torch_compilecache but no rank directories."""
+        """Test detection with torch_compile_cache but no rank directories."""
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
         hash_dir = torch_compile_dir / "abc123def456"
 
         # Create hash directory but no rank dirs
@@ -114,7 +114,7 @@ class TestCacheDetection(unittest.TestCase):
         cache_dir = self.temp_dir / "mixed_cache"
 
         # Create vLLM structure
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
         hash_dir = torch_compile_dir / "abc123def456"
         rank_dir = hash_dir / "rank0_0"
         triton_cache = rank_dir / "triton_cache"
@@ -129,10 +129,10 @@ class TestCacheDetection(unittest.TestCase):
         result = detect_cache_mode(cache_dir)
         self.assertEqual(result, "vllm")
 
-    def test_detect_cache_mode_torch_compilecache_empty(self):
-        """Test detection with torch_compilecache directory but no contents."""
+    def test_detect_cache_mode_torch_compile_cache_empty(self):
+        """Test detection with torch_compile_cache directory but no contents."""
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
         torch_compile_dir.mkdir(parents=True)
 
         result = detect_cache_mode(cache_dir)
@@ -141,7 +141,7 @@ class TestCacheDetection(unittest.TestCase):
     def test_detect_cache_mode_rank_dirs_not_starting_with_rank(self):
         """Test detection with directories that don't start with 'rank'."""
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
         hash_dir = torch_compile_dir / "abc123def456"
         not_rank_dir = hash_dir / "not_rank_dir"
         triton_cache = not_rank_dir / "triton_cache"
@@ -154,7 +154,7 @@ class TestCacheDetection(unittest.TestCase):
     def test_detect_cache_mode_complex_vllm_structure(self):
         """Test detection with complex vLLM structure having multiple ranks."""
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "torch_compilecache"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
         hash_dir = torch_compile_dir / "abc123def456"
 
         # Create multiple rank directories
@@ -170,7 +170,7 @@ class TestCacheDetection(unittest.TestCase):
     def test_detect_cache_mode_case_sensitivity(self):
         """Test detection is case sensitive for directory names."""
         cache_dir = self.temp_dir / "vllm_cache"
-        torch_compile_dir = cache_dir / "Torch_Compilecache"  # Wrong case
+        torch_compile_dir = cache_dir / "Torch_compile_cache"  # Wrong case
         hash_dir = torch_compile_dir / "abc123def456"
         rank_dir = hash_dir / "Rank0_0"  # Wrong case
         triton_cache = rank_dir / "triton_cache"
@@ -181,12 +181,12 @@ class TestCacheDetection(unittest.TestCase):
         self.assertEqual(result, "triton")
 
     def test_detect_cache_mode_files_not_directories(self):
-        """Test detection when torch_compilecache is a file, not directory."""
+        """Test detection when torch_compile_cache is a file, not directory."""
         cache_dir = self.temp_dir / "vllm_cache"
         cache_dir.mkdir()
 
-        # Create torch_compilecache as a file instead of directory
-        torch_compile_file = cache_dir / "torch_compilecache"
+        # Create torch_compile_cache as a file instead of directory
+        torch_compile_file = cache_dir / "torch_compile_cache"
         torch_compile_file.write_text("not a directory")
 
         result = detect_cache_mode(cache_dir)

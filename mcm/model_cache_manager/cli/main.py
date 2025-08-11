@@ -185,6 +185,9 @@ def search(
         _display_kernels_table(rows=rows, mode=mode)
     except (ValueError, FileNotFoundError) as exc:
         rich.print(f"[red]{exc}[/red]")
+    except typer.Exit:
+        # Re-raise typer.Exit to allow proper exit code handling
+        raise
     except Exception as exc:  # pylint: disable=broad-exception-caught
         log.exception("search failed")
         rich.print(f"[red]Unexpected error: {exc}[/red]")
@@ -273,6 +276,9 @@ def prune(
             rich.print(f"[green]Pruned fully {stats.pruned} kernel(s).[/green]")
     except (ValueError, FileNotFoundError) as exc:
         rich.print(f"[red]{exc}[/red]")
+    except typer.Exit:
+        # Re-raise typer.Exit to allow proper exit code handling
+        raise
     except Exception as exc:  # pylint: disable=broad-exception-caught
         rich.print(f"[red]Prune failed: {exc}[/red]")
         log.exception("Prune command failed")
