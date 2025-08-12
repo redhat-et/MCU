@@ -17,15 +17,11 @@ from .kernel_validator import deserialize_kernel
 log = logging.getLogger(__name__)
 
 # Lazy-loaded plugins to avoid import-time discovery failures
-_PLUGINS = None
-
-
 def _get_plugins():
     """Get plugins dictionary, loading them lazily on first access."""
-    global _PLUGINS
-    if _PLUGINS is None:
-        _PLUGINS = {p.backend: p for p in discover_plugins()}
-    return _PLUGINS
+    if not hasattr(_get_plugins, '_cache'):
+        _get_plugins._cache = {p.backend: p for p in discover_plugins()}  # pylint: disable=protected-access
+    return _get_plugins._cache  # pylint: disable=protected-access
 
 
 def _read_json(path: Path, ctx: str) -> Optional[dict]:
@@ -159,7 +155,7 @@ class CacheRepository:
         yield from iter_triton_kernels(self.root, _get_plugins())
 
 
-class VllmCacheRepository:
+class VllmCacheRepository:  # pylint: disable=too-few-public-methods
     """
     Repository for accessing and managing vLLM kernel cache files.
 

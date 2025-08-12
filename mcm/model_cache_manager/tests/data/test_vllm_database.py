@@ -5,11 +5,10 @@ Unit tests for the VllmDatabase and VllmKernelOrm.
 import unittest
 from unittest.mock import MagicMock, patch, Mock
 from pathlib import Path
-import tempfile
 import time
 
 from model_cache_manager.data.database import VllmDatabase
-from model_cache_manager.data.db_models import VllmKernelOrm, VllmKernelFileOrm, BaseKernelMixin
+from model_cache_manager.data.db_models import VllmKernelOrm, BaseKernelMixin
 from model_cache_manager.models.kernel import Kernel, KernelFile
 from model_cache_manager.models.criteria import SearchCriteria
 
@@ -80,7 +79,7 @@ class TestBaseKernelMixin(unittest.TestCase):
         """Test _get_common_kernel_values method."""
         mock_kernel = create_mock_kernel()
 
-        values = BaseKernelMixin._get_common_kernel_values(mock_kernel)
+        values = BaseKernelMixin._get_common_kernel_values(mock_kernel)  # pylint: disable=protected-access
 
         self.assertEqual(values["backend"], "cuda")
         self.assertEqual(values["arch"], "80")
@@ -103,7 +102,7 @@ class TestVllmKernelOrm(unittest.TestCase):
         vllm_hash = "test_vllm_hash"
 
         with patch('model_cache_manager.data.db_models.sqlite_insert') as mock_insert, \
-             patch('model_cache_manager.data.db_models.VllmKernelFileOrm') as mock_file_orm:
+             patch('model_cache_manager.data.db_models.VllmKernelFileOrm'):
 
             mock_stmt = MagicMock()
             mock_insert.return_value = mock_stmt
@@ -120,7 +119,6 @@ class TestVllmKernelOrm(unittest.TestCase):
             mock_insert.assert_called_once_with(VllmKernelOrm)
 
             # Verify kernel values were set correctly
-            call_args = mock_insert.call_args[1] if mock_insert.call_args[1] else mock_stmt.values.call_args[0][0]
             if hasattr(mock_stmt.values, 'call_args') and mock_stmt.values.call_args:
                 kernel_values = mock_stmt.values.call_args[0][0]
                 self.assertEqual(kernel_values["vllm_cache_root"], vllm_cache_root)
@@ -254,7 +252,7 @@ class TestVllmDatabase(unittest.TestCase):
 
         with patch('model_cache_manager.data.database.Base'), \
              patch('model_cache_manager.data.database.VllmKernelOrm') as mock_vllm_kernel_orm, \
-             patch('model_cache_manager.data.database.and_') as mock_and:
+             patch('model_cache_manager.data.database.and_'):
 
             # Mock the column attributes to avoid comparison issues
             mock_vllm_kernel_orm.modified_time = MagicMock()

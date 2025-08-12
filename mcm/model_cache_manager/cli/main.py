@@ -23,7 +23,7 @@ from ..models.criteria import SearchCriteria
 from ..services.prune import PruningService, PruneStats
 from ..services.warm import WarmupService
 from .cli_helpers import resolve_mode, ensure_db, service_ctx
-from .cli_options import get_common_search_options
+from .cli_options import get_common_search_options, CommonSearchOptions, WarmOptions
 
 log = logging.getLogger(__name__)
 app = typer.Typer(help="Model Kernel Cache Manager CLI")
@@ -74,7 +74,8 @@ def index(
             )
             n = svc.reindex()
             rich.print(
-                f"[green]Number of kernels in {svc.cache_dir}\n\tbefore: {n[1]}\n\tnow: {n[0]}[/green]"
+                f"[green]Number of kernels in {svc.cache_dir}\n\t"
+                f"before: {n[1]}\n\tnow: {n[0]}[/green]"
             )
     except (ValueError, FileNotFoundError) as exc:
         rich.print(f"[red]{exc}[/red]")
@@ -139,47 +140,125 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = "triton"):
     rich.print(table)
 
 
-@app.command(name="list")
-def search(
-    name: Optional[str] = get_common_search_options()["name"],
-    backend: Optional[str] = get_common_search_options()["backend"],
-    arch: Optional[str] = get_common_search_options()["arch"],
-    older_than: Optional[str] = get_common_search_options()["older_than"],
-    younger_than: Optional[str] = get_common_search_options()["younger_than"],
-    cache_hit_lower: Optional[int] = get_common_search_options()["cache_hit_lower"],
-    cache_hit_higher: Optional[int] = get_common_search_options()["cache_hit_higher"],
-    cache_dir: Optional[Path] = get_common_search_options()["cache_dir"],
-    mode: Optional[str] = get_common_search_options()["mode"],
-):
-    """
-    Search for indexed kernels based on various SearchCriteria.
-    """
+def _execute_warm_command(options: WarmOptions) -> None:
+    """Execute warm command with given options."""
+    image = DEFAULT_ROCM_IMAGE if options.rocm else DEFAULT_CUDA_IMAGE
+
     try:
-        mode = resolve_mode(mode, cache_dir)
+        rich.print(f"Starting cache warm for '{options.model}'...")
+        svc = WarmupService(
+            options.model, options.hug_face_token,
+            options.vllm_cache_dir, options.host_cache_dir
+        )
+        success = svc.warmup(image, options.output_file, options.tarball, options.rocm)
+
+        if success:
+            rich.print(
+                f"[green]Cache warmup successful! Saved to: {options.host_cache_dir}[/green]"
+            )
+        else:
+            rich.print(
+                "[red]Cache warmup failed. Check the logs for more details.[/red]"
+            )
+            raise typer.Exit(code=1)
+
+    except Exception as e:
+        rich.print(f"[red]An unexpected error occurred during warmup: {e}[/red]")
+        raise typer.Exit(code=1)
+
+
+def _execute_prune_command(
+    options: CommonSearchOptions, full: bool, deduplicate: bool, yes: bool
+) -> None:
+    """Execute prune command with given options."""
+    try:
+        mode = resolve_mode(options.mode, options.cache_dir)
         ensure_db(mode)
 
-        if not check_hits_num(cache_hit_higher, cache_hit_lower):
+        if not check_hits_num(options.cache_hit_higher, options.cache_hit_lower):
             raise ValueError("--cache-hit-lower cannot exceed --cache-hit-higher")
 
-        older_ts, younger_ts = get_older_younger(older_than, younger_than)
+        with service_ctx(PruningService, cache_dir=options.cache_dir, mode=mode) as svc:
+            stats: Optional[PruneStats] = None
+            if deduplicate:
+                filter_options_used = [
+                    options.name, options.backend, options.arch,
+                    options.older_than, options.younger_than, full,
+                ]
+                if any(opt is not None and opt is not False for opt in filter_options_used):
+                    rich.print(
+                        "[yellow]Warning: Filter options and --full are ignored"
+                        + "when --deduplicate is used.[/yellow]"
+                    )
+                rich.print("Starting kernel deduplication process...")
+                stats = svc.deduplicate_kernels(auto_confirm=yes)
+            else:
+                older_ts, younger_ts = get_older_younger(
+                    options.older_than, options.younger_than
+                )
+                criteria = SearchCriteria(
+                    name=options.name,
+                    backend=options.backend,
+                    arch=options.arch,
+                    older_than_timestamp=older_ts,
+                    younger_than_timestamp=younger_ts,
+                    cache_hit_higher=options.cache_hit_higher,
+                    cache_hit_lower=options.cache_hit_lower,
+                )
+                stats = svc.prune(criteria, delete_ir_only=not full, auto_confirm=yes)
+
+        if stats is None:
+            rich.print("[yellow]Prune cancelled by user.[/yellow]")
+            return
+        if stats.pruned == 0:
+            rich.print("[yellow]No kernels matched the given filters.[/yellow]")
+            return
+
+        if not full:
+            rich.print(f"[green]Pruned IRs of {stats.pruned} kernel(s).[/green]")
+        else:
+            rich.print(f"[green]Pruned fully {stats.pruned} kernel(s).[/green]")
+    except (ValueError, FileNotFoundError) as exc:
+        rich.print(f"[red]{exc}[/red]")
+    except typer.Exit:
+        # Re-raise typer.Exit to allow proper exit code handling
+        raise
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        rich.print(f"[red]Prune failed: {exc}[/red]")
+        log.exception("Prune command failed")
+
+
+def _execute_search_command(options: CommonSearchOptions) -> None:
+    """Execute search command with given options."""
+    try:
+        mode = resolve_mode(options.mode, options.cache_dir)
+        ensure_db(mode)
+
+        if not check_hits_num(options.cache_hit_higher, options.cache_hit_lower):
+            raise ValueError("--cache-hit-lower cannot exceed --cache-hit-higher")
+
+        older_ts, younger_ts = get_older_younger(options.older_than, options.younger_than)
 
         criteria = SearchCriteria(
-            cache_dir=cache_dir,
-            name=name,
-            backend=backend,
-            arch=arch,
+            cache_dir=options.cache_dir,
+            name=options.name,
+            backend=options.backend,
+            arch=options.arch,
             older_than_timestamp=older_ts,
             younger_than_timestamp=younger_ts,
-            cache_hit_lower=cache_hit_lower,
-            cache_hit_higher=cache_hit_higher,
+            cache_hit_lower=options.cache_hit_lower,
+            cache_hit_higher=options.cache_hit_higher,
         )
 
         with service_ctx(SearchService, criteria=criteria, mode=mode) as svc:
             rich.print(
-                f"Searching for kernels for {mode} with: Name='{name or 'any'}', "
-                f"Cache_dir='{cache_dir or 'any'}', "
-                f"Backend='{backend or 'any'}', Arch='{arch or 'any'}', "
-                f"OlderThan='{older_than or 'N/A'}', YoungerThan='{younger_than or 'N/A'}'..."
+                f"Searching for kernels for {mode} with: "
+                f"Name='{options.name or 'any'}', "
+                f"Cache_dir='{options.cache_dir or 'any'}', "
+                f"Backend='{options.backend or 'any'}', "
+                f"Arch='{options.arch or 'any'}', "
+                f"OlderThan='{options.older_than or 'N/A'}', "
+                f"YoungerThan='{options.younger_than or 'N/A'}'..."
             )
             rows = svc.search()
         _display_kernels_table(rows=rows, mode=mode)
@@ -193,8 +272,37 @@ def search(
         rich.print(f"[red]Unexpected error: {exc}[/red]")
 
 
+@app.command(name="list")
+def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    name: Optional[str] = get_common_search_options()["name"],
+    backend: Optional[str] = get_common_search_options()["backend"],
+    arch: Optional[str] = get_common_search_options()["arch"],
+    older_than: Optional[str] = get_common_search_options()["older_than"],
+    younger_than: Optional[str] = get_common_search_options()["younger_than"],
+    cache_hit_lower: Optional[int] = get_common_search_options()["cache_hit_lower"],
+    cache_hit_higher: Optional[int] = get_common_search_options()["cache_hit_higher"],
+    cache_dir: Optional[Path] = get_common_search_options()["cache_dir"],
+    mode: Optional[str] = get_common_search_options()["mode"],
+):
+    """
+    Search for indexed kernels based on various SearchCriteria.
+    """
+    options = CommonSearchOptions(
+        name=name,
+        backend=backend,
+        arch=arch,
+        older_than=older_than,
+        younger_than=younger_than,
+        cache_hit_lower=cache_hit_lower,
+        cache_hit_higher=cache_hit_higher,
+        cache_dir=cache_dir,
+        mode=mode
+    )
+    _execute_search_command(options)
+
+
 @app.command()
-def prune(
+def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     name: Optional[str] = get_common_search_options()["name"],
     backend: Optional[str] = get_common_search_options()["backend"],
     arch: Optional[str] = get_common_search_options()["arch"],
@@ -218,98 +326,40 @@ def prune(
     Delete intermediate‑representation files (default) or whole kernel
     directories that satisfy the given filters.
     """
-    try:
-        mode = resolve_mode(mode, cache_dir)
-        ensure_db(mode)
-
-        if not check_hits_num(cache_hit_higher, cache_hit_lower):
-            raise ValueError("--cache-hit-lower cannot exceed --cache-hit-higher")
-
-        with service_ctx(PruningService, cache_dir=cache_dir, mode=mode) as svc:
-            stats: Optional[PruneStats] = None
-            if deduplicate:
-                filter_options_used = [
-                    name,
-                    backend,
-                    arch,
-                    older_than,
-                    younger_than,
-                    full,
-                ]
-                if any(
-                    opt is not None and opt is not False for opt in filter_options_used
-                ):
-                    rich.print(
-                        "[yellow]Warning: Filter options and --full are ignored"
-                        + "when --deduplicate is used.[/yellow]"
-                    )
-                rich.print("Starting kernel deduplication process...")
-                stats = svc.deduplicate_kernels(auto_confirm=yes)
-            else:
-                older_ts, younger_ts = get_older_younger(older_than, younger_than)
-
-                criteria = SearchCriteria(
-                    name=name,
-                    backend=backend,
-                    arch=arch,
-                    older_than_timestamp=older_ts,
-                    younger_than_timestamp=younger_ts,
-                    cache_hit_higher=cache_hit_higher,
-                    cache_hit_lower=cache_hit_lower,
-                )
-                stats = svc.prune(
-                    criteria,
-                    delete_ir_only=not full,
-                    auto_confirm=yes,
-                )
-
-        if stats is None:
-            rich.print("[yellow]Prune cancelled by user.[/yellow]")
-            return
-        if stats.pruned == 0:
-            rich.print("[yellow]No kernels matched the given filters.[/yellow]")
-            return
-
-        if not full:
-            rich.print(f"[green]Pruned IRs of {stats.pruned} kernel(s).[/green]")
-        else:
-            rich.print(f"[green]Pruned fully {stats.pruned} kernel(s).[/green]")
-    except (ValueError, FileNotFoundError) as exc:
-        rich.print(f"[red]{exc}[/red]")
-    except typer.Exit:
-        # Re-raise typer.Exit to allow proper exit code handling
-        raise
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        rich.print(f"[red]Prune failed: {exc}[/red]")
-        log.exception("Prune command failed")
+    options = CommonSearchOptions(
+        name=name,
+        backend=backend,
+        arch=arch,
+        older_than=older_than,
+        younger_than=younger_than,
+        cache_hit_lower=cache_hit_lower,
+        cache_hit_higher=cache_hit_higher,
+        cache_dir=cache_dir,
+        mode=mode
+    )
+    _execute_prune_command(options, full, deduplicate, yes)
 
 
 @app.command()
-def warm(
+def warm(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     model: str = typer.Option(
-        "facebook/opt-125m",
-        "--model",
-        "-m",
-        help="The model to use for warming the cache.",
+        "facebook/opt-125m", "--model", "-m",
+        help="The model to use for warming the cache."
     ),
     output_file: Path = typer.Option(
-        "warmed_cache.tar.gz",
-        "--output",
-        "-o",
-        help="The path to save the packaged cache archive.",
+        "warmed_cache.tar.gz", "--output", "-o",
+        help="The path to save the packaged cache archive."
     ),
     host_cache_dir: str = typer.Option(
-        "./",
-        "--host-cache-dir",
-        help="Specify the vLLM cache directory to use on the host",
+        "./", "--host-cache-dir",
+        help="Specify the vLLM cache directory to use on the host"
     ),
     hug_face_token: str = typer.Option(
         None, "--hugging-face-token", help="Add HF Token"
     ),
     vllm_cache_dir: str = typer.Option(
-        "/root/.cache/vllm/",
-        "--vllm_cache_dir",
-        help="Specify the vLLM cache directory to use on the container",
+        "/root/.cache/vllm/", "--vllm_cache_dir",
+        help="Specify the vLLM cache directory to use on the container"
     ),
     tarball: bool = typer.Option(
         False, "--tarball", help="Create a tarball of the vLLM cache"
@@ -322,27 +372,16 @@ def warm(
     Warms up the Model cache using a specified container image and
     optionally packages the result into a tarball.
     """
-    image = DEFAULT_ROCM_IMAGE if rocm else DEFAULT_CUDA_IMAGE
-
-    svc = None
-    try:
-        rich.print(f"Starting cache warm for '{model}'...")
-        svc = WarmupService(model, hug_face_token, vllm_cache_dir, host_cache_dir)
-        success = svc.warmup(image, output_file, tarball, rocm)
-
-        if success:
-            rich.print(
-                f"[green]Cache warmup successful! Saved to: {host_cache_dir}[/green]"
-            )
-        else:
-            rich.print(
-                "[red]Cache warmup failed. Check the logs for more details.[/red]"
-            )
-            raise typer.Exit(code=1)
-
-    except Exception as e:
-        rich.print(f"[red]An unexpected error occurred during warmup: {e}[/red]")
-        raise typer.Exit(code=1)
+    options = WarmOptions(
+        model=model,
+        output_file=output_file,
+        host_cache_dir=host_cache_dir,
+        hug_face_token=hug_face_token,
+        vllm_cache_dir=vllm_cache_dir,
+        tarball=tarball,
+        rocm=rocm
+    )
+    _execute_warm_command(options)
 
 
 def run():

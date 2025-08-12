@@ -5,7 +5,7 @@ This module centralizes common Typer options to reduce duplication across comman
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, NamedTuple
 import typer
 
 
@@ -54,6 +54,30 @@ def get_common_search_options():
             "'vllm' for vLLM cache structure. Auto-detected if not specified.",
         ),
     }
+
+
+class CommonSearchOptions(NamedTuple):
+    """Common search options for CLI commands."""
+    name: Optional[str] = None
+    backend: Optional[str] = None
+    arch: Optional[str] = None
+    older_than: Optional[str] = None
+    younger_than: Optional[str] = None
+    cache_hit_lower: Optional[int] = None
+    cache_hit_higher: Optional[int] = None
+    cache_dir: Optional[Path] = None
+    mode: Optional[str] = None
+
+
+class WarmOptions(NamedTuple):
+    """Options for warm command."""
+    model: str = "facebook/opt-125m"
+    output_file: Path = Path("warmed_cache.tar.gz")
+    host_cache_dir: str = "./"
+    hug_face_token: Optional[str] = None
+    vllm_cache_dir: str = "/root/.cache/vllm/"
+    tarball: bool = False
+    rocm: bool = False
 
 
 CommonSearchParams = {
