@@ -10,7 +10,7 @@ from ..data.database import Database, VllmDatabase
 from ..utils.paths import get_cache_dir
 
 
-class BaseService:
+class BaseService: # pylint: disable=too-few-public-methods
     """Base service with common initialization for cache and database."""
 
     def __init__(self, cache_dir: Path | None = None, mode: str = "triton"):
@@ -22,6 +22,9 @@ class BaseService:
             mode: Cache mode - 'triton' for standard Triton cache, 'vllm' for vLLM cache.
         """
         self.mode = mode
+        self.cache_dir: Path
+        self.repo: Union[CacheRepository, VllmCacheRepository]
+        self.db: Union[Database, VllmDatabase]
         if mode == "vllm":
             self.cache_dir = cache_dir or get_cache_dir(mode=mode)
             self.repo = VllmCacheRepository(self.cache_dir)

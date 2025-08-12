@@ -32,7 +32,6 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
     Remove files from the cache and keep the DB consistent.
     """
 
-
     def prune(
         self,
         criteria: SearchCriteria,
@@ -333,8 +332,9 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
                         kernel_dirs.append(kernel_dir)
         return kernel_dirs
 
-    def _delete_vllm_ir_files(self, kernel_dirs: list, vllm_hash: str,
-                              triton_cache_key: str, session) -> int:
+    def _delete_vllm_ir_files(
+        self, kernel_dirs: list, vllm_hash: str, triton_cache_key: str, session
+    ) -> int:
         """Delete IR files and update database records. Returns bytes freed."""
         freed = 0
         for k_dir in kernel_dirs:
