@@ -6,16 +6,13 @@ from __future__ import annotations
 
 import logging
 import shutil
-from pathlib import Path
 from typing import Optional, List, Any, Tuple, Dict
 from dataclasses import dataclass
 from rich.prompt import Confirm
-from ..data.cache_repo import CacheRepository, VllmCacheRepository
-from ..data.database import Database, VllmDatabase
+from .base import BaseService
 from ..models.criteria import SearchCriteria
 from ..data.db_models import KernelOrm, KernelFileOrm, VllmKernelOrm, VllmKernelFileOrm
 from ..utils.mcm_constants import IR_EXTS
-from ..utils.paths import get_cache_dir
 
 log = logging.getLogger(__name__)
 
@@ -30,21 +27,11 @@ class PruneStats:
     empty: bool = False
 
 
-class PruningService:  # pylint: disable=too-few-public-methods
+class PruningService(BaseService):  # pylint: disable=too-few-public-methods
     """
     Remove files from the cache and keep the DB consistent.
     """
 
-    def __init__(self, cache_dir: Path | None = None, mode: str = "triton"):
-        self.mode = mode
-        if mode == "vllm":
-            self.cache_dir = cache_dir or get_cache_dir(mode=mode)
-            self.repo = VllmCacheRepository(self.cache_dir)
-            self.db = VllmDatabase()
-        else:
-            self.cache_dir = cache_dir or get_cache_dir(mode=mode)
-            self.repo = CacheRepository(self.cache_dir)
-            self.db = Database()
 
     def prune(
         self,
@@ -71,7 +58,9 @@ class PruningService:  # pylint: disable=too-few-public-methods
         rows = self.db.search(criteria)
         if self.mode == "vllm":
             # For vLLM mode, we need both vllm_hash and triton_cache_key for deletion
-            vllm_data: List[Tuple[str, str]] = [(row["vllm_hash"], row["triton_cache_key"]) for row in rows]
+            vllm_data: List[Tuple[str, str]] = [
+                (row["vllm_hash"], row["triton_cache_key"]) for row in rows
+            ]
             hash_list = [row["triton_cache_key"] for row in rows]  # For estimate_space
         else:
             hashes: List[str] = [row["hash"] for row in rows]
@@ -91,7 +80,9 @@ class PruningService:  # pylint: disable=too-few-public-methods
         with self.db.get_session() as session:
             if self.mode == "vllm":
                 for vllm_hash, triton_cache_key in vllm_data:
-                    freed += self._delete_vllm_kernel(vllm_hash, triton_cache_key, session, delete_ir_only)
+                    freed += self._delete_vllm_kernel(
+                        vllm_hash, triton_cache_key, session, delete_ir_only
+                    )
             else:
                 for h in hashes:
                     freed += self._delete_kernel(h, session, delete_ir_only)
@@ -144,13 +135,17 @@ class PruningService:  # pylint: disable=too-few-public-methods
                 kernel_info_map[kernel_dict[hash_field]] = kernel_dict
 
         for group in duplicate_groups:
-            log.debug("Processing duplicate group: %s", [k.get(hash_field) for k in group])
+            log.debug(
+                "Processing duplicate group: %s", [k.get(hash_field) for k in group]
+            )
             if len(group) > 1:
                 for kernel_to_prune_dict in group[:-1]:
                     if self.mode == "vllm":
                         vllm_hash = kernel_to_prune_dict["vllm_hash"]
                         triton_cache_key = kernel_to_prune_dict["triton_cache_key"]
-                        kernels_to_prune_identifiers.append((vllm_hash, triton_cache_key))
+                        kernels_to_prune_identifiers.append(
+                            (vllm_hash, triton_cache_key)
+                        )
                     else:
                         h_hash = kernel_to_prune_dict["hash"]
                         kernels_to_prune_identifiers.append(h_hash)
@@ -183,7 +178,9 @@ class PruningService:  # pylint: disable=too-few-public-methods
             # Set identifier_str early for error handling
             if self.mode == "vllm" and isinstance(identifier, tuple):
                 vllm_hash, triton_cache_key = identifier
-                identifier_str = f"vllm_hash={vllm_hash}, triton_cache_key={triton_cache_key}"
+                identifier_str = (
+                    f"vllm_hash={vllm_hash}, triton_cache_key={triton_cache_key}"
+                )
             else:
                 identifier_str = str(identifier)
 
@@ -322,7 +319,67 @@ class PruningService:  # pylint: disable=too-few-public-methods
 
         return freed
 
-    def _delete_vllm_kernel(self, vllm_hash: str, triton_cache_key: str, session, ir_only: bool) -> int:
+    def _find_vllm_kernel_dirs(self, vllm_hash: str, triton_cache_key: str) -> list:
+        """Find kernel directories for a given vLLM hash and triton cache key."""
+        vllm_root_dir = self.repo.root / "torch_compile_cache" / vllm_hash
+        kernel_dirs = []
+
+        if vllm_root_dir.exists():
+            for rank_dir in vllm_root_dir.iterdir():
+                if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
+                    triton_cache_dir = rank_dir / "triton_cache"
+                    kernel_dir = triton_cache_dir / triton_cache_key
+                    if kernel_dir.exists():
+                        kernel_dirs.append(kernel_dir)
+        return kernel_dirs
+
+    def _delete_vllm_ir_files(self, kernel_dirs: list, vllm_hash: str,
+                              triton_cache_key: str, session) -> int:
+        """Delete IR files and update database records. Returns bytes freed."""
+        freed = 0
+        for k_dir in kernel_dirs:
+            files = list(k_dir.iterdir()) if k_dir.exists() else []
+            for p in files:
+                if p.suffix in IR_EXTS and p.is_file():
+                    try:
+                        freed += p.stat().st_size
+                        p.unlink()
+                    except OSError as err:
+                        log.warning("Could not delete %s: %s", p, err)
+
+            # Remove IR file records from database
+            ir_file_names = [p.name for p in files if p.suffix in IR_EXTS]
+            ir_rows = (
+                session.query(VllmKernelFileOrm)
+                .filter(
+                    VllmKernelFileOrm.vllm_cache_root == str(self.cache_dir),
+                    VllmKernelFileOrm.vllm_hash == vllm_hash,
+                    VllmKernelFileOrm.triton_cache_key == triton_cache_key,
+                    VllmKernelFileOrm.rel_path.in_(ir_file_names),
+                )
+                .all()
+            )
+            for r in ir_rows:
+                session.delete(r)
+        return freed
+
+    def _delete_vllm_kernel_dirs(self, kernel_dirs: list) -> int:
+        """Delete entire kernel directories. Returns bytes freed."""
+        freed = 0
+        for k_dir in kernel_dirs:
+            if k_dir.exists():
+                try:
+                    freed += sum(
+                        p.stat().st_size for p in k_dir.rglob("*") if p.is_file()
+                    )
+                    shutil.rmtree(k_dir)
+                except OSError as err:
+                    log.error("Failed to remove %s: %s", k_dir, err, exc_info=True)
+        return freed
+
+    def _delete_vllm_kernel(
+        self, vllm_hash: str, triton_cache_key: str, session, ir_only: bool
+    ) -> int:
         """
         Delete vLLM kernel files on disk and update db. Returns bytes freed.
 
@@ -332,20 +389,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
             session: Database session
             ir_only: If True, only delete IR files; if False, delete entire kernel
         """
-        # For vLLM, the directory structure is based on vllm_hash
-        # The structure is: torch_compile_cache/{vllm_hash}/rank*/triton_cache/{triton_cache_key}
-        vllm_root_dir = self.repo.root / "torch_compile_cache" / vllm_hash
-        freed = 0
-
-        # Find the triton cache directory containing the kernel
-        kernel_dirs = []
-        if vllm_root_dir.exists():
-            for rank_dir in vllm_root_dir.iterdir():
-                if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
-                    triton_cache_dir = rank_dir / "triton_cache"
-                    kernel_dir = triton_cache_dir / triton_cache_key
-                    if kernel_dir.exists():
-                        kernel_dirs.append(kernel_dir)
+        kernel_dirs = self._find_vllm_kernel_dirs(vllm_hash, triton_cache_key)
 
         # Get the kernel record from the database
         kernel_row: VllmKernelOrm | None = session.get(
@@ -354,48 +398,14 @@ class PruningService:  # pylint: disable=too-few-public-methods
         )
 
         if ir_only:
-            # Delete only IR files
-            for k_dir in kernel_dirs:
-                files = list(k_dir.iterdir()) if k_dir.exists() else []
-                for p in files:
-                    if p.suffix in IR_EXTS and p.is_file():
-                        try:
-                            freed += p.stat().st_size
-                            p.unlink()
-                        except OSError as err:
-                            log.warning("Could not delete %s: %s", p, err)
-
-                # Remove IR file records from database
-                ir_rows = (
-                    session.query(VllmKernelFileOrm)
-                    .filter(
-                        VllmKernelFileOrm.vllm_cache_root == str(self.cache_dir),
-                        VllmKernelFileOrm.vllm_hash == vllm_hash,
-                        VllmKernelFileOrm.triton_cache_key == triton_cache_key,
-                        VllmKernelFileOrm.rel_path.in_(
-                            [p.name for p in files if p.suffix in IR_EXTS]
-                        ),
-                    )
-                    .all()
-                )
-                for r in ir_rows:
-                    session.delete(r)
-
+            freed = self._delete_vllm_ir_files(
+                kernel_dirs, vllm_hash, triton_cache_key, session
+            )
             # Update kernel total size
             if kernel_row:
                 kernel_row.total_size = sum(f.size or 0 for f in kernel_row.files)
         else:
-            # Delete entire kernel directories
-            for k_dir in kernel_dirs:
-                if k_dir.exists():
-                    try:
-                        freed += sum(
-                            p.stat().st_size for p in k_dir.rglob("*") if p.is_file()
-                        )
-                        shutil.rmtree(k_dir)
-                    except OSError as err:
-                        log.error("Failed to remove %s: %s", k_dir, err, exc_info=True)
-
+            freed = self._delete_vllm_kernel_dirs(kernel_dirs)
             # Delete kernel record from database
             if kernel_row:
                 session.delete(kernel_row)

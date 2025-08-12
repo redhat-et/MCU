@@ -3,12 +3,12 @@ Unit tests for the VllmCacheRepository.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 import tempfile
-import os
+import shutil
 
-from model_cache_manager.data.cache_repo import VllmCacheRepository, CacheRepository
+from model_cache_manager.data.cache_repo import VllmCacheRepository
 from model_cache_manager.models.kernel import Kernel
 
 
@@ -23,7 +23,6 @@ class TestVllmCacheRepository(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after each test method."""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_init_with_existing_directory(self):
@@ -50,7 +49,7 @@ class TestVllmCacheRepository(unittest.TestCase):
     def test_find_torch_compile_cache_dirs_empty(self):
         """Test finding torch compile cache directories when none exist."""
         repo = VllmCacheRepository(self.vllm_cache_root)
-        dirs = list(repo._find_torch_compile_cache_dirs())
+        dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
         self.assertEqual(len(dirs), 0)
 
     def test_find_torch_compile_cache_dirs_with_dirs(self):
@@ -65,7 +64,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir2.mkdir()
 
         repo = VllmCacheRepository(self.vllm_cache_root)
-        dirs = list(repo._find_torch_compile_cache_dirs())
+        dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
 
         self.assertEqual(len(dirs), 2)
         hash_names = [hash_name for hash_name, _ in dirs]
@@ -78,7 +77,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir.mkdir()
 
         repo = VllmCacheRepository(self.vllm_cache_root)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))
+        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
         self.assertEqual(len(rank_dirs), 0)
 
     def test_find_rank_dirs_with_rank_dirs(self):
@@ -98,7 +97,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         triton_cache2.mkdir()
 
         repo = VllmCacheRepository(self.vllm_cache_root)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))
+        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
 
         self.assertEqual(len(rank_dirs), 2)
         self.assertIn(triton_cache1, rank_dirs)
@@ -114,7 +113,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         rank1.mkdir()
 
         repo = VllmCacheRepository(self.vllm_cache_root)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))
+        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
 
         self.assertEqual(len(rank_dirs), 0)
 
@@ -193,14 +192,14 @@ class TestVllmCacheRepository(unittest.TestCase):
             triton_cache.mkdir()
 
         # Mock kernels for each cache directory call
-        def side_effect(triton_cache_path, plugins):
+        def side_effect(triton_cache_path, plugins):  # pylint: disable=unused-argument
             if "hash123abc" in str(triton_cache_path):
                 mock_kernel = MagicMock(spec=Kernel)
-                mock_kernel.hash = f"kernel_from_hash123abc"
+                mock_kernel.hash = "kernel_from_hash123abc"
                 return [mock_kernel]
-            elif "hash456def" in str(triton_cache_path):
+            if "hash456def" in str(triton_cache_path):
                 mock_kernel = MagicMock(spec=Kernel)
-                mock_kernel.hash = f"kernel_from_hash456def"
+                mock_kernel.hash = "kernel_from_hash456def"
                 return [mock_kernel]
             return []
 

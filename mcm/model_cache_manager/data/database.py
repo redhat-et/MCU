@@ -382,7 +382,8 @@ class VllmDatabase:
         except exc.IntegrityError as e:
             session.rollback()
             log.error(
-                "Failed to upsert vLLM kernel %s with vllm_cache_root %s vllm_hash %s due to a constraint violation: %s",
+                "Failed to upsert vLLM kernel %s with vllm_cache_root %s "
+                "vllm_hash %s due to a constraint violation: %s",
                 k_data.hash,
                 vllm_cache_root,
                 vllm_hash,
@@ -393,7 +394,8 @@ class VllmDatabase:
         except exc.OperationalError as e:
             session.rollback()
             log.error(
-                "Failed to upsert vLLM kernel %s with vllm_cache_root %s vllm_hash %s due to a db operation issue: %s",
+                "Failed to upsert vLLM kernel %s with vllm_cache_root %s "
+                "vllm_hash %s due to a db operation issue: %s",
                 k_data.hash,
                 vllm_cache_root,
                 vllm_hash,

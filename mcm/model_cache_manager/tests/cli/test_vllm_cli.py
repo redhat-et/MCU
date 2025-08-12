@@ -2,6 +2,7 @@
 Integration tests for CLI with vLLM mode support.
 """
 
+import re
 import unittest
 from unittest.mock import patch, MagicMock
 import tempfile
@@ -184,7 +185,6 @@ class TestVllmCLI(unittest.TestCase):
     @patch('model_cache_manager.utils.paths.get_db_path')
     def test_list_command_no_db_vllm_mode(self, mock_get_db_path, mock_exists):
         """Test list command when vLLM database doesn't exist."""
-        from pathlib import Path
         fake_db_path = Path("/nonexistent/path/db.sqlite")
         mock_get_db_path.return_value = fake_db_path
         mock_exists.return_value = False
@@ -278,7 +278,6 @@ class TestVllmCLI(unittest.TestCase):
 
     def test_help_shows_mode_parameter(self):
         """Test that help shows the --mode parameter."""
-        import re
         result = self.runner.invoke(app, ["index", "--help"])
 
         self.assertEqual(result.exit_code, 0)

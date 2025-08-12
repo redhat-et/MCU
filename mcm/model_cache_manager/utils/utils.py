@@ -128,6 +128,29 @@ def check_hits_num(higher: int | None, lower: int | None) -> bool:
     return True
 
 
+def _has_vllm_cache_structure(cache_dir: Path) -> bool:
+    """Check if directory has vLLM cache structure."""
+    torch_compile_cache = cache_dir / "torch_compile_cache"
+    if not (torch_compile_cache.exists() and torch_compile_cache.is_dir()):
+        return False
+
+    # Look for hash directories containing rank subdirectories
+    for hash_dir in torch_compile_cache.iterdir():
+        if not hash_dir.is_dir():
+            continue
+
+        # Look for rank directories pattern rank<x>_<y>
+        for rank_dir in hash_dir.iterdir():
+            if not (rank_dir.is_dir() and rank_dir.name.startswith("rank")):
+                continue
+
+            # Check for triton_cache subdirectory
+            triton_cache = rank_dir / "triton_cache"
+            if triton_cache.exists():
+                return True
+    return False
+
+
 def detect_cache_mode(cache_dir: Path) -> str:
     """
     Auto-detect cache mode based on directory structure.
@@ -143,19 +166,8 @@ def detect_cache_mode(cache_dir: Path) -> str:
 
     # Check for vLLM cache structure:
     # $VLLM_CACHE_ROOT/torch_compile_cache/<hash>/rank<x>_<y>/
-    # Look for torch_compile_cache subdirectory
-    torch_compile_cache = cache_dir / "torch_compile_cache"
-    if torch_compile_cache.exists() and torch_compile_cache.is_dir():
-        # Look for hash directories containing rank subdirectories
-        for hash_dir in torch_compile_cache.iterdir():
-            if hash_dir.is_dir():
-                # Look for rank directories pattern rank<x>_<y>
-                for rank_dir in hash_dir.iterdir():
-                    if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
-                        # Check for triton_cache subdirectory
-                        triton_cache = rank_dir / "triton_cache"
-                        if triton_cache.exists():
-                            return "vllm"
+    if _has_vllm_cache_structure(cache_dir):
+        return "vllm"
 
     # Check for direct triton cache structure
     # Look for triton kernel files in the directory
