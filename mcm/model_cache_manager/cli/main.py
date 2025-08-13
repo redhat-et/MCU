@@ -24,15 +24,15 @@ from ..services.prune import PruningService, PruneStats
 from ..services.warm import WarmupService
 from .cli_helpers import resolve_mode, ensure_db, service_ctx
 from .cli_options import get_common_search_options, CommonSearchOptions, WarmOptions
+from ..utils.mcm_constants import MODE_VLLM, MODE_TRITON
+
 
 log = logging.getLogger(__name__)
 app = typer.Typer(help="Model Kernel Cache Manager CLI")
 
-# Constants for container images
 DEFAULT_CUDA_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.2-tcm-warm:0.0.2"
 DEFAULT_ROCM_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1"
 
-# Log level mapping
 LOG_LEVELS = {0: "ERROR", 1: "WARNING", 2: "INFO", 3: "DEBUG"}
 
 
@@ -83,7 +83,7 @@ def index(
         rich.print(f"[red]Unexpected error: {exc}[/red]")
 
 
-def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = "triton"):
+def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
     """
     Helper function to display kernel data (list of dicts) in a rich Table.
     """
@@ -119,7 +119,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = "triton"):
         last_time_str = mod_time_handle(last_time_unix)
         num_hits = row_dict.get("runtime_hits", 0)
         num_hits_str = str(num_hits)
-        if mode != "vllm":
+        if mode != MODE_VLLM:
             hash_mode = row_dict.get("hash", "N/A")[:12] + "..."
         else:
             hash_mode = row_dict.get("vllm_hash", "N/A")
@@ -147,8 +147,10 @@ def _execute_warm_command(options: WarmOptions) -> None:
     try:
         rich.print(f"Starting cache warm for '{options.model}'...")
         svc = WarmupService(
-            options.model, options.hug_face_token,
-            options.vllm_cache_dir, options.host_cache_dir
+            options.model,
+            options.hug_face_token,
+            options.vllm_cache_dir,
+            options.host_cache_dir,
         )
         success = svc.warmup(image, options.output_file, options.tarball, options.rocm)
 
@@ -182,10 +184,16 @@ def _execute_prune_command(
             stats: Optional[PruneStats] = None
             if deduplicate:
                 filter_options_used = [
-                    options.name, options.backend, options.arch,
-                    options.older_than, options.younger_than, full,
+                    options.name,
+                    options.backend,
+                    options.arch,
+                    options.older_than,
+                    options.younger_than,
+                    full,
                 ]
-                if any(opt is not None and opt is not False for opt in filter_options_used):
+                if any(
+                    opt is not None and opt is not False for opt in filter_options_used
+                ):
                     rich.print(
                         "[yellow]Warning: Filter options and --full are ignored"
                         + "when --deduplicate is used.[/yellow]"
@@ -237,7 +245,9 @@ def _execute_search_command(options: CommonSearchOptions) -> None:
         if not check_hits_num(options.cache_hit_higher, options.cache_hit_lower):
             raise ValueError("--cache-hit-lower cannot exceed --cache-hit-higher")
 
-        older_ts, younger_ts = get_older_younger(options.older_than, options.younger_than)
+        older_ts, younger_ts = get_older_younger(
+            options.older_than, options.younger_than
+        )
 
         criteria = SearchCriteria(
             cache_dir=options.cache_dir,
@@ -296,7 +306,7 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_lower=cache_hit_lower,
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
-        mode=mode
+        mode=mode,
     )
     _execute_search_command(options)
 
@@ -335,7 +345,7 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_lower=cache_hit_lower,
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
-        mode=mode
+        mode=mode,
     )
     _execute_prune_command(options, full, deduplicate, yes)
 
@@ -343,23 +353,29 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
 @app.command()
 def warm(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     model: str = typer.Option(
-        "facebook/opt-125m", "--model", "-m",
-        help="The model to use for warming the cache."
+        "facebook/opt-125m",
+        "--model",
+        "-m",
+        help="The model to use for warming the cache.",
     ),
     output_file: Path = typer.Option(
-        "warmed_cache.tar.gz", "--output", "-o",
-        help="The path to save the packaged cache archive."
+        "warmed_cache.tar.gz",
+        "--output",
+        "-o",
+        help="The path to save the packaged cache archive.",
     ),
     host_cache_dir: str = typer.Option(
-        "./", "--host-cache-dir",
-        help="Specify the vLLM cache directory to use on the host"
+        "./",
+        "--host-cache-dir",
+        help="Specify the vLLM cache directory to use on the host",
     ),
     hug_face_token: str = typer.Option(
         None, "--hugging-face-token", help="Add HF Token"
     ),
     vllm_cache_dir: str = typer.Option(
-        "/root/.cache/vllm/", "--vllm_cache_dir",
-        help="Specify the vLLM cache directory to use on the container"
+        "/root/.cache/vllm/",
+        "--vllm_cache_dir",
+        help="Specify the vLLM cache directory to use on the container",
     ),
     tarball: bool = typer.Option(
         False, "--tarball", help="Create a tarball of the vLLM cache"
@@ -379,7 +395,7 @@ def warm(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         hug_face_token=hug_face_token,
         vllm_cache_dir=vllm_cache_dir,
         tarball=tarball,
-        rocm=rocm
+        rocm=rocm,
     )
     _execute_warm_command(options)
 

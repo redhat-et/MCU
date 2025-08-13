@@ -3,9 +3,12 @@ Utilities.
 """
 
 import re
+import logging
+import shutil
 from datetime import timedelta, datetime, timezone
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Union, Any, Dict
 from pathlib import Path
+from dataclasses import dataclass
 import rich
 import typer
 
@@ -177,3 +180,123 @@ def detect_cache_mode(cache_dir: Path) -> str:
             return "triton"
 
     return "triton"  # Default to triton mode
+
+
+# Kernel operations utilities
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class KernelIdentifier:
+    """Unified identifier for kernels across different modes."""
+    mode: str
+    hash_key: str  # "hash" for triton, "triton_cache_key" for vllm
+    vllm_hash: str = None  # Only used for vLLM mode
+
+    def __str__(self) -> str:
+        if self.mode == "vllm":
+            return f"vllm_hash={self.vllm_hash}, triton_cache_key={self.hash_key}"
+        return self.hash_key
+
+    def to_tuple(self) -> Union[str, Tuple[str, str]]:
+        """Convert to the format expected by existing code."""
+        if self.mode == "vllm":
+            return (self.vllm_hash, self.hash_key)
+        return self.hash_key
+
+
+def find_vllm_kernel_dirs(cache_dir: Path, vllm_hash: str, triton_cache_key: str) -> List[Path]:
+    """Find kernel directories for a given vLLM hash and triton cache key."""
+    vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
+    kernel_dirs = []
+
+    if vllm_root_dir.exists():
+        for rank_dir in vllm_root_dir.iterdir():
+            if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
+                triton_cache_dir = rank_dir / "triton_cache"
+                kernel_dir = triton_cache_dir / triton_cache_key
+                if kernel_dir.exists():
+                    kernel_dirs.append(kernel_dir)
+    return kernel_dirs
+
+
+def get_kernel_directories(cache_dir: Path, mode: str, identifier: KernelIdentifier) -> List[Path]:
+    """Get list of directories containing kernel files for any mode."""
+    if mode == "vllm":
+        return find_vllm_kernel_dirs(cache_dir, identifier.vllm_hash, identifier.hash_key)
+    return [cache_dir / identifier.hash_key]
+
+
+def delete_ir_files_from_dirs(kernel_dirs: List[Path], ir_extensions: set) -> Tuple[int, List[str]]:
+    """Delete IR files from kernel directories. Returns (bytes_freed, deleted_file_names)."""
+    freed = 0
+    deleted_file_names = []
+
+    for k_dir in kernel_dirs:
+        files = list(k_dir.iterdir()) if k_dir.exists() else []
+        for p in files:
+            if p.suffix in ir_extensions and p.is_file():
+                try:
+                    freed += p.stat().st_size
+                    p.unlink()
+                    deleted_file_names.append(p.name)
+                    log.debug("Deleted IR file: %s", p)
+                except OSError as err:
+                    log.warning("Could not delete %s: %s", p, err)
+    return freed, deleted_file_names
+
+
+def delete_kernel_directories(kernel_dirs: List[Path]) -> int:
+    """Delete entire kernel directories. Returns bytes freed."""
+    freed = 0
+    for k_dir in kernel_dirs:
+        if k_dir.exists():
+            try:
+                freed += sum(
+                    p.stat().st_size for p in k_dir.rglob("*") if p.is_file()
+                )
+                shutil.rmtree(k_dir)
+                log.debug("Deleted kernel directory: %s", k_dir)
+            except OSError as err:
+                log.error("Failed to remove %s: %s", k_dir, err, exc_info=True)
+    return freed
+
+
+def create_kernel_identifier(mode: str, **kwargs) -> KernelIdentifier:
+    """Factory function to create kernel identifiers."""
+    if mode == "vllm":
+        return KernelIdentifier(
+            mode=mode,
+            hash_key=kwargs.get('triton_cache_key'),
+            vllm_hash=kwargs.get('vllm_hash')
+        )
+    return KernelIdentifier(
+        mode=mode,
+        hash_key=kwargs.get('hash')
+    )
+
+
+def extract_identifiers_from_groups(mode: str,
+                                    duplicate_groups: List[List[Dict[str, Any]]]
+                                    ) -> List[KernelIdentifier]:
+    """Extract kernel identifiers from duplicate groups, excluding the newest in each group."""
+    identifiers = []
+
+    for group in duplicate_groups:
+        if len(group) > 1:
+            # Prune all but the newest (last) kernel in each group
+            for kernel_dict in group[:-1]:
+                if mode == "vllm":
+                    identifier = create_kernel_identifier(
+                        mode=mode,
+                        vllm_hash=kernel_dict["vllm_hash"],
+                        triton_cache_key=kernel_dict["triton_cache_key"]
+                    )
+                else:
+                    identifier = create_kernel_identifier(
+                        mode=mode,
+                        hash=kernel_dict["hash"]
+                    )
+                identifiers.append(identifier)
+
+    return identifiers

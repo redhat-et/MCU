@@ -14,7 +14,6 @@ from sqlalchemy import (
     Float,
     Integer,
     String,
-    inspect,
     ForeignKeyConstraint,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -81,16 +80,6 @@ class BaseKernelMixin:  # pylint: disable=too-few-public-methods
         Float, index=True, nullable=False, default=time.time()
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Converts the ORM object to a dictionary.
-        Maps 'kernel_metadata_json' back to 'metadata' for compatibility.
-        """
-        d = {c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs}
-        if "kernel_metadata_json" in d:
-            d["metadata"] = d.pop("kernel_metadata_json")
-        return d
-
     @classmethod
     def _get_common_kernel_values(cls, k_data: Kernel) -> Dict[str, Any]:
         """Get common kernel field values from a Kernel DTO."""
@@ -147,6 +136,16 @@ class KernelOrm(Base, BaseKernelMixin):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts the ORM object to a dictionary.
+        Maps 'kernel_metadata_json' back to 'metadata' for compatibility.
+        """
+        d = {c.key: getattr(self, c.key) for c in self.__table__.columns}
+        if "kernel_metadata_json" in d:
+            d["metadata"] = d.pop("kernel_metadata_json")
+        return d
 
     @classmethod
     def upsert_from_dto(cls, session: SqlaSession, k_data: Kernel) -> None:
@@ -220,6 +219,16 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts the ORM object to a dictionary.
+        Maps 'kernel_metadata_json' back to 'metadata' for compatibility.
+        """
+        d = {c.key: getattr(self, c.key) for c in self.__table__.columns}
+        if "kernel_metadata_json" in d:
+            d["metadata"] = d.pop("kernel_metadata_json")
+        return d
 
     @classmethod
     def upsert_from_dto(

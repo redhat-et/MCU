@@ -10,6 +10,7 @@ from .base import BaseService
 from ..models.criteria import SearchCriteria
 from ..data.cache_repo import VllmCacheRepository
 from ..data.database import VllmDatabase
+from ..utils.mcm_constants import MODE_VLLM
 
 
 class IndexService(BaseService):
@@ -20,7 +21,6 @@ class IndexService(BaseService):
     kernel metadata in the database.
     """
 
-
     def reindex(self) -> Tuple[int, int]:
         """
         Scan the cache directory and update the database.
@@ -28,14 +28,20 @@ class IndexService(BaseService):
         Returns:
             Number of kernels indexed.
         """
-        if self.mode == "vllm":
+        if self.mode == MODE_VLLM:
             criteria = SearchCriteria(cache_dir=self.cache_dir)
             current_kernels = len(self.db.search(criteria))
 
             updated_kernels = 0
             # Type guard: ensure we're using vLLM types
-            assert isinstance(self.repo, VllmCacheRepository)
-            assert isinstance(self.db, VllmDatabase)
+            if not isinstance(self.repo, VllmCacheRepository):
+                raise TypeError(
+                    f"Expected self.repo to be VllmCacheRepository, got {type(self.repo).__name__}"
+                )
+            if not isinstance(self.db, VllmDatabase):
+                raise TypeError(
+                    f"Expected self.db to be VllmDatabase, got {type(self.db).__name__}"
+                )
             for vllm_hash, vllm_cache_root, kernel in self.repo.kernels():
                 self.db.insert_kernel(kernel, vllm_cache_root, vllm_hash)
                 updated_kernels += 1
@@ -46,8 +52,12 @@ class IndexService(BaseService):
         current_kernels = len(self.db.search(criteria))
 
         updated_kernels = 0
-        assert not isinstance(self.repo, VllmCacheRepository)
-        assert not isinstance(self.db, VllmDatabase)
+        if isinstance(self.repo, VllmCacheRepository):
+            raise TypeError(
+                "self.repo should not be a VllmCacheRepository in this mode"
+            )
+        if isinstance(self.db, VllmDatabase):
+            raise TypeError("self.db should not be a VllmDatabase in this mode")
         for kernel in self.repo.kernels():
             self.db.insert_kernel(kernel, str(self.cache_dir))
             updated_kernels += 1

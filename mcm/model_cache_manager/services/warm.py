@@ -22,7 +22,11 @@ class WarmupService:
     """
 
     def __init__(
-        self, model: str, hface_secret: str, vllm_cache_dir: str, host_cache_dir: str
+        self,
+        model: str,
+        hface_secret: str | None,
+        vllm_cache_dir: str,
+        host_cache_dir: str,
     ):
         """
         Initializes the WarmupService.
