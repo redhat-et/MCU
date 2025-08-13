@@ -17,11 +17,15 @@ from .kernel_validator import deserialize_kernel
 log = logging.getLogger(__name__)
 
 # Lazy-loaded plugins to avoid import-time discovery failures
+_PLUGINS_CACHE = None
+
+
 def _get_plugins():
     """Get plugins dictionary, loading them lazily on first access."""
-    if not hasattr(_get_plugins, '_cache'):
-        _get_plugins._cache = {p.backend: p for p in discover_plugins()}  # pylint: disable=protected-access
-    return _get_plugins._cache  # pylint: disable=protected-access
+    global _PLUGINS_CACHE  # pylint: disable=global-statement
+    if _PLUGINS_CACHE is None:
+        _PLUGINS_CACHE = {p.backend: p for p in discover_plugins()}
+    return _PLUGINS_CACHE
 
 
 def _read_json(path: Path, ctx: str) -> Optional[dict]:
@@ -75,14 +79,12 @@ def _resolve_group_metadata(cache_root: Path, kernel_dir: Path) -> Optional[Path
         if not key.endswith(".json"):
             continue
 
-        # Try same-dir derivation first (robust across host/container moves)
         p = Path(path_str)
         if p.parent.name and p.name:
             derived = cache_root / p.parent.name / p.name
             if derived.is_file():
                 return derived
 
-        # Try path as given in group file
         candidate = Path(path_str)
         if candidate.is_file():
             return candidate
@@ -114,11 +116,15 @@ def iter_triton_kernels(cache_root: Path, plugins: dict) -> Iterable[Kernel]:
         if not data:
             continue
 
-        kernel = deserialize_kernel(data, kernel_dir.name, str(cache_root), kernel_dir, plugins)
+        kernel = deserialize_kernel(
+            data, kernel_dir.name, str(cache_root), kernel_dir, plugins
+        )
         if kernel:
             yield kernel
         else:
-            log.warning("Skipping invalid kernel at '%s' (meta '%s')", kernel_dir, meta_path)
+            log.warning(
+                "Skipping invalid kernel at '%s' (meta '%s')", kernel_dir, meta_path
+            )
 
 
 class CacheRepository:
@@ -202,6 +208,7 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
 
         Yields:
             Paths to rank directories (rank<x>_<y>)
+        TODO: see if should we add the rank on the key.
         """
         for rank_dir in hash_dir.iterdir():
             if rank_dir.is_dir() and rank_dir.name.startswith("rank"):

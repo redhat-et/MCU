@@ -138,18 +138,26 @@ class TestVllmKernelOrm(unittest.TestCase):
         vllm_kernel.triton_cache_key = "triton_key"
         vllm_kernel.kernel_metadata_json = {"test": "metadata"}
 
-        with patch('model_cache_manager.data.db_models.inspect') as mock_inspect:
-            mock_mapper = MagicMock()
-            mock_column_attr = MagicMock()
-            mock_column_attr.key = "kernel_metadata_json"
-            mock_mapper.column_attrs = [mock_column_attr]
-            mock_inspect.return_value.mapper = mock_mapper
+        # Mock the __table__.columns attribute
+        mock_column1 = MagicMock()
+        mock_column1.key = "vllm_cache_root"
+        mock_column2 = MagicMock()
+        mock_column2.key = "vllm_hash"
+        mock_column3 = MagicMock()
+        mock_column3.key = "triton_cache_key"
+        mock_column4 = MagicMock()
+        mock_column4.key = "kernel_metadata_json"
 
-            result = vllm_kernel.to_dict()
+        mock_table = MagicMock()
+        mock_table.columns = [mock_column1, mock_column2, mock_column3, mock_column4]
+        vllm_kernel.__table__ = mock_table
 
-            # Should have metadata instead of kernel_metadata_json
-            self.assertIn("metadata", result)
-            self.assertNotIn("kernel_metadata_json", result)
+        result = vllm_kernel.to_dict()
+
+        # Should have metadata instead of kernel_metadata_json
+        self.assertIn("metadata", result)
+        self.assertNotIn("kernel_metadata_json", result)
+        self.assertEqual(result["metadata"], {"test": "metadata"})
 
 
 class TestVllmDatabase(unittest.TestCase):

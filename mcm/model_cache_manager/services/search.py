@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 from ..data.database import Database, VllmDatabase
 from ..models.criteria import SearchCriteria
+from ..utils.mcm_constants import MODE_VLLM
 
 
 class SearchService:
@@ -22,7 +23,7 @@ class SearchService:
             mode: Cache mode - 'triton' for standard Triton cache, 'vllm' for vLLM cache
         """
         self.mode = mode
-        if mode == "vllm":
+        if mode == MODE_VLLM:
             self.db = VllmDatabase()
         else:
             self.db = Database()
