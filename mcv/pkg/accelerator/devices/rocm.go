@@ -120,6 +120,7 @@ func (r *gpuROCm) Init() error {
 	for gpuID, info := range gpuInfoList.GPUInfo {
 		memTotal, _ := strconv.ParseUint(info.VRAMTotalMemory, 10, 64)
 		name := "card" + strconv.Itoa(gpuID)
+		prodName, _ := GetProductName(gpuID) // TODO error checking in the future
 		r.devices[gpuID] = GPUDevice{
 			ID: gpuID,
 			TritonInfo: TritonGPUInfo{
@@ -130,6 +131,12 @@ func (r *gpuROCm) Init() error {
 				WarpSize:          64,
 				MemoryTotalMB:     memTotal / (1024 * 1024),
 				Backend:           "hip",
+				ID:                gpuID,
+			},
+			Summary: DeviceSummary{
+				ID:            strconv.Itoa(gpuID),
+				ProductName:   prodName,
+				DriverVersion: gpuInfoList.DrvInfo.System.DriverVersion,
 			},
 		}
 	}
@@ -217,7 +224,8 @@ func getROCmSystemInfo(ctx context.Context) (*ROCMSystemInfo, error) {
 // GetAllGPUInfo returns a list of GPU info for all devices
 func (r *gpuROCm) GetAllGPUInfo() ([]TritonGPUInfo, error) {
 	var allTritonInfo []TritonGPUInfo
-	for gpuID, dev := range r.devices {
+	for gpuID := range r.devices {
+		dev := r.devices[gpuID]
 		allTritonInfo = append(allTritonInfo, dev.TritonInfo)
 		logging.Debugf("GPU %d: %+v", gpuID, dev.TritonInfo)
 	}
@@ -231,4 +239,22 @@ func (r *gpuROCm) GetGPUInfo(gpuID int) (TritonGPUInfo, error) {
 		return TritonGPUInfo{}, fmt.Errorf("GPU device %d not found", gpuID)
 	}
 	return dev.TritonInfo, nil
+}
+
+func (r *gpuROCm) GetAllSummaries() ([]DeviceSummary, error) {
+	var allAccInfo []DeviceSummary
+	for gpuID := range r.devices {
+		dev := r.devices[gpuID]
+		allAccInfo = append(allAccInfo, dev.Summary)
+		logging.Debugf("GPU %d: %+v", gpuID, dev.TritonInfo)
+	}
+	return allAccInfo, nil
+}
+
+func (r *gpuROCm) GetSummary(gpuID int) (DeviceSummary, error) {
+	dev, exists := r.devices[gpuID]
+	if !exists {
+		return DeviceSummary{}, fmt.Errorf("GPU device %d not found", gpuID)
+	}
+	return dev.Summary, nil
 }

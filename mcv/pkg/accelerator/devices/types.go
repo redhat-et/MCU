@@ -52,9 +52,12 @@ type TritonGPUInfo struct {
 	PTXVersion int `json:"ptx_version"`
 
 	Backend string `json:"backend"`
+
+	ID int
 }
 
 type GPUDevice struct {
 	ID         int
 	TritonInfo TritonGPUInfo
+	Summary    DeviceSummary
 }
