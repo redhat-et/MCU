@@ -119,9 +119,6 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
         last_time_str = mod_time_handle(last_time_unix)
         num_hits = row_dict.get("runtime_hits", 0)
         num_hits_str = str(num_hits)
-        if mode != MODE_VLLM:
-            hash_mode = row_dict.get("hash", "N/A")[:12] + "..."
-        else:
         # Dictionary-based strategy for hash display per mode
         hash_display_strategies = {
             MODE_TRITON: lambda r: r.get("hash", "N/A")[:12] + "...",
