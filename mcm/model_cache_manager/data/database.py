@@ -18,6 +18,7 @@ from .db_models import Base, KernelOrm, KernelFileOrm, VllmKernelOrm, VllmKernel
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
 from ..utils.mcm_constants import IR_EXTS
+from ..utils.utils import build_common_search_filters
 
 log = logging.getLogger(__name__)
 
@@ -109,8 +110,6 @@ class Database:
         session = self.get_session()
         try:
             query = session.query(KernelOrm)
-            active_filters = []
-
             equality_filter_configs = [
                 ("cache_dir", KernelOrm.cache_dir, str),
                 ("name", KernelOrm.name, None),
@@ -118,29 +117,9 @@ class Database:
                 ("arch", KernelOrm.arch, str),
             ]
 
-            for crit_attr, orm_column, transformer in equality_filter_configs:
-                value = getattr(criteria, crit_attr, None)
-                if value is not None:
-                    if transformer:
-                        value = transformer(value)
-                    active_filters.append(orm_column == value)
-
-            if criteria.cache_hit_lower is not None:
-                active_filters.append(KernelOrm.runtime_hits < criteria.cache_hit_lower)
-
-            if criteria.cache_hit_higher is not None:
-                active_filters.append(
-                    KernelOrm.runtime_hits > criteria.cache_hit_higher
-                )
-            if criteria.older_than_timestamp is not None:
-                active_filters.append(
-                    KernelOrm.modified_time < criteria.older_than_timestamp
-                )
-
-            if criteria.younger_than_timestamp is not None:
-                active_filters.append(
-                    KernelOrm.modified_time > criteria.younger_than_timestamp
-                )
+            active_filters = build_common_search_filters(
+                criteria, KernelOrm, equality_filter_configs
+            )
 
             if active_filters:
                 query = query.filter(and_(*active_filters))
@@ -488,8 +467,6 @@ class VllmDatabase:
         session = self.get_session()
         try:
             query = session.query(VllmKernelOrm)
-            active_filters = []
-
             equality_filter_configs = [
                 ("cache_dir", VllmKernelOrm.vllm_cache_root, str),
                 ("name", VllmKernelOrm.name, None),
@@ -497,29 +474,9 @@ class VllmDatabase:
                 ("arch", VllmKernelOrm.arch, str),
             ]
 
-            for crit_attr, orm_column, transformer in equality_filter_configs:
-                value = getattr(criteria, crit_attr, None)
-                if value is not None:
-                    if transformer:
-                        value = transformer(value)
-                    active_filters.append(orm_column == value)
-
-            if criteria.cache_hit_lower is not None:
-                active_filters.append(VllmKernelOrm.runtime_hits < criteria.cache_hit_lower)
-
-            if criteria.cache_hit_higher is not None:
-                active_filters.append(
-                    VllmKernelOrm.runtime_hits > criteria.cache_hit_higher
-                )
-            if criteria.older_than_timestamp is not None:
-                active_filters.append(
-                    VllmKernelOrm.modified_time < criteria.older_than_timestamp
-                )
-
-            if criteria.younger_than_timestamp is not None:
-                active_filters.append(
-                    VllmKernelOrm.modified_time > criteria.younger_than_timestamp
-                )
+            active_filters = build_common_search_filters(
+                criteria, VllmKernelOrm, equality_filter_configs
+            )
 
             if active_filters:
                 query = query.filter(and_(*active_filters))
