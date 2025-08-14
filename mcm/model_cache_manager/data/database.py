@@ -230,7 +230,7 @@ class Database:
             self.engine.dispose()
             log.info("Database engine connection pool disposed.")
 
-    def _find_duplicates_generic(self, orm_class, hash_field: str,  # pylint: disable=too-many-branches
+    def _find_duplicates_generic(self, orm_class, hash_field: str,
                                  additional_fields: List[str] = None) -> List[List[Dict[str, Any]]]:
         """
         Generic method to find duplicate kernels for any ORM class.
@@ -242,99 +242,24 @@ class Database:
         """
         session = self.get_session()
         try:
-            # Build query fields dynamically
-            base_fields = [
-                getattr(orm_class, hash_field),
-                orm_class.name,
-                orm_class.kernel_metadata_json,
-                orm_class.modified_time,
-                orm_class.backend,
-                orm_class.arch,
-                orm_class.triton_version,
-                orm_class.total_size,
-            ]
-
-            # Add additional fields if specified
-            if additional_fields:
-                for field_name in additional_fields:
-                    base_fields.append(getattr(orm_class, field_name))
-
-            all_kernels_data_from_orm = (
-                session.query(*base_fields)
-                .order_by(orm_class.modified_time.asc())
-                .all()
-            )
-
-            if not all_kernels_data_from_orm:
+            kernel_data = self._query_all_kernels(session, orm_class, hash_field, additional_fields)
+            if not kernel_data:
                 return []
 
-            # Build kernel dictionaries dynamically
-            kernel_list_of_dicts: List[Dict[str, Any]] = []
-            for k in all_kernels_data_from_orm:
-                kernel_dict = {
-                    hash_field: getattr(k, hash_field),
-                    "name": k.name,
-                    "metadata": k.kernel_metadata_json,
-                    "modified_time": k.modified_time,
-                    "backend": k.backend,
-                    "arch": k.arch,
-                    "triton_version": k.triton_version,
-                    "total_size": k.total_size,
-                }
-
-                # Add additional fields to dict
-                if additional_fields:
-                    for field_name in additional_fields:
-                        kernel_dict[field_name] = getattr(k, field_name)
-                kernel_list_of_dicts.append(kernel_dict)
-
-            kernels_grouped_by_name_and_size = collections.defaultdict(list)
-            for kernel_dict in kernel_list_of_dicts:
-                hash_val = kernel_dict.get(hash_field, "")
-                name_val = kernel_dict.get("name", "")
-                size_val = kernel_dict.get("total_size")
-                log.debug("%s %s name %s total_size %s", hash_field, hash_val, name_val, size_val)
-                grouping_key = (name_val, size_val)
-                kernels_grouped_by_name_and_size[grouping_key].append(kernel_dict)
-
-            final_duplicate_groups: List[List[Dict[str, Any]]] = []
-            for (
-                _,
-                kernels_with_this_name_size,
-            ) in kernels_grouped_by_name_and_size.items():
-                if len(kernels_with_this_name_size) < 2:
-                    continue
-
-                processed_in_name_group = [False] * len(kernels_with_this_name_size)
-                for i, _ in enumerate(kernels_with_this_name_size):
-                    if processed_in_name_group[i]:
-                        continue
-
-                    current_duplicate_set = [kernels_with_this_name_size[i]]
-                    processed_in_name_group[i] = True
-
-                    for j in range(i + 1, len(kernels_with_this_name_size)):
-                        if processed_in_name_group[j]:
-                            continue
-
-                        if Database._are_kernel_metadata_jsons_duplicates(
-                            kernels_with_this_name_size[i].get("metadata"),
-                            kernels_with_this_name_size[j].get("metadata"),
-                        ):
-                            current_duplicate_set.append(kernels_with_this_name_size[j])
-                            processed_in_name_group[j] = True
-
-                    if len(current_duplicate_set) > 1:
-                        final_duplicate_groups.append(current_duplicate_set)
+            kernel_dicts = self._build_kernel_dictionaries(
+                kernel_data, hash_field, additional_fields
+            )
+            grouped_kernels = self._group_kernels_by_name_and_size(kernel_dicts, hash_field)
+            duplicate_groups = self._find_duplicate_groups_in_groups(grouped_kernels)
 
             log.debug(
                 "Found %s sets of duplicate kernels using %s "
                 "(grouped by name, JSON metadata identical or "
                 "differs only in internal 'hash' field).",
-                len(final_duplicate_groups),
+                len(duplicate_groups),
                 orm_class.__name__,
             )
-            return final_duplicate_groups
+            return duplicate_groups
 
         except Exception as e:  # pylint: disable=broad-except
             log.error(
@@ -346,6 +271,113 @@ class Database:
             return []
         finally:
             session.close()
+
+    def _query_all_kernels(self, session, orm_class, hash_field: str,
+                          additional_fields: List[str] = None):
+        """Query all kernels with required fields."""
+        base_fields = [
+            getattr(orm_class, hash_field),
+            orm_class.name,
+            orm_class.kernel_metadata_json,
+            orm_class.modified_time,
+            orm_class.backend,
+            orm_class.arch,
+            orm_class.triton_version,
+            orm_class.total_size,
+        ]
+
+        if additional_fields:
+            for field_name in additional_fields:
+                base_fields.append(getattr(orm_class, field_name))
+
+        return (
+            session.query(*base_fields)
+            .order_by(orm_class.modified_time.asc())
+            .all()
+        )
+
+    def _build_kernel_dictionaries(self, kernel_data, hash_field: str,
+                                  additional_fields: List[str] = None) -> List[Dict[str, Any]]:
+        """Build kernel dictionaries from ORM query results."""
+        kernel_list_of_dicts: List[Dict[str, Any]] = []
+
+        for k in kernel_data:
+            kernel_dict = {
+                hash_field: getattr(k, hash_field),
+                "name": k.name,
+                "metadata": k.kernel_metadata_json,
+                "modified_time": k.modified_time,
+                "backend": k.backend,
+                "arch": k.arch,
+                "triton_version": k.triton_version,
+                "total_size": k.total_size,
+            }
+
+            if additional_fields:
+                for field_name in additional_fields:
+                    kernel_dict[field_name] = getattr(k, field_name)
+
+            kernel_list_of_dicts.append(kernel_dict)
+
+        return kernel_list_of_dicts
+
+    def _group_kernels_by_name_and_size(self, kernel_dicts: List[Dict[str, Any]],
+                                       hash_field: str) -> Dict:
+        """Group kernels by name and total size."""
+        grouped_kernels = collections.defaultdict(list)
+
+        for kernel_dict in kernel_dicts:
+            hash_val = kernel_dict.get(hash_field, "")
+            name_val = kernel_dict.get("name", "")
+            size_val = kernel_dict.get("total_size")
+            log.debug("%s %s name %s total_size %s", hash_field, hash_val, name_val, size_val)
+            grouping_key = (name_val, size_val)
+            grouped_kernels[grouping_key].append(kernel_dict)
+
+        return grouped_kernels
+
+    def _find_duplicate_groups_in_groups(self, grouped_kernels: Dict) -> List[List[Dict[str, Any]]]:
+        """Find duplicate groups within name/size groups."""
+        final_duplicate_groups: List[List[Dict[str, Any]]] = []
+
+        for kernels_with_same_name_size in grouped_kernels.values():
+            if len(kernels_with_same_name_size) < 2:
+                continue
+
+            duplicate_sets = self._find_duplicates_in_single_group(kernels_with_same_name_size)
+            final_duplicate_groups.extend(duplicate_sets)
+
+        return final_duplicate_groups
+
+    def _find_duplicates_in_single_group(
+        self, kernels: List[Dict[str, Any]]
+    ) -> List[List[Dict[str, Any]]]:
+        """Find duplicate sets within a single name/size group."""
+        processed = [False] * len(kernels)
+        duplicate_sets = []
+
+        for i, _ in enumerate(kernels):
+            if processed[i]:
+                continue
+
+            current_duplicate_set = [kernels[i]]
+            processed[i] = True
+
+            for j in range(i + 1, len(kernels)):
+                if processed[j]:
+                    continue
+
+                if Database._are_kernel_metadata_jsons_duplicates(
+                    kernels[i].get("metadata"),
+                    kernels[j].get("metadata"),
+                ):
+                    current_duplicate_set.append(kernels[j])
+                    processed[j] = True
+
+            if len(current_duplicate_set) > 1:
+                duplicate_sets.append(current_duplicate_set)
+
+        return duplicate_sets
 
 
 class VllmDatabase:

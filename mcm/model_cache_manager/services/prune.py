@@ -164,28 +164,49 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
         pruned_count = 0
 
         for identifier in identifiers_to_delete:
-            try:
-                freed_for_kernel = self._delete_kernel_unified(identifier, session, ir_only=False)
-                freed_bytes_total += freed_for_kernel
+            freed_bytes, success = self._delete_single_kernel_safely(identifier, session)
+            freed_bytes_total += freed_bytes
+            if success:
                 pruned_count += 1
-                log.debug("Successfully deleted kernel: %s", identifier)
-
-            except (FileNotFoundError, PermissionError, OSError) as e:
-                log.error(
-                    "Failed to delete kernel %s during deduplication: %s",
-                    identifier,
-                    e,
-                    exc_info=True,
-                )
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                log.error(
-                    "Unexpected error deleting kernel %s during deduplication: %s",
-                    identifier,
-                    e,
-                    exc_info=True,
-                )
 
         return freed_bytes_total, pruned_count
+
+    def _delete_single_kernel_safely(
+        self, identifier: KernelIdentifier, session
+    ) -> Tuple[int, bool]:
+        """
+        Safely delete a single kernel with error handling.
+
+        Args:
+            identifier: KernelIdentifier object to delete
+            session: Database session
+
+        Returns:
+            A tuple containing:
+                - Bytes freed (0 if deletion failed)
+                - Success flag
+        """
+        try:
+            freed_for_kernel = self._delete_kernel_unified(identifier, session, ir_only=False)
+            log.debug("Successfully deleted kernel: %s", identifier)
+            return freed_for_kernel, True
+
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            log.error(
+                "Failed to delete kernel %s during deduplication: %s",
+                identifier,
+                e,
+                exc_info=True,
+            )
+            return 0, False
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            log.error(
+                "Unexpected error deleting kernel %s during deduplication: %s",
+                identifier,
+                e,
+                exc_info=True,
+            )
+            return 0, False
 
     def _delete_kernel_unified(self, identifier: KernelIdentifier, session, ir_only: bool) -> int:
         """

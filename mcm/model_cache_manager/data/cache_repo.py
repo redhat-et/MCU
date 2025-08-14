@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import logging
+import threading
 from typing import Iterable, Optional
 from ..utils.paths import get_cache_dir
 from ..models.kernel import Kernel
@@ -16,15 +17,19 @@ from .kernel_validator import deserialize_kernel
 
 log = logging.getLogger(__name__)
 
-# Lazy-loaded plugins to avoid import-time discovery failures
+# Thread-safe lazy-loaded plugins to avoid import-time discovery failures
 _PLUGINS_CACHE = None
+_PLUGINS_LOCK = threading.Lock()
 
 
 def _get_plugins():
-    """Get plugins dictionary, loading them lazily on first access."""
+    """Get plugins dictionary, loading them lazily on first access with thread safety."""
     global _PLUGINS_CACHE  # pylint: disable=global-statement
     if _PLUGINS_CACHE is None:
-        _PLUGINS_CACHE = {p.backend: p for p in discover_plugins()}
+        with _PLUGINS_LOCK:
+            # Double-check pattern to avoid race conditions
+            if _PLUGINS_CACHE is None:
+                _PLUGINS_CACHE = {p.backend: p for p in discover_plugins()}
     return _PLUGINS_CACHE
 
 
