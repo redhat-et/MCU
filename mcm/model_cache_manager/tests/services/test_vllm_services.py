@@ -42,8 +42,8 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         """Clean up after each test method."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("model_cache_manager.services.base.VllmCacheRepository")
-    @patch("model_cache_manager.services.base.VllmDatabase")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmCacheRepository")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmDatabase")
     def test_init_vllm_mode(self, mock_vllm_db, mock_vllm_repo):
         """Test IndexService initialization in vLLM mode."""
         mock_repo_instance = MagicMock()
@@ -58,8 +58,8 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         mock_vllm_repo.assert_called_once_with(self.cache_dir)
         mock_vllm_db.assert_called_once()
 
-    @patch("model_cache_manager.services.base.CacheRepository")
-    @patch("model_cache_manager.services.base.Database")
+    @patch("model_cache_manager.strategies.triton_strategy.CacheRepository")
+    @patch("model_cache_manager.strategies.triton_strategy.Database")
     def test_init_triton_mode(self, mock_db, mock_repo):
         """Test IndexService initialization in triton mode (backward compatibility)."""
         mock_repo_instance = MagicMock()
@@ -73,8 +73,8 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         mock_repo.assert_called_once_with(self.cache_dir)
         mock_db.assert_called_once()
 
-    @patch("model_cache_manager.services.base.VllmCacheRepository")
-    @patch("model_cache_manager.services.base.VllmDatabase")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmCacheRepository")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmDatabase")
     def test_reindex_vllm_mode(self, mock_vllm_db, mock_vllm_repo):
         """Test reindex method in vLLM mode."""
         # Mock kernels from vLLM repo
@@ -107,8 +107,8 @@ class TestIndexServiceVllmMode(unittest.TestCase):
             mock_kernel2, "/cache/root", "vllm_hash2"
         )
 
-    @patch("model_cache_manager.services.base.CacheRepository")
-    @patch("model_cache_manager.services.base.Database")
+    @patch("model_cache_manager.strategies.triton_strategy.CacheRepository")
+    @patch("model_cache_manager.strategies.triton_strategy.Database")
     def test_reindex_triton_mode(self, mock_db, mock_repo):
         """Test reindex method in triton mode (backward compatibility)."""
         mock_kernel1 = create_mock_kernel("hash1", "kernel1")
@@ -116,6 +116,7 @@ class TestIndexServiceVllmMode(unittest.TestCase):
 
         mock_repo_instance = MagicMock()
         mock_repo_instance.kernels.return_value = [mock_kernel1, mock_kernel2]
+        mock_repo_instance.cache_dir = self.cache_dir
         mock_repo.return_value = mock_repo_instance
 
         mock_db_instance = MagicMock()
@@ -141,7 +142,7 @@ class TestIndexServiceVllmMode(unittest.TestCase):
 class TestSearchServiceVllmMode(unittest.TestCase):
     """Test suite for SearchService in vLLM mode."""
 
-    @patch("model_cache_manager.services.search.VllmDatabase")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmDatabase")
     def test_init_vllm_mode(self, mock_vllm_db):
         """Test SearchService initialization in vLLM mode."""
         mock_db_instance = MagicMock()
@@ -153,7 +154,7 @@ class TestSearchServiceVllmMode(unittest.TestCase):
         self.assertEqual(service.mode, "vllm")
         mock_vllm_db.assert_called_once()
 
-    @patch("model_cache_manager.services.search.Database")
+    @patch("model_cache_manager.strategies.triton_strategy.Database")
     def test_init_triton_mode(self, mock_db):
         """Test SearchService initialization in triton mode."""
         mock_db_instance = MagicMock()
@@ -165,7 +166,7 @@ class TestSearchServiceVllmMode(unittest.TestCase):
         self.assertEqual(service.mode, "triton")
         mock_db.assert_called_once()
 
-    @patch("model_cache_manager.services.search.VllmDatabase")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmDatabase")
     def test_search_vllm_mode(self, mock_vllm_db):
         """Test search method in vLLM mode."""
         mock_results = [
@@ -198,8 +199,8 @@ class TestPruningServiceVllmMode(unittest.TestCase):
         """Clean up after each test method."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("model_cache_manager.services.base.VllmCacheRepository")
-    @patch("model_cache_manager.services.base.VllmDatabase")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmCacheRepository")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmDatabase")
     def test_init_vllm_mode(self, mock_vllm_db, mock_vllm_repo):
         """Test PruningService initialization in vLLM mode."""
         mock_repo_instance = MagicMock()
@@ -214,8 +215,8 @@ class TestPruningServiceVllmMode(unittest.TestCase):
         mock_vllm_repo.assert_called_once_with(self.cache_dir)
         mock_vllm_db.assert_called_once()
 
-    @patch("model_cache_manager.services.base.CacheRepository")
-    @patch("model_cache_manager.services.base.Database")
+    @patch("model_cache_manager.strategies.triton_strategy.CacheRepository")
+    @patch("model_cache_manager.strategies.triton_strategy.Database")
     def test_init_triton_mode(self, mock_db, mock_repo):
         """Test PruningService initialization in triton mode."""
         mock_repo_instance = MagicMock()
@@ -229,8 +230,8 @@ class TestPruningServiceVllmMode(unittest.TestCase):
         mock_repo.assert_called_once_with(self.cache_dir)
         mock_db.assert_called_once()
 
-    @patch("model_cache_manager.services.base.VllmCacheRepository")
-    @patch("model_cache_manager.services.base.VllmDatabase")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmCacheRepository")
+    @patch("model_cache_manager.strategies.vllm_strategy.VllmDatabase")
     def test_prune_basic_functionality_vllm(self, mock_vllm_db, mock_vllm_repo):
         """Test basic prune functionality in vLLM mode."""
         # Mock search results - include both vllm_hash and triton_cache_key for vLLM mode

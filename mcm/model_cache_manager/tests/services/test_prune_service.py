@@ -58,11 +58,11 @@ class TestPruningService(unittest.TestCase):
         self.mock_db_instance = MagicMock(spec=Database)
 
         self.patch_cache_repo = patch(
-            "model_cache_manager.services.base.CacheRepository",
+            "model_cache_manager.strategies.triton_strategy.CacheRepository",
             return_value=self.mock_cache_repo_instance,
         )
         self.patch_db = patch(
-            "model_cache_manager.services.base.Database",
+            "model_cache_manager.strategies.triton_strategy.Database",
             return_value=self.mock_db_instance,
         )
 
