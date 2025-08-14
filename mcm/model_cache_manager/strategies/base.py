@@ -23,36 +23,36 @@ class CacheConfig:
 
 class CacheModeStrategy(ABC):
     """Abstract strategy for handling cache mode-specific operations."""
-    
+
     @property
     @abstractmethod
     def config(self) -> CacheConfig:
         """Return configuration for this cache mode."""
-        
+
     @abstractmethod
     def create_database(self):
         """Create appropriate database instance for this mode."""
-        
+
     @abstractmethod
     def create_repository(self, cache_dir: Path):
         """Create appropriate repository instance for this mode."""
-        
+
     @abstractmethod
     def extract_identifiers_from_row(self, row: Dict[str, Any]) -> KernelIdentifier:
         """Extract kernel identifier from database row."""
-        
+
     @abstractmethod
     def reindex_kernels(self, repo, db) -> int:
         """Perform mode-specific kernel reindexing."""
-        
+
     @abstractmethod
     def insert_kernel_strategy(self, db, k_data, *args) -> None:
         """Strategy-specific kernel insertion."""
-        
+
     @abstractmethod
     def get_cache_dir_from_row(self, row: Dict[str, Any]) -> str:
         """Get cache directory path from database row."""
-        
+
     @abstractmethod
     def build_search_filters(self, criteria, orm_class) -> List:
         """Build mode-specific search filters for database queries."""
