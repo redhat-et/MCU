@@ -47,7 +47,7 @@ class TritonStrategy(CacheModeStrategy):
         """Perform Triton-specific kernel reindexing."""
         updated_kernels = 0
         for kernel in repo.kernels():
-            self.insert_kernel_strategy(db, kernel, str(repo.cache_dir))
+            self.insert_kernel_strategy(db, kernel, str(repo.root))
             updated_kernels += 1
         return updated_kernels
     
