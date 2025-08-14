@@ -229,8 +229,7 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
         if ir_only:
             freed = self._delete_ir_only_unified(session, identifier, kernel_dirs, kernel_record)
         else:
-            freed = self._delete_full_kernel_unified(session, identifier, kernel_dirs,
-                                                     kernel_record)
+            freed = self._delete_full_kernel_unified(session, kernel_dirs, kernel_record)
 
         return freed
 
@@ -261,8 +260,7 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
 
         return freed
 
-    def _delete_full_kernel_unified(self, session, identifier: KernelIdentifier,  # pylint: disable=unused-argument
-                                    kernel_dirs: List, kernel_record) -> int:
+    def _delete_full_kernel_unified(self, session, kernel_dirs: List, kernel_record) -> int:
         """Delete entire kernel using unified logic."""
         freed = delete_kernel_directories(kernel_dirs)
 
