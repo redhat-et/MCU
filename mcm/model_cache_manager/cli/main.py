@@ -122,7 +122,12 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
         if mode != MODE_VLLM:
             hash_mode = row_dict.get("hash", "N/A")[:12] + "..."
         else:
-            hash_mode = row_dict.get("vllm_hash", "N/A")
+        # Dictionary-based strategy for hash display per mode
+        hash_display_strategies = {
+            MODE_TRITON: lambda r: r.get("hash", "N/A")[:12] + "...",
+            MODE_VLLM: lambda r: r.get("vllm_hash", "N/A"),
+        }
+        hash_mode = hash_display_strategies.get(mode, lambda r: r.get("hash", "N/A"))(row_dict)
 
         table.add_row(
             hash_mode,
