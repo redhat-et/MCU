@@ -117,6 +117,7 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         mock_repo_instance = MagicMock()
         mock_repo_instance.kernels.return_value = [mock_kernel1, mock_kernel2]
         mock_repo_instance.cache_dir = self.cache_dir
+        mock_repo_instance.root = self.cache_dir
         mock_repo.return_value = mock_repo_instance
 
         mock_db_instance = MagicMock()
