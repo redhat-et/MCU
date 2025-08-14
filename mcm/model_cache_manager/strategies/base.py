@@ -6,7 +6,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Type, List, Dict, Any, Union
+from typing import Type, List, Dict, Any
 
 from ..utils.utils import KernelIdentifier
 
@@ -46,7 +46,7 @@ class CacheModeStrategy(ABC):
         """Perform mode-specific kernel reindexing."""
 
     @abstractmethod
-    def insert_kernel_strategy(self, db, k_data, *args) -> None:
+    def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
         """Strategy-specific kernel insertion."""
 
     @abstractmethod

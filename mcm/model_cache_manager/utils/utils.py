@@ -300,3 +300,31 @@ def extract_identifiers_from_groups(mode: str,
                 identifiers.append(identifier)
 
     return identifiers
+
+
+def build_common_search_filters(
+    criteria, orm_class, equality_filter_configs: List[Tuple[str, Any, Any]]
+) -> List:
+    """Build common search filters that are shared between strategies."""
+    active_filters = []
+
+    for crit_attr, orm_column, transformer in equality_filter_configs:
+        value = getattr(criteria, crit_attr, None)
+        if value is not None:
+            if transformer:
+                value = transformer(value)
+            active_filters.append(orm_column == value)
+
+    if criteria.cache_hit_lower is not None:
+        active_filters.append(orm_class.runtime_hits < criteria.cache_hit_lower)
+
+    if criteria.cache_hit_higher is not None:
+        active_filters.append(orm_class.runtime_hits > criteria.cache_hit_higher)
+
+    if criteria.older_than_timestamp is not None:
+        active_filters.append(orm_class.modified_time < criteria.older_than_timestamp)
+
+    if criteria.younger_than_timestamp is not None:
+        active_filters.append(orm_class.modified_time > criteria.younger_than_timestamp)
+
+    return active_filters
