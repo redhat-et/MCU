@@ -3,10 +3,7 @@ Base service class for shared initialization logic.
 """
 
 from pathlib import Path
-from typing import Union
-
-from ..data.cache_repo import CacheRepository, VllmCacheRepository
-from ..data.database import Database, VllmDatabase
+from ..strategies import TritonStrategy, VllmStrategy
 from ..utils.paths import get_cache_dir
 from ..utils.mcm_constants import MODE_TRITON, MODE_VLLM
 
@@ -23,14 +20,14 @@ class BaseService: # pylint: disable=too-few-public-methods
             mode: Cache mode - 'triton' for standard Triton cache, 'vllm' for vLLM cache.
         """
         self.mode = mode
-        self.cache_dir: Path
-        self.repo: Union[CacheRepository, VllmCacheRepository]
-        self.db: Union[Database, VllmDatabase]
+        self.cache_dir = cache_dir or get_cache_dir(mode=mode)
+
+        # Initialize strategy based on mode
         if mode == MODE_VLLM:
-            self.cache_dir = cache_dir or get_cache_dir(mode=mode)
-            self.repo = VllmCacheRepository(self.cache_dir)
-            self.db = VllmDatabase()
+            self.strategy = VllmStrategy()
         else:
-            self.cache_dir = cache_dir or get_cache_dir(mode=mode)
-            self.repo = CacheRepository(self.cache_dir)
-            self.db = Database()
+            self.strategy = TritonStrategy()
+
+        # Create repository and database using strategy
+        self.repo = self.strategy.create_repository(self.cache_dir)
+        self.db = self.strategy.create_database()

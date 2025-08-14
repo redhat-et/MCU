@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from rich.prompt import Confirm
 from .base import BaseService
 from ..models.criteria import SearchCriteria
-from ..data.db_models import KernelOrm, KernelFileOrm, VllmKernelOrm, VllmKernelFileOrm
 from ..utils.mcm_constants import IR_EXTS, MODE_VLLM
 from ..utils.utils import (
     KernelIdentifier,
@@ -63,15 +62,14 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
         """
         criteria.cache_dir = self.cache_dir
         rows = self.db.search(criteria)
+
+        # Extract identifiers using strategy pattern
+        identifiers = [self.strategy.extract_identifiers_from_row(row) for row in rows]
+        # For estimate_space, use the correct hash field based on mode
         if self.mode == "vllm":
-            # For vLLM mode, we need both vllm_hash and triton_cache_key for deletion
-            vllm_data: List[Tuple[str, str]] = [
-                (row["vllm_hash"], row["triton_cache_key"]) for row in rows
-            ]
-            hash_list = [row["triton_cache_key"] for row in rows]  # For estimate_space
+            hash_list = [identifier.hash_key for identifier in identifiers]  # triton_cache_key
         else:
-            hashes: List[str] = [row["hash"] for row in rows]
-            hash_list = hashes
+            hash_list = [identifier.hash_key for identifier in identifiers]  # hash
 
         if not hash_list:
             log.info("No kernels matched pruning criteria – nothing to do.")
@@ -85,18 +83,8 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
 
         freed = 0
         with self.db.get_session() as session:
-            if self.mode == "vllm":
-                for vllm_hash, triton_cache_key in vllm_data:
-                    identifier = create_kernel_identifier(
-                        mode=self.mode,
-                        vllm_hash=vllm_hash,
-                        triton_cache_key=triton_cache_key
-                    )
-                    freed += self._delete_kernel_unified(identifier, session, delete_ir_only)
-            else:
-                for h in hashes:
-                    identifier = create_kernel_identifier(mode=self.mode, hash=h)
-                    freed += self._delete_kernel_unified(identifier, session, delete_ir_only)
+            for identifier in identifiers:
+                freed += self._delete_kernel_unified(identifier, session, delete_ir_only)
             session.commit()
 
         log.info("Pruned %d kernels – reclaimed %.1f MB", len(hash_list), freed / 2**20)
@@ -234,14 +222,17 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
         return freed
 
     def _get_kernel_record(self, session, identifier: KernelIdentifier):
-        """Get kernel record from database based on mode."""
+        """Get kernel record from database using strategy pattern."""
+        config = self.strategy.config
         if self.mode == MODE_VLLM:
+            # For vLLM: (vllm_cache_root, vllm_hash, triton_cache_key)
             return session.get(
-                VllmKernelOrm,
+                config.orm_model,
                 (str(self.cache_dir), identifier.vllm_hash, identifier.hash_key),
             )
+        # For Triton: (hash, cache_dir)
         return session.get(
-            KernelOrm,
+            config.orm_model,
             (identifier.hash_key, str(self.cache_dir)),
         )
 
@@ -272,24 +263,26 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
 
     def _delete_ir_file_records(self, session, identifier: KernelIdentifier,
                                 ir_file_names: List[str]) -> None:
-        """Delete IR file records from database."""
+        """Delete IR file records from database using strategy pattern."""
+        config = self.strategy.config
+
         if self.mode == MODE_VLLM:
             ir_rows = (
-                session.query(VllmKernelFileOrm)
+                session.query(config.file_orm_model)
                 .filter(
-                    VllmKernelFileOrm.vllm_cache_root == str(self.cache_dir),
-                    VllmKernelFileOrm.vllm_hash == identifier.vllm_hash,
-                    VllmKernelFileOrm.triton_cache_key == identifier.hash_key,
-                    VllmKernelFileOrm.rel_path.in_(ir_file_names),
+                    config.file_orm_model.vllm_cache_root == str(self.cache_dir),
+                    config.file_orm_model.vllm_hash == identifier.vllm_hash,
+                    config.file_orm_model.triton_cache_key == identifier.hash_key,
+                    config.file_orm_model.rel_path.in_(ir_file_names),
                 )
                 .all()
             )
         else:
             ir_rows = (
-                session.query(KernelFileOrm)
+                session.query(config.file_orm_model)
                 .filter(
-                    KernelFileOrm.kernel_hash == identifier.hash_key,
-                    KernelFileOrm.rel_path.in_(ir_file_names),
+                    config.file_orm_model.kernel_hash == identifier.hash_key,
+                    config.file_orm_model.rel_path.in_(ir_file_names),
                 )
                 .all()
             )
