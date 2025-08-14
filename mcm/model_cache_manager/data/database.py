@@ -13,7 +13,14 @@ import collections
 from sqlalchemy import and_, exc, or_, func
 
 from .db_config import engine, SessionLocal, DB_PATH, create_engine_and_session
-from .db_models import Base, KernelOrm, KernelFileOrm, VllmKernelOrm, VllmKernelFileOrm, SqlaSession
+from .db_models import (
+    Base,
+    KernelOrm,
+    KernelFileOrm,
+    VllmKernelOrm,
+    VllmKernelFileOrm,
+    SqlaSession,
+)
 
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
@@ -185,7 +192,7 @@ class Database:
         Returns a list of lists, where each inner list contains dictionaries of duplicate kernels,
         sorted by 'modified_time' (oldest first).
         """
-        return self._find_duplicates_generic(KernelOrm, "hash")
+        return Database.find_duplicates_generic(self.SessionLocal, KernelOrm, "hash")
 
     def estimate_space(self, hashes: Iterable[str], f_ext: Set[str] | None) -> int:
         """Sum the sizes of artefacts that would be deleted."""
@@ -209,27 +216,36 @@ class Database:
             self.engine.dispose()
             log.info("Database engine connection pool disposed.")
 
-    def _find_duplicates_generic(self, orm_class, hash_field: str,
-                                 additional_fields: List[str] = None) -> List[List[Dict[str, Any]]]:
+    @staticmethod
+    def find_duplicates_generic(
+        session_factory, orm_class, hash_field: str, additional_fields: List[str] = None
+    ) -> List[List[Dict[str, Any]]]:
         """
         Generic method to find duplicate kernels for any ORM class.
 
         Args:
+            session_factory: SQLAlchemy session factory function
             orm_class: The ORM class (KernelOrm or VllmKernelOrm)
             hash_field: Primary hash field name ("hash" for triton, "triton_cache_key" for vllm)
             additional_fields: Additional fields to include in the result (e.g., ["vllm_hash"])
         """
-        session = self.get_session()
+        session = session_factory()
         try:
-            kernel_data = self._query_all_kernels(session, orm_class, hash_field, additional_fields)
+            kernel_data = Database._query_all_kernels(
+                session, orm_class, hash_field, additional_fields
+            )
             if not kernel_data:
                 return []
 
-            kernel_dicts = self._build_kernel_dictionaries(
+            kernel_dicts = Database._build_kernel_dictionaries(
                 kernel_data, hash_field, additional_fields
             )
-            grouped_kernels = self._group_kernels_by_name_and_size(kernel_dicts, hash_field)
-            duplicate_groups = self._find_duplicate_groups_in_groups(grouped_kernels)
+            grouped_kernels = Database._group_kernels_by_name_and_size(
+                kernel_dicts, hash_field
+            )
+            duplicate_groups = Database._find_duplicate_groups_in_groups(
+                grouped_kernels
+            )
 
             log.debug(
                 "Found %s sets of duplicate kernels using %s "
@@ -251,8 +267,10 @@ class Database:
         finally:
             session.close()
 
-    def _query_all_kernels(self, session, orm_class, hash_field: str,
-                          additional_fields: List[str] = None):
+    @staticmethod
+    def _query_all_kernels(
+        session, orm_class, hash_field: str, additional_fields: List[str] = None
+    ):
         """Query all kernels with required fields."""
         base_fields = [
             getattr(orm_class, hash_field),
@@ -269,14 +287,12 @@ class Database:
             for field_name in additional_fields:
                 base_fields.append(getattr(orm_class, field_name))
 
-        return (
-            session.query(*base_fields)
-            .order_by(orm_class.modified_time.asc())
-            .all()
-        )
+        return session.query(*base_fields).order_by(orm_class.modified_time.asc()).all()
 
-    def _build_kernel_dictionaries(self, kernel_data, hash_field: str,
-                                  additional_fields: List[str] = None) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _build_kernel_dictionaries(
+        kernel_data, hash_field: str, additional_fields: List[str] = None
+    ) -> List[Dict[str, Any]]:
         """Build kernel dictionaries from ORM query results."""
         kernel_list_of_dicts: List[Dict[str, Any]] = []
 
@@ -300,8 +316,10 @@ class Database:
 
         return kernel_list_of_dicts
 
-    def _group_kernels_by_name_and_size(self, kernel_dicts: List[Dict[str, Any]],
-                                       hash_field: str) -> Dict:
+    @staticmethod
+    def _group_kernels_by_name_and_size(
+        kernel_dicts: List[Dict[str, Any]], hash_field: str
+    ) -> Dict:
         """Group kernels by name and total size."""
         grouped_kernels = collections.defaultdict(list)
 
@@ -309,13 +327,18 @@ class Database:
             hash_val = kernel_dict.get(hash_field, "")
             name_val = kernel_dict.get("name", "")
             size_val = kernel_dict.get("total_size")
-            log.debug("%s %s name %s total_size %s", hash_field, hash_val, name_val, size_val)
+            log.debug(
+                "%s %s name %s total_size %s", hash_field, hash_val, name_val, size_val
+            )
             grouping_key = (name_val, size_val)
             grouped_kernels[grouping_key].append(kernel_dict)
 
         return grouped_kernels
 
-    def _find_duplicate_groups_in_groups(self, grouped_kernels: Dict) -> List[List[Dict[str, Any]]]:
+    @staticmethod
+    def _find_duplicate_groups_in_groups(
+        grouped_kernels: Dict,
+    ) -> List[List[Dict[str, Any]]]:
         """Find duplicate groups within name/size groups."""
         final_duplicate_groups: List[List[Dict[str, Any]]] = []
 
@@ -323,13 +346,16 @@ class Database:
             if len(kernels_with_same_name_size) < 2:
                 continue
 
-            duplicate_sets = self._find_duplicates_in_single_group(kernels_with_same_name_size)
+            duplicate_sets = Database._find_duplicates_in_single_group(
+                kernels_with_same_name_size
+            )
             final_duplicate_groups.extend(duplicate_sets)
 
         return final_duplicate_groups
 
+    @staticmethod
     def _find_duplicates_in_single_group(
-        self, kernels: List[Dict[str, Any]]
+        kernels: List[Dict[str, Any]],
     ) -> List[List[Dict[str, Any]]]:
         """Find duplicate sets within a single name/size group."""
         processed = [False] * len(kernels)
@@ -366,7 +392,10 @@ class VllmDatabase:
 
     def __init__(self) -> None:
         """Initializes DB engine, session factory, and ensures schema exists."""
-        self.engine, self.SessionLocal = create_engine_and_session("vllm")  # pylint: disable=invalid-name
+        # pylint: disable=invalid-name
+        self.engine, self.SessionLocal = create_engine_and_session(
+            "vllm"
+        )  # pylint: disable=invalid-name
         self._ensure_schema()
         log.info("vLLM Database service interface initialized successfully.")
 
@@ -380,11 +409,14 @@ class VllmDatabase:
 
             if f_ext:
                 q = q.filter(
-                    or_(*[VllmKernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
+                    or_(
+                        *[VllmKernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS]
+                    )
                 )
 
             size = q.scalar() or 0
         return size
+
     def _ensure_schema(self) -> None:
         """Ensures database schema (tables, indexes) exists."""
         try:
@@ -398,7 +430,9 @@ class VllmDatabase:
         """Returns a new database session."""
         return self.SessionLocal()
 
-    def insert_kernel(self, k_data: Kernel, vllm_cache_root: str, vllm_hash: str) -> None:
+    def insert_kernel(
+        self, k_data: Kernel, vllm_cache_root: str, vllm_hash: str
+    ) -> None:
         """
         Upserts a vLLM kernel and its associated files into the database.
 
@@ -489,7 +523,9 @@ class VllmDatabase:
             )
             return [kernel_orm.to_dict() for kernel_orm in results_orm]
         except Exception:  # pylint: disable=broad-except
-            log.error("vLLM DB Search: Failed for criteria %s.", criteria, exc_info=True)
+            log.error(
+                "vLLM DB Search: Failed for criteria %s.", criteria, exc_info=True
+            )
             return []
         finally:
             session.close()
@@ -504,17 +540,10 @@ class VllmDatabase:
         Returns a list of lists, where each inner list contains dictionaries of duplicate kernels,
         sorted by 'modified_time' (oldest first).
         """
-        # Use the generic method from Database class, but need to use our own session
-        session = self.get_session()
-        try:
-            # Create a temporary Database instance to use the generic method
-            temp_db = Database()
-            temp_db.SessionLocal = self.SessionLocal  # Use our session factory
-            temp_db.engine = self.engine  # Use our engine
-            return temp_db._find_duplicates_generic(VllmKernelOrm, "triton_cache_key",  # pylint: disable=protected-access
-                                                    ["vllm_hash"])
-        finally:
-            session.close()
+        # Use the static generic method from Database class
+        return Database.find_duplicates_generic(
+            self.SessionLocal, VllmKernelOrm, "triton_cache_key", ["vllm_hash"]
+        )
 
     def close(self) -> None:
         """Closes the database engine's connection pool."""
