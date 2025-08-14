@@ -191,7 +191,7 @@ class KernelIdentifier:
     """Unified identifier for kernels across different modes."""
     mode: str
     hash_key: str  # "hash" for triton, "triton_cache_key" for vllm
-    vllm_hash: str = None  # Only used for vLLM mode
+    vllm_hash: Optional[str] = None  # Only used for vLLM mode
 
     def __str__(self) -> str:
         if self.mode == "vllm":
