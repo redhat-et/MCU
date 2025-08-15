@@ -5,12 +5,10 @@ on: # yamllint disable-line rule:truthy
     paths:
       - mcm/**/*.py
       - triton_util/**/*.py
-      - "!mcv/**"
   push:
     paths:
       - mcm/**/*.py
       - triton_util/**/*.py
-      - "!mcv/**"
 
 jobs:
   pylint:
@@ -34,4 +32,4 @@ jobs:
 
       - name: Run pylint
         run: |
-          pylint $(git ls-files '*.py')
+          pylint $(git ls-files -- '*.py' ':(exclude)mcv/**')
