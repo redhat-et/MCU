@@ -65,10 +65,12 @@ mcm index [OPTIONS]
 ```
 
 **Options:**
+
 - `--cache-dir PATH` – Path to cache directory (default: `~/.triton/cache` for Triton, `~/.cache/vllm` for vLLM)
 - `--mode MODE` – Cache mode: `triton` or `vllm` (auto-detected if not specified)
 
 **Examples:**
+
 ```bash
 # Auto-detect and index
 mcm index
@@ -89,6 +91,7 @@ mcm list [OPTIONS]
 ```
 
 **Filter Options:**
+
 - `--name, -n TEXT` – Filter by exact kernel name
 - `--backend, -b TEXT` – Filter by backend (cuda, rocm, etc.)
 - `--arch, -a TEXT` – Filter by architecture (80, 90a, gfx90a, etc.)
@@ -100,6 +103,7 @@ mcm list [OPTIONS]
 - `--mode MODE` – Cache mode (triton or vllm)
 
 **Examples:**
+
 ```bash
 # List all CUDA kernels
 mcm list --backend cuda
@@ -124,6 +128,7 @@ mcm list --mode vllm --backend cuda
 ```
 
 The output displays a formatted table showing:
+
 - Kernel hash (truncated for readability)
 - Kernel name
 - Cache hits count
@@ -143,6 +148,7 @@ mcm prune [OPTIONS]
 ```
 
 **Filter Options (same as list):**
+
 - `--name, -n TEXT` – Target specific kernel name
 - `--backend, -b TEXT` – Target specific backend
 - `--arch, -a TEXT` – Target specific architecture
@@ -154,6 +160,7 @@ mcm prune [OPTIONS]
 - `--mode MODE` – Cache mode
 
 **Pruning Options:**
+
 - `--full` – Delete entire kernel directory (default: only remove IR files)
 - `--deduplicate` – Keep only the newest copy of duplicate kernels
 - `-y, --yes` – Skip confirmation prompt
@@ -165,6 +172,7 @@ mcm prune [OPTIONS]
 3. **Deduplication** – Identifies duplicate kernels and keeps only the newest version
 
 **Examples:**
+
 ```bash
 # Remove IR files from kernels older than 90 days
 mcm prune --older-than 90d
@@ -197,6 +205,7 @@ mcm warm [OPTIONS]
 ```
 
 **How it works:**
+
 1. Launches a vLLM container (CUDA or ROCm) with the specified model
 2. Runs sample text generations to trigger kernel compilation
 3. Collects environment metadata (GPU info, vLLM/Torch versions, Triton cache keys, etc)
@@ -204,6 +213,7 @@ mcm warm [OPTIONS]
 5. Optionally packages everything as a portable tarball
 
 **Options:**
+
 - `--model, -m TEXT` – Hugging Face model ID (default: facebook/opt-125m)
 - `--output, -o PATH` – Output tarball path (default: warmed_cache.tar.gz)
 - `--host-cache-dir PATH` – Host directory for cache (default: ./)
@@ -213,11 +223,13 @@ mcm warm [OPTIONS]
 - `--rocm` – Use ROCm image instead of CUDA
 
 **What gets cached:**
+
 - Compiled Triton kernels
 - vLLM and Torch inductor compilation artifacts
 - Metadata JSON
 
 **Examples:**
+
 ```bash
 # Basic cache warming
 mcm warm --model facebook/opt-125m
@@ -236,10 +248,12 @@ mcm warm --model EleutherAI/gpt-neo-125M --rocm
 ```
 
 The warm command uses container images:
+
 - **CUDA**: `quay.io/rh-ee-asangior/vllm-0.9.2-tcm-warm:0.0.2` (based on vllm/vllm-openai)
 - **ROCm**: `quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1` (based on rocm/vllm-dev)
 
 **Generated Cache Contents:**
+
 - Compiled Triton kernels in `torch_compile_cache/<hash>/rank<x>_<y>/triton_cache/`
 - Metadata JSON with environment profile and cache keys
 - All compilation artifacts from running inference on the model
@@ -247,10 +261,12 @@ The warm command uses container images:
 ## Database Structure
 
 MCM uses SQLite databases to store kernel metadata:
+
 - Triton mode: `~/.local/share/model-cache-manager/cache.db`
 - vLLM mode: `~/.local/share/model-cache-manager/cache_vllm.db`
 
 The database tracks:
+
 - Kernel metadata (name, backend, architecture, version)
 - File information (paths, sizes, types)
 - Runtime statistics (hit counts, last access time)
@@ -274,6 +290,7 @@ This tracks cache hits and access patterns, updating the MCM database with runti
 ### Verbose Logging
 
 Use `-v` flags for increased verbosity:
+
 ```bash
 mcm -v index    # WARNING level
 mcm -vv index   # INFO level
@@ -282,7 +299,7 @@ mcm -vvv index  # DEBUG level
 
 ## Project Structure
 
-```
+```text
 mcm/
 ├── model_cache_manager/
 │   ├── cli/           # CLI commands and helpers
@@ -296,15 +313,16 @@ mcm/
 └── tests/             # Test suite
 ```
 
-
 ## Use Cases
 
 ### Development and Testing
+
 - **Cache Analysis**: Understand what kernels your models generate (especially if autotune is involved)
 - **Performance Debugging**: Track cache hit rates
 - **Storage Management**: Keep development machines clean with intelligent pruning
 
 ### Production Deployments
+
 - **Cache Pre-warming**: Eliminate cold-start compilation delays
 - **Container Integration**: Ship pre-compiled caches with Docker/Kubernetes deployments using mcv after using mcm warm
 - **Multi-node Consistency**: Ensure all nodes have identical optimized kernels
