@@ -201,7 +201,7 @@ class KernelIdentifier:
             return f"vllm_hash={self.vllm_hash}, triton_cache_key={self.hash_key}"
         return self.hash_key
 
-    def to_tuple(self) -> Union[str, Tuple[str, str]]:
+    def to_tuple(self) -> Union[str, Tuple[Optional[str], str]]:
         """Convert to the format expected by existing code."""
         if self.mode == MODE_VLLM:
             return (self.vllm_hash, self.hash_key)
@@ -230,6 +230,8 @@ def get_kernel_directories(
 ) -> List[Path]:
     """Get list of directories containing kernel files for any mode."""
     if mode == MODE_VLLM:
+        if identifier.vllm_hash is None:
+            raise ValueError("vllm_hash cannot be None for VLLM mode")
         return find_vllm_kernel_dirs(
             cache_dir, identifier.vllm_hash, identifier.hash_key
         )
@@ -274,12 +276,18 @@ def delete_kernel_directories(kernel_dirs: List[Path]) -> int:
 def create_kernel_identifier(mode: str, **kwargs) -> KernelIdentifier:
     """Factory function to create kernel identifiers."""
     if mode == MODE_VLLM:
+        triton_cache_key = kwargs.get("triton_cache_key")
+        if triton_cache_key is None:
+            raise ValueError("triton_cache_key is required for VLLM mode")
         return KernelIdentifier(
             mode=mode,
-            hash_key=kwargs.get("triton_cache_key"),
+            hash_key=triton_cache_key,
             vllm_hash=kwargs.get("vllm_hash"),
         )
-    return KernelIdentifier(mode=mode, hash_key=kwargs.get("hash"))
+    hash_key = kwargs.get("hash")
+    if hash_key is None:
+        raise ValueError("hash is required for Triton mode")
+    return KernelIdentifier(mode=mode, hash_key=hash_key)
 
 
 def extract_identifiers_from_groups(

@@ -218,7 +218,10 @@ class Database:
 
     @staticmethod
     def find_duplicates_generic(
-        session_factory, orm_class, hash_field: str, additional_fields: List[str] = None
+        session_factory,
+        orm_class,
+        hash_field: str,
+        additional_fields: List[str] | None = None,
     ) -> List[List[Dict[str, Any]]]:
         """
         Generic method to find duplicate kernels for any ORM class.
@@ -269,7 +272,7 @@ class Database:
 
     @staticmethod
     def _query_all_kernels(
-        session, orm_class, hash_field: str, additional_fields: List[str] = None
+        session, orm_class, hash_field: str, additional_fields: List[str] | None = None
     ):
         """Query all kernels with required fields."""
         base_fields = [
@@ -291,7 +294,7 @@ class Database:
 
     @staticmethod
     def _build_kernel_dictionaries(
-        kernel_data, hash_field: str, additional_fields: List[str] = None
+        kernel_data, hash_field: str, additional_fields: List[str] | None = None
     ) -> List[Dict[str, Any]]:
         """Build kernel dictionaries from ORM query results."""
         kernel_list_of_dicts: List[Dict[str, Any]] = []

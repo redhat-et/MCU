@@ -331,13 +331,6 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
         )
         return PruneStats(pruned=pruned_count, reclaimed=reclaimed_mb)
 
-    def _delete_kernel(self, h: str, session, ir_only: bool) -> int:
-        """
-        Delete files on disk and update db. Returns bytes freed.
-        Wrapper method for backward compatibility - uses unified deletion logic.
-        """
-        identifier = create_kernel_identifier(mode=self.mode, hash=h)
-        return self._delete_kernel_unified(identifier, session, ir_only)
 
     def _find_vllm_kernel_dirs(self, vllm_hash: str, triton_cache_key: str) -> list:
         """Find kernel directories for a given vLLM hash and triton cache key.

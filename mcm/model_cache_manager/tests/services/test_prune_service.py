@@ -236,7 +236,7 @@ class TestPruningService(unittest.TestCase):
         self.assertFalse(stats.aborted)
 
     @patch("model_cache_manager.services.prune.Confirm.ask", return_value=False)
-    @patch("model_cache_manager.services.prune.PruningService._delete_kernel")
+    @patch("model_cache_manager.services.prune.PruningService._delete_kernel_unified")
     def test_prune_user_cancels_operation_when_prompted(
         self, mock_delete_kernel: MagicMock, mock_rich_confirm_ask: MagicMock
     ):

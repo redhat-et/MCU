@@ -18,7 +18,7 @@ class CacheConfig:
     file_orm_model: Type
     hash_field: str
     primary_key_fields: List[str]
-    additional_duplicate_fields: List[str] = None
+    additional_duplicate_fields: List[str] | None = None
 
 
 class CacheModeStrategy(ABC):
@@ -30,11 +30,11 @@ class CacheModeStrategy(ABC):
         """Return configuration for this cache mode."""
 
     @abstractmethod
-    def create_database(self):
+    def create_database(self) -> Any:
         """Create appropriate database instance for this mode."""
 
     @abstractmethod
-    def create_repository(self, cache_dir: Path):
+    def create_repository(self, cache_dir: Path) -> Any:
         """Create appropriate repository instance for this mode."""
 
     @abstractmethod
