@@ -252,7 +252,7 @@ class TestPruningServiceVllmMode(unittest.TestCase):
 
         service = PruningService(cache_dir=self.cache_dir, mode="vllm")
 
-        with patch.object(service, "_delete_kernel", return_value=1024), patch.object(
+        with patch.object(service, "_delete_kernel_unified", return_value=1024), patch.object(
             service, "_confirm", return_value=True
         ):
 

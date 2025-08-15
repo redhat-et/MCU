@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     model_config = {
-        'env_prefix': 'MCM_',
-        'case_sensitive': False,
+        "env_prefix": "MCM_",
+        "case_sensitive": False,
     }
 
 
