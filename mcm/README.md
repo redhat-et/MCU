@@ -2,15 +2,21 @@
 
 <img src="../logo/mcm.png" alt="mcm" width="20%" height="auto">
 
-A lightweight CLI tool for **indexing, searching, and managing GPU kernel caches** for Triton and vLLM. MCM helps you organize, prune, and pre-warm caches to improve runtime efficiency and save disk space.
+A lightweight CLI tool for **indexing, searching, and managing GPU kernel caches**
+for Triton and vLLM. MCM helps
+you organize, prune, and pre-warm caches to improve runtime
+efficiency and save disk space.
 
 ![MCM Screenshot](./screenshot/mcm-screenshot.png)
 
 ## Features
 
-- **Cache Indexing** – Scan Triton or vLLM cache directories and build a local database recording kernel metadata
-- **Advanced Search** – Query kernels by name, backend, architecture, modification time, and cache hit statistics
-- **Intelligent Pruning** – Remove kernels based on age, usage patterns, or duplicates with multiple pruning strategies
+- **Cache Indexing** – Scan Triton or vLLM cache directories
+and build a local database recording kernel metadata
+- **Advanced Search** – Query kernels by name, backend,
+architecture, modification time, and cache hit statistics
+- **Intelligent Pruning** – Remove kernels based on age,
+usage patterns, or duplicates with multiple pruning strategies
 - **Cache Warming** – Pre-generate vLLM caches in containers (CUDA/ROCm) and export
 - **Runtime Tracking** – Monitor cache hits and access patterns in production environments
 
@@ -58,7 +64,8 @@ mcm prune --older-than 30d --cache-hit-lower 5
 
 ### Indexing the Cache
 
-The `index` command scans your cache directory and populates the database with kernel metadata.
+The `index` command scans your cache directory
+and populates the database with kernel metadata.
 
 ```bash
 mcm index [OPTIONS]
@@ -66,7 +73,8 @@ mcm index [OPTIONS]
 
 **Options:**
 
-- `--cache-dir PATH` – Path to cache directory (default: `~/.triton/cache` for Triton, `~/.cache/vllm` for vLLM)
+- `--cache-dir PATH` – Path to cache directory
+(default: `~/.triton/cache` for Triton, `~/.cache/vllm` for vLLM)
 - `--mode MODE` – Cache mode: `triton` or `vllm` (auto-detected if not specified)
 
 **Examples:**
@@ -141,7 +149,8 @@ The output displays a formatted table showing:
 
 ### Pruning Kernels
 
-The `prune` command removes kernels from the cache with the same powerful filtering as `list`, plus additional pruning strategies.
+The `prune` command removes kernels from the cache with the same
+powerful filtering as `list`, plus additional pruning strategies.
 
 ```bash
 mcm prune [OPTIONS]
@@ -167,7 +176,8 @@ mcm prune [OPTIONS]
 
 **Pruning Strategies:**
 
-1. **IR-only pruning (default)** – Removes intermediate representation files (.ttir, .ttgir, .llir) while keeping binaries
+1. **IR-only pruning (default)** – Removes intermediate representation files
+(.ttir, .ttgir, .llir) while keeping binaries
 2. **Full pruning** – Removes entire kernel directory and database records
 3. **Deduplication** – Identifies duplicate kernels and keeps only the newest version
 
@@ -198,7 +208,9 @@ mcm prune --mode vllm --older-than 14d
 
 ### Warming the Cache
 
-The `warm` command pre-compiles GPU kernels for vLLM models by running actual inference in a containerized environment. This eliminates cold-start compilation delays in production deployments.
+The `warm` command pre-compiles GPU kernels for vLLM models by running actual inference
+in a containerized environment. This eliminates cold-start compilation
+delays in production deployments.
 
 ```bash
 mcm warm [OPTIONS]
@@ -208,7 +220,8 @@ mcm warm [OPTIONS]
 
 1. Launches a vLLM container (CUDA or ROCm) with the specified model
 2. Runs sample text generations to trigger kernel compilation
-3. Collects environment metadata (GPU info, vLLM/Torch versions, Triton cache keys, etc)
+3. Collects environment metadata (GPU info,
+vLLM/Torch versions, Triton cache keys, etc)
 4. Saves compiled kernels to the mounted cache directory
 5. Optionally packages everything as a portable tarball
 
@@ -274,7 +287,8 @@ The database tracks:
 
 ## Runtime Tracking
 
-MCM includes a runtime tracker that can be integrated into your Triton code to monitor cache performance:
+MCM includes a runtime tracker that can be integrated
+into your Triton code to monitor cache performance:
 
 ```python
 from model_cache_manager.runtime.tracker import MCMTrackingCacheManager
@@ -283,7 +297,8 @@ from model_cache_manager.runtime.tracker import MCMTrackingCacheManager
 triton.knobs.cache.manager_class = MCMTrackingCacheManager
 ```
 
-This tracks cache hits and access patterns, updating the MCM database with runtime statistics.
+This tracks cache hits and access patterns,
+updating the MCM database with runtime statistics.
 
 ## Advanced Usage
 
@@ -317,7 +332,8 @@ mcm/
 
 ### Development and Testing
 
-- **Cache Analysis**: Understand what kernels your models generate (especially if autotune is involved)
+- **Cache Analysis**: Understand what kernels your models
+generate (especially if autotune is involved)
 - **Performance Debugging**: Track cache hit rates
 - **Storage Management**: Keep development machines clean with intelligent pruning
 
