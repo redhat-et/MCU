@@ -2,49 +2,17 @@
 
 <img src="../logo/mcm.png" alt="mcm" width="20%" height="auto">
 
-Model Cache Manager (MCM) is a lightweight CLI for **indexing, searching, and
-managing GPU‑kernel caches**. It helps you organise, prune, and pre‑warm
-caches to improve runtime efficiency and save disk space.
+A lightweight CLI tool for **indexing, searching, and managing GPU kernel caches** for Triton and vLLM. MCM helps you organize, prune, and pre-warm caches to improve runtime efficiency and save disk space.
 
-<img src="./screenshot/mcm-screenshot.png" alt="mcm" width="75%" height="auto">
-
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-  - [Indexing the Cache](#indexing-the-cache)
-  - [Listing Kernels](#listing-kernels)
-  - [Pruning Kernels](#pruning-kernels)
-  - [Warming the Cache](#warming-the-cache)
-- [Requirements](#requirements)
-- [Project Structure](#project-structure)
-
----
+![MCM Screenshot](./screenshot/mcm-screenshot.png)
 
 ## Features
 
-MCM offers the following capabilities:
-
-- **Cache Indexing** – Scan a Triton cache directory and build a local
-  database that records kernel name, backend, architecture, and file sizes.
-- **Flexible Search and Listing** – Query kernels by name, backend (for
-  example *CUDA* or *ROCm*), architecture, or modification time.
-- **Intelligent Pruning**
-  - **IR‑only mode** – Remove intermediate‑representation files while leaving
-    binaries intact.
-  - **Full deletion** – Remove the entire kernel directory and its database
-    record.
-  - **Deduplication** – Keep only the newest copy of each unique kernel.
-- **Cache Warming** – Pre‑fill the vLLM cache in a container (CUDA or ROCm) and
-  optionally export it as a tarball.
-- **Human‑readable Output** – Show kernel details in well‑formatted tables with
-  readable file sizes and timestamps.
-
----
+- **Cache Indexing** – Scan Triton or vLLM cache directories and build a local database recording kernel metadata
+- **Advanced Search** – Query kernels by name, backend, architecture, modification time, and cache hit statistics
+- **Intelligent Pruning** – Remove kernels based on age, usage patterns, or duplicates with multiple pruning strategies
+- **Cache Warming** – Pre-generate vLLM caches in containers (CUDA/ROCm) and export
+- **Runtime Tracking** – Monitor cache hits and access patterns in production environments
 
 ## Installation
 
@@ -52,193 +20,292 @@ MCM offers the following capabilities:
 
 - Python 3.9 or newer
 - Triton
-- [Podman](https://podman.io/) (needed for `mcm warm`)
+- Podman (required for `mcm warm` command - used to run vLLM containers)
 
-### Installation Steps
+### Install from Source
 
-1. Install in editable mode
+```bash
+pip install -e .
+```
 
-   ```bash
-   pip install -e .
-   ```
+### Verify Installation
 
-   The command installs MCM and its dependencies (`typer`, `rich`, `sqlalchemy`,
-   and `pydantic`) and adds the `mcm` command to your PATH.
+```bash
+# Check MCM is installed
+mcm --help
 
----
+# Verify Podman for cache warming (optional)
+podman --version
+```
 
 ## Quick Start
 
-1. Index your cache
+```bash
+# Index your cache (auto-detects Triton or vLLM)
+mcm index
 
-   ```bash
-   mcm index --cache-dir ~/.triton/cache   # or your custom path
-   ```
+# List all kernels
+mcm list
 
-2. List kernels by backend
+# List CUDA kernels
+mcm list --backend cuda
 
-   ```bash
-   mcm list --backend cuda
-   ```
-
----
+# Remove old unused kernels
+mcm prune --older-than 30d --cache-hit-lower 5
+```
 
 ## Usage
 
-The `mcm` CLI groups its functionality into sub‑commands.
-
 ### Indexing the Cache
 
-The `index` sub‑command scans the cache and populates the database.
+The `index` command scans your cache directory and populates the database with kernel metadata.
 
 ```bash
 mcm index [OPTIONS]
 ```
 
-#### Options
+**Options:**
+- `--cache-dir PATH` – Path to cache directory (default: `~/.triton/cache` for Triton, `~/.cache/vllm` for vLLM)
+- `--mode MODE` – Cache mode: `triton` or `vllm` (auto-detected if not specified)
 
-- `--cache-dir PATH` – Path to the cache (default `~/.triton/cache`)
-
-#### Example
-
+**Examples:**
 ```bash
+# Auto-detect and index
+mcm index
+
+# Index vLLM cache explicitly
+mcm index --mode vllm --cache-dir ~/.cache/vllm
+
+# Index custom Triton cache location
 mcm index --cache-dir /path/to/my/cache
 ```
 
-### Listing Kernels
+### Searching and Listing Kernels
 
-Search and display kernels that match one or more filters.
+The `list` command provides powerful search capabilities with multiple filter options.
 
 ```bash
 mcm list [OPTIONS]
 ```
 
-#### Listing Options
+**Filter Options:**
+- `--name, -n TEXT` – Filter by exact kernel name
+- `--backend, -b TEXT` – Filter by backend (cuda, rocm, etc.)
+- `--arch, -a TEXT` – Filter by architecture (80, 90a, gfx90a, etc.)
+- `--older-than TEXT` – Show kernels older than duration (e.g., 7d, 2w)
+- `--younger-than TEXT` – Show kernels younger than duration
+- `--cache-hit-lower INT` – Show kernels with cache hits lower than specified number
+- `--cache-hit-higher INT` – Show kernels with cache hits higher than specified number
+- `--cache-dir PATH` – Specify cache directory to search
+- `--mode MODE` – Cache mode (triton or vllm)
 
-- `--name, -n TEXT`     Kernel name (exact match)
-- `--backend, -b TEXT`  Backend (`cuda`, `rocm`, …)
-- `--arch, -a TEXT`     Architecture (`80`, `gfx90a`, …)
-- `--older-than TEXT`   Only kernels older than the given duration
-- `--younger-than TEXT` Only kernels younger than the given duration
-- `--cache-dir PATH`    Cache directory to search
+**Examples:**
+```bash
+# List all CUDA kernels
+mcm list --backend cuda
 
-#### Examples
+# Find specific kernel by name
+mcm list --name flash_attention_kernel
 
-- List all CUDA kernels
+# Find kernels for specific GPU architecture
+mcm list --backend cuda --arch 80
 
-  ```bash
-  mcm list --backend cuda
-  ```
+# Find old kernels with low usage
+mcm list --older-than 30d --cache-hit-lower 10
 
-- Kernels named `my_custom_kernel` older than 30 days
+# Find frequently used kernels
+mcm list --cache-hit-higher 100
 
-  ```bash
-  mcm list --name my_custom_kernel --older-than 30d
-  ```
+# Combine multiple filters
+mcm list --backend rocm --arch gfx90a --younger-than 7d
 
-- ROCm kernels for architecture `gfx90a`
+# Search in vLLM cache
+mcm list --mode vllm --backend cuda
+```
 
-  ```bash
-  mcm list --backend rocm --arch gfx90a
-  ```
+The output displays a formatted table showing:
+- Kernel hash (truncated for readability)
+- Kernel name
+- Cache hits count
+- Last access time
+- Backend and architecture
+- Triton version
+- Number of warps
+- Total size
+- Cache directory
 
 ### Pruning Kernels
 
-Remove kernels from the cache. Supports IR‑only, full deletion, and
-deduplication.
+The `prune` command removes kernels from the cache with the same powerful filtering as `list`, plus additional pruning strategies.
 
 ```bash
 mcm prune [OPTIONS]
 ```
 
-#### Pruning Options
+**Filter Options (same as list):**
+- `--name, -n TEXT` – Target specific kernel name
+- `--backend, -b TEXT` – Target specific backend
+- `--arch, -a TEXT` – Target specific architecture
+- `--older-than TEXT` – Delete kernels older than duration
+- `--younger-than TEXT` – Delete kernels younger than duration
+- `--cache-hit-lower INT` – Delete kernels with fewer hits
+- `--cache-hit-higher INT` – Delete kernels with more hits
+- `--cache-dir PATH` – Cache directory
+- `--mode MODE` – Cache mode
 
-- `--name, -n TEXT`     Kernel name
-- `--backend, -b TEXT`  Backend
-- `--arch, -a TEXT`     Architecture
-- `--older-than TEXT`   Delete kernels older than the duration
-- `--younger-than TEXT` Delete kernels younger than the duration
-- `--full`              Delete the entire kernel directory
-- `--deduplicate`       Keep only the newest copy of each kernel
-- `-y, --yes`           Skip the confirmation prompt
-- `--cache-dir PATH`    Cache directory
+**Pruning Options:**
+- `--full` – Delete entire kernel directory (default: only remove IR files)
+- `--deduplicate` – Keep only the newest copy of duplicate kernels
+- `-y, --yes` – Skip confirmation prompt
 
-#### Pruning Examples
+**Pruning Strategies:**
 
-- IR files older than 90 days
+1. **IR-only pruning (default)** – Removes intermediate representation files (.ttir, .ttgir, .llir) while keeping binaries
+2. **Full pruning** – Removes entire kernel directory and database records
+3. **Deduplication** – Identifies duplicate kernels and keeps only the newest version
 
-  ```bash
-  mcm prune --older-than 90d
-  ```
+**Examples:**
+```bash
+# Remove IR files from kernels older than 90 days
+mcm prune --older-than 90d
 
-- Fully remove all `unstable_kernel` entries
+# Fully remove all kernels with specific name
+mcm prune --name unstable_kernel --full -y
 
-  ```bash
-  mcm prune --name unstable_kernel --full -y
-  ```
+# Remove unused old CUDA kernels
+mcm prune --backend cuda --older-than 60d --cache-hit-lower 5 --full
 
-- Deduplicate the cache
+# Deduplicate cache (removes older copies of duplicate kernels)
+mcm prune --deduplicate -y
 
-  ```bash
-  mcm prune --deduplicate -y
-  ```
+# Target specific architecture
+mcm prune --arch gfx90a --older-than 30d
+
+# Remove kernels in specific hit range
+mcm prune --cache-hit-lower 10 --cache-hit-higher 50 --full
+
+# Clean vLLM cache
+mcm prune --mode vllm --older-than 14d
+```
 
 ### Warming the Cache
 
-Run a container that generates a vLLM cache for a model and optionally export
-it.
+The `warm` command pre-compiles GPU kernels for vLLM models by running actual inference in a containerized environment. This eliminates cold-start compilation delays in production deployments.
 
 ```bash
 mcm warm [OPTIONS]
 ```
 
-#### Warming Options
+**How it works:**
+1. Launches a vLLM container (CUDA or ROCm) with the specified model
+2. Runs sample text generations to trigger kernel compilation
+3. Collects environment metadata (GPU info, vLLM/Torch versions, Triton cache keys, etc)
+4. Saves compiled kernels to the mounted cache directory
+5. Optionally packages everything as a portable tarball
 
-- `--model, -m TEXT`         Hugging Face model (default `facebook/opt-125m`)
-- `--output, -o PATH`        Output tarball (default `warmed_cache.tar.gz`)
-- `--host-cache-dir PATH`    Host directory for the cache (default `./`)
-- `--hugging-face-token TEXT` Token for private models
-- `--vllm_cache_dir PATH`    Cache path inside the container
-- `--tarball`                Produce a gzipped tarball after warming
-- `--rocm`                   Warm for ROCm GPUs (default CUDA)
+**Options:**
+- `--model, -m TEXT` – Hugging Face model ID (default: facebook/opt-125m)
+- `--output, -o PATH` – Output tarball path (default: warmed_cache.tar.gz)
+- `--host-cache-dir PATH` – Host directory for cache (default: ./)
+- `--hugging-face-token TEXT` – Token for private models
+- `--vllm_cache_dir PATH` – Cache path inside container (default: /root/.cache/vllm/)
+- `--tarball` – Create gzipped tarball after warming
+- `--rocm` – Use ROCm image instead of CUDA
 
-#### Warming Examples
+**What gets cached:**
+- Compiled Triton kernels
+- vLLM and Torch inductor compilation artifacts
+- Metadata JSON
 
-- Warm cache for a model and produce a tarball
+**Examples:**
+```bash
+# Basic cache warming
+mcm warm --model facebook/opt-125m
 
-  ```bash
-  mcm warm --model EleutherAI/gpt-neo-125M \
-           --tarball \
-           --output my_gpt_neo_cache.tar.gz
-  ```
+# Create portable cache tarball for deployment
+mcm warm --model meta-llama/Llama-2-7b-hf \
+         --tarball \
+         --output llama2_cache.tar.gz
 
-- Warm cache on a ROCm system
+# Warm cache for private model
+mcm warm --model org/private-model \
+         --hugging-face-token hf_xxxxx
 
-  ```bash
-  mcm warm --model Llama-3-8B --rocm \
-           --hugging-face-token hf_YOUR_TOKEN
-  ```
+# ROCm GPU support
+mcm warm --model EleutherAI/gpt-neo-125M --rocm
+```
 
----
+The warm command uses container images:
+- **CUDA**: `quay.io/rh-ee-asangior/vllm-0.9.2-tcm-warm:0.0.2` (based on vllm/vllm-openai)
+- **ROCm**: `quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1` (based on rocm/vllm-dev)
 
-## Requirements
+**Generated Cache Contents:**
+- Compiled Triton kernels in `torch_compile_cache/<hash>/rank<x>_<y>/triton_cache/`
+- Metadata JSON with environment profile and cache keys
+- All compilation artifacts from running inference on the model
 
-mcm depends on the following libraries (installed from `requirements.txt`):
+## Database Structure
 
-- `typer`
-- `rich`
-- `pydantic`
-- `pydantic-settings`
-- `structlog`
-- `sqlalchemy`
+MCM uses SQLite databases to store kernel metadata:
+- Triton mode: `~/.local/share/model-cache-manager/cache.db`
+- vLLM mode: `~/.local/share/model-cache-manager/cache_vllm.db`
 
----
+The database tracks:
+- Kernel metadata (name, backend, architecture, version)
+- File information (paths, sizes, types)
+- Runtime statistics (hit counts, last access time)
+- Kernel parameters (warps, stages, shared memory, etc.)
+
+## Runtime Tracking
+
+MCM includes a runtime tracker that can be integrated into your Triton code to monitor cache performance:
+
+```python
+from model_cache_manager.runtime.tracker import MCMTrackingCacheManager
+
+# Use as drop-in replacement for Triton's CacheManager
+triton.knobs.cache.manager_class = MCMTrackingCacheManager
+```
+
+This tracks cache hits and access patterns, updating the MCM database with runtime statistics.
+
+## Advanced Usage
+
+### Verbose Logging
+
+Use `-v` flags for increased verbosity:
+```bash
+mcm -v index    # WARNING level
+mcm -vv index   # INFO level  
+mcm -vvv index  # DEBUG level
+```
 
 ## Project Structure
 
-- `mcm/model_cache_manager/cli` – CLI entry points
-- `mcm/model_cache_manager/services` – Business logic
-- `mcm/model_cache_manager/data` – Database access and cache repository
-- `mcm/model_cache_manager/models` – DTOs and Pydantic models
-- `mcm/model_cache_manager/plugins` – Backend‑specific handlers
-- `mcm/model_cache_manager/utils` – Logging, paths, helpers
+```
+mcm/
+├── model_cache_manager/
+│   ├── cli/           # CLI commands and helpers
+│   ├── services/      # Business logic (index, search, prune, warm)
+│   ├── data/          # Database and repository layers
+│   ├── models/        # Data models (Kernel, SearchCriteria)
+│   ├── plugins/       # Backend plugins (CUDA, ROCm)
+│   ├── strategies/    # Mode strategies (Triton, vLLM)
+│   ├── runtime/       # Runtime tracking
+│   └── utils/         # Utilities and helpers
+└── tests/             # Test suite
+```
+
+
+## Use Cases
+
+### Development and Testing
+- **Cache Analysis**: Understand what kernels your models generate (especially if autotune is involved)
+- **Performance Debugging**: Track cache hit rates
+- **Storage Management**: Keep development machines clean with intelligent pruning
+
+### Production Deployments
+- **Cache Pre-warming**: Eliminate cold-start compilation delays
+- **Container Integration**: Ship pre-compiled caches with Docker/Kubernetes deployments using mcv after using mcm warm
+- **Multi-node Consistency**: Ensure all nodes have identical optimized kernels
+- **Version Migration**: Safely update vLLM/Triton versions with pre-validated caches
