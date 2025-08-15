@@ -5,17 +5,21 @@ Service for pruning kernel cache artefacts based on criteria
 from __future__ import annotations
 
 import logging
-import shutil
-from pathlib import Path
 from typing import Optional, List, Any, Tuple, Dict
 from dataclasses import dataclass
 from rich.prompt import Confirm
-from ..data.cache_repo import CacheRepository
-from ..data.database import Database
+from .base import BaseService
 from ..models.criteria import SearchCriteria
-from ..data.db_models import KernelOrm, KernelFileOrm
-from ..utils.mcm_constants import IR_EXTS
-from ..utils.paths import get_cache_dir
+from ..utils.mcm_constants import IR_EXTS, MODE_VLLM
+from ..utils.utils import (
+    KernelIdentifier,
+    create_kernel_identifier,
+    extract_identifiers_from_groups,
+    get_kernel_directories,
+    delete_ir_files_from_dirs,
+    delete_kernel_directories,
+    find_vllm_kernel_dirs
+)
 
 log = logging.getLogger(__name__)
 
@@ -30,15 +34,10 @@ class PruneStats:
     empty: bool = False
 
 
-class PruningService:  # pylint: disable=too-few-public-methods
+class PruningService(BaseService):  # pylint: disable=too-few-public-methods
     """
     Remove files from the cache and keep the DB consistent.
     """
-
-    def __init__(self, cache_dir: Path | None = None):
-        self.cache_dir = cache_dir or get_cache_dir()
-        self.repo = CacheRepository(cache_dir)
-        self.db = Database()
 
     def prune(
         self,
@@ -63,26 +62,33 @@ class PruningService:  # pylint: disable=too-few-public-methods
         """
         criteria.cache_dir = self.cache_dir
         rows = self.db.search(criteria)
-        hashes: List[str] = [row["hash"] for row in rows]
 
-        if not hashes:
+        # Extract identifiers using strategy pattern
+        identifiers = [self.strategy.extract_identifiers_from_row(row) for row in rows]
+        # For estimate_space, use the correct hash field based on mode
+        if self.mode == "vllm":
+            hash_list = [identifier.hash_key for identifier in identifiers]  # triton_cache_key
+        else:
+            hash_list = [identifier.hash_key for identifier in identifiers]  # hash
+
+        if not hash_list:
             log.info("No kernels matched pruning criteria – nothing to do.")
             return PruneStats(0, 0)
 
-        reclaimed = self.db.estimate_space(hashes, IR_EXTS)
+        reclaimed = self.db.estimate_space(hash_list, IR_EXTS)
         if not auto_confirm and not self._confirm(
-            len(hashes), reclaimed, delete_ir_only
+            len(hash_list), reclaimed, delete_ir_only
         ):
             return None
 
         freed = 0
         with self.db.get_session() as session:
-            for h in hashes:
-                freed += self._delete_kernel(h, session, delete_ir_only)
+            for identifier in identifiers:
+                freed += self._delete_kernel_unified(identifier, session, delete_ir_only)
             session.commit()
 
-        log.info("Pruned %d kernels – reclaimed %.1f MB", len(hashes), freed / 2**20)
-        return PruneStats(len(hashes), (freed / 2**20))
+        log.info("Pruned %d kernels – reclaimed %.1f MB", len(hash_list), freed / 2**20)
+        return PruneStats(len(hash_list), (freed / 2**20))
 
     def close(self) -> None:
         """Dispose DB connections"""
@@ -99,9 +105,10 @@ class PruningService:  # pylint: disable=too-few-public-methods
 
     def _get_hashes_and_estimated_space_for_deduplication(
         self, duplicate_groups: List[List[Dict[str, Any]]]
-    ) -> Tuple[List[str], int]:
+    ) -> Tuple[List[KernelIdentifier], int]:
         """
-        Identifies hashes of older duplicate kernels to prune and estimates reclaimable space.
+        Identifies kernel identifiers of older duplicate kernels to prune and estimates space.
+        Works unified for both triton and vLLM modes using utility functions.
 
         Args:
             duplicate_groups: List of groups, where each group is a list of kernel dicts
@@ -109,38 +116,32 @@ class PruningService:  # pylint: disable=too-few-public-methods
 
         Returns:
             A tuple containing:
-                - List of kernel hashes to prune.
+                - List of KernelIdentifier objects to prune.
                 - Estimated total bytes to be reclaimed.
         """
-        kernels_to_prune_hashes: List[str] = []
+        # Use utility function to extract identifiers
+        identifiers_to_prune = extract_identifiers_from_groups(self.mode, duplicate_groups)
+
+        # Calculate total estimated space
         total_reclaimed_bytes_estimate = 0
-
-        kernel_info_map: Dict[str, Dict[str, Any]] = {}
         for group in duplicate_groups:
-            for kernel_dict in group:
-                kernel_info_map[kernel_dict["hash"]] = kernel_dict
-
-        for group in duplicate_groups:
-            log.debug("Processing duplicate group: %s", [k.get("hash") for k in group])
             if len(group) > 1:
-                for kernel_to_prune_dict in group[:-1]:
-                    h_hash = kernel_to_prune_dict["hash"]
-                    kernels_to_prune_hashes.append(h_hash)
-                    total_reclaimed_bytes_estimate += kernel_to_prune_dict.get(
-                        "total_size", 0
-                    )
+                # Sum up sizes of all but the newest kernel in each group
+                for kernel_dict in group[:-1]:
+                    total_reclaimed_bytes_estimate += kernel_dict.get("total_size", 0)
 
-        return kernels_to_prune_hashes, total_reclaimed_bytes_estimate
+        log.debug("Found %d older duplicate kernels to prune", len(identifiers_to_prune))
+        return identifiers_to_prune, total_reclaimed_bytes_estimate
 
     def _perform_deduplication_deletions(
-        self, session, hashes_to_delete: List[str]
+        self, session, identifiers_to_delete: List[KernelIdentifier]
     ) -> Tuple[int, int]:
         """
-        Deletes the specified kernels from disk and DB.
+        Deletes the specified kernels from disk and DB using unified deletion logic.
 
         Args:
             session: The SQLAlchemy session.
-            hashes_to_delete: List of kernel hashes to delete.
+            identifiers_to_delete: List of KernelIdentifier objects to delete.
 
         Returns:
             A tuple containing:
@@ -149,43 +150,145 @@ class PruningService:  # pylint: disable=too-few-public-methods
         """
         freed_bytes_total = 0
         pruned_count = 0
-        for h_to_delete in hashes_to_delete:
-            try:
-                freed_for_kernel = self._delete_kernel(
-                    h_to_delete, session, ir_only=False
-                )
-                freed_bytes_total += freed_for_kernel
+
+        for identifier in identifiers_to_delete:
+            freed_bytes, success = self._delete_single_kernel_safely(identifier, session)
+            freed_bytes_total += freed_bytes
+            if success:
                 pruned_count += 1
-            except FileNotFoundError as e_fnf:
-                log.error(
-                    "Kernel directory or file not found for %s during deduplication: %s. ",
-                    h_to_delete,
-                    e_fnf,
-                    exc_info=True,
-                )
-            except PermissionError as e_perm:
-                log.error(
-                    "Permission denied while trying to delete kernel %s during deduplication: %s.",
-                    h_to_delete,
-                    e_perm,
-                    exc_info=True,
-                )
-            except OSError as e_os:
-                log.error(
-                    "OS error while deleting kernel %s during deduplication: %s.",
-                    h_to_delete,
-                    e_os,
-                    exc_info=True,
-                )
-            # pylint: disable=broad-exception-caught
-            except Exception as e_del:
-                log.error(
-                    "Failed to delete kernel %s during deduplication: %s",
-                    h_to_delete,
-                    e_del,
-                    exc_info=True,
-                )
+
         return freed_bytes_total, pruned_count
+
+    def _delete_single_kernel_safely(
+        self, identifier: KernelIdentifier, session
+    ) -> Tuple[int, bool]:
+        """
+        Safely delete a single kernel with error handling.
+
+        Args:
+            identifier: KernelIdentifier object to delete
+            session: Database session
+
+        Returns:
+            A tuple containing:
+                - Bytes freed (0 if deletion failed)
+                - Success flag
+        """
+        try:
+            freed_for_kernel = self._delete_kernel_unified(identifier, session, ir_only=False)
+            log.debug("Successfully deleted kernel: %s", identifier)
+            return freed_for_kernel, True
+
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            log.error(
+                "Failed to delete kernel %s during deduplication: %s",
+                identifier,
+                e,
+                exc_info=True,
+            )
+            return 0, False
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            log.error(
+                "Unexpected error deleting kernel %s during deduplication: %s",
+                identifier,
+                e,
+                exc_info=True,
+            )
+            return 0, False
+
+    def _delete_kernel_unified(self, identifier: KernelIdentifier, session, ir_only: bool) -> int:
+        """
+        Unified kernel deletion method that works for both triton and vLLM modes.
+
+        Args:
+            identifier: KernelIdentifier object
+            session: Database session
+            ir_only: If True, only delete IR files; if False, delete entire kernel
+
+        Returns:
+            Bytes freed
+        """
+        # Get kernel directories using utility function
+        kernel_dirs = get_kernel_directories(self.cache_dir, self.mode, identifier)
+
+        # Get kernel record from database
+        kernel_record = self._get_kernel_record(session, identifier)
+
+        if ir_only:
+            freed = self._delete_ir_only_unified(session, identifier, kernel_dirs, kernel_record)
+        else:
+            freed = self._delete_full_kernel_unified(session, kernel_dirs, kernel_record)
+
+        return freed
+
+    def _get_kernel_record(self, session, identifier: KernelIdentifier):
+        """Get kernel record from database using strategy pattern."""
+        config = self.strategy.config
+        if self.mode == MODE_VLLM:
+            # For vLLM: (vllm_cache_root, vllm_hash, triton_cache_key)
+            return session.get(
+                config.orm_model,
+                (str(self.cache_dir), identifier.vllm_hash, identifier.hash_key),
+            )
+        # For Triton: (hash, cache_dir)
+        return session.get(
+            config.orm_model,
+            (identifier.hash_key, str(self.cache_dir)),
+        )
+
+    def _delete_ir_only_unified(self, session, identifier: KernelIdentifier,
+                                kernel_dirs: List, kernel_record) -> int:
+        """Delete only IR files using unified logic."""
+        freed, deleted_file_names = delete_ir_files_from_dirs(kernel_dirs, IR_EXTS)
+
+        # Update database records
+        if deleted_file_names:
+            self._delete_ir_file_records(session, identifier, deleted_file_names)
+
+        # Update kernel total size
+        if kernel_record:
+            kernel_record.total_size = sum(f.size or 0 for f in kernel_record.files)
+
+        return freed
+
+    def _delete_full_kernel_unified(self, session, kernel_dirs: List, kernel_record) -> int:
+        """Delete entire kernel using unified logic."""
+        freed = delete_kernel_directories(kernel_dirs)
+
+        # Delete kernel record from database
+        if kernel_record:
+            session.delete(kernel_record)
+
+        return freed
+
+    def _delete_ir_file_records(self, session, identifier: KernelIdentifier,
+                                ir_file_names: List[str]) -> None:
+        """Delete IR file records from database using strategy pattern."""
+        config = self.strategy.config
+
+        if self.mode == MODE_VLLM:
+            ir_rows = (
+                session.query(config.file_orm_model)
+                .filter(
+                    config.file_orm_model.vllm_cache_root == str(self.cache_dir),
+                    config.file_orm_model.vllm_hash == identifier.vllm_hash,
+                    config.file_orm_model.triton_cache_key == identifier.hash_key,
+                    config.file_orm_model.rel_path.in_(ir_file_names),
+                )
+                .all()
+            )
+        else:
+            ir_rows = (
+                session.query(config.file_orm_model)
+                .filter(
+                    config.file_orm_model.kernel_hash == identifier.hash_key,
+                    config.file_orm_model.rel_path.in_(ir_file_names),
+                )
+                .all()
+            )
+
+        for r in ir_rows:
+            session.delete(r)
 
     def deduplicate_kernels(self, auto_confirm: bool = False) -> Optional[PruneStats]:
         """
@@ -197,15 +300,15 @@ class PruningService:  # pylint: disable=too-few-public-methods
             log.info("No duplicate kernels found – nothing to do.")
             return PruneStats(pruned=0, reclaimed=0.0, empty=True)
 
-        kernels_to_prune_hashes, total_reclaimed_bytes_estimate = (
+        kernels_to_prune_identifiers, total_reclaimed_bytes_estimate = (
             self._get_hashes_and_estimated_space_for_deduplication(duplicate_groups)
         )
 
-        if not kernels_to_prune_hashes:
+        if not kernels_to_prune_identifiers:
             log.info("No older duplicate kernel instances to prune after analysis.")
             return PruneStats(pruned=0, reclaimed=0.0, empty=True)
 
-        num_kernels_to_prune = len(kernels_to_prune_hashes)
+        num_kernels_to_prune = len(kernels_to_prune_identifiers)
         if not auto_confirm:
             if not self._confirm(
                 num_kernels_to_prune, total_reclaimed_bytes_estimate, ir_only=False
@@ -217,7 +320,7 @@ class PruningService:  # pylint: disable=too-few-public-methods
         pruned_count = 0
         with self.db.get_session() as session:
             freed_bytes_total, pruned_count = self._perform_deduplication_deletions(
-                session, kernels_to_prune_hashes
+                session, kernels_to_prune_identifiers
             )
             session.commit()
         reclaimed_mb = freed_bytes_total / (1024 * 1024)
@@ -228,53 +331,28 @@ class PruningService:  # pylint: disable=too-few-public-methods
         )
         return PruneStats(pruned=pruned_count, reclaimed=reclaimed_mb)
 
-    def _delete_kernel(self, h: str, session, ir_only: bool) -> int:
-        """
-        Delete files on disk and update db. Returns bytes freed.
-        """
-        k_dir = self.repo.root / h
-        freed = 0
 
-        kernel_row: KernelOrm | None = session.get(
-            KernelOrm,
-            (h, str(self.cache_dir)),
+    def _find_vllm_kernel_dirs(self, vllm_hash: str, triton_cache_key: str) -> list:
+        """Find kernel directories for a given vLLM hash and triton cache key.
+        Wrapper method for backward compatibility - uses utility function."""
+        return find_vllm_kernel_dirs(self.cache_dir, vllm_hash, triton_cache_key)
+
+    def _delete_vllm_kernel(
+        self, vllm_hash: str, triton_cache_key: str, session, ir_only: bool
+    ) -> int:
+        """
+        Delete vLLM kernel files on disk and update db. Returns bytes freed.
+        Wrapper method for backward compatibility - uses unified deletion logic.
+
+        Args:
+            vllm_hash: The vLLM hash (used for directory structure)
+            triton_cache_key: The Triton cache key (used for DB lookups)
+            session: Database session
+            ir_only: If True, only delete IR files; if False, delete entire kernel
+        """
+        identifier = create_kernel_identifier(
+            mode=self.mode,
+            vllm_hash=vllm_hash,
+            triton_cache_key=triton_cache_key
         )
-        if ir_only:
-            files = list(k_dir.iterdir()) if k_dir.exists() else []
-            for p in files:
-                if p.suffix in IR_EXTS and p.is_file():
-                    try:
-                        freed += p.stat().st_size
-                        p.unlink()
-                    except OSError as err:
-                        log.warning("Could not delete %s: %s", p, err)
-
-            ir_rows = (
-                session.query(KernelFileOrm)
-                .filter(
-                    KernelFileOrm.kernel_hash == h,
-                    KernelFileOrm.rel_path.in_(
-                        [p.name for p in files if p.suffix in IR_EXTS]
-                    ),
-                )
-                .all()
-            )
-            for r in ir_rows:
-                session.delete(r)
-
-            if kernel_row:
-                kernel_row.total_size = sum(f.size or 0 for f in kernel_row.files)
-        else:
-            if k_dir.exists():
-                try:
-                    freed = sum(
-                        p.stat().st_size for p in k_dir.rglob("*") if p.is_file()
-                    )
-                    shutil.rmtree(k_dir)
-                except OSError as err:
-                    log.error("Failed to remove %s: %s", k_dir, err, exc_info=True)
-
-            if kernel_row:
-                session.delete(kernel_row)
-
-        return freed
+        return self._delete_kernel_unified(identifier, session, ir_only)

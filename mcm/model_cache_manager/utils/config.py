@@ -23,28 +23,27 @@ class Settings(BaseSettings):
     model_cache_dir: Path = Field(
         default_factory=lambda: Path.home() / ".triton" / "cache"
     )
+    model_cache_dir_vllm: Path = Field(
+        default_factory=lambda: Path.home() / ".cache" / "vllm"
+    )
     data_dir: Path = Field(
-        default_factory=lambda: (
-            Path.home()
-            / (
-                ".local/share"
-                if platform.system() == "Linux"
-                else (
-                    "Library/Application Support"
-                    if platform.system() == "Darwin"
-                    else os.environ.get("LOCALAPPDATA", "C:/Temp")
-                )
+        default_factory=lambda: Path.home() / (
+            ".local/share"
+            if platform.system() == "Linux"
+            else (
+                "Library/Application Support"
+                if platform.system() == "Darwin"
+                else os.environ.get("LOCALAPPDATA", "C:/Temp")
             )
-            / "model-cache-manager"
-        )
+        ) / "model-cache-manager"
     )
     db_filename: str = "cache.db"
     log_level: str = "INFO"
 
-    class Config:
-        """Configuration for the Settings class."""
-
-        env_prefix = "MCM_"
+    model_config = {
+        "env_prefix": "MCM_",
+        "case_sensitive": False,
+    }
 
 
 settings = Settings()

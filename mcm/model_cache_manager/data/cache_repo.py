@@ -6,9 +6,9 @@ This module provides functionality to scan and parse the model cache directory.
 
 from __future__ import annotations
 from pathlib import Path
-import os
 import json
 import logging
+import threading
 from typing import Iterable, Optional
 from ..utils.paths import get_cache_dir
 from ..models.kernel import Kernel
@@ -16,6 +16,120 @@ from ..plugins.discovery import discover_plugins
 from .kernel_validator import deserialize_kernel
 
 log = logging.getLogger(__name__)
+
+# Thread-safe lazy-loaded plugins to avoid import-time discovery failures
+_PLUGINS_CACHE = None
+_PLUGINS_LOCK = threading.Lock()
+
+
+def _get_plugins():
+    """Get plugins dictionary, loading them lazily on first access with thread safety."""
+    global _PLUGINS_CACHE  # pylint: disable=global-statement
+    if _PLUGINS_CACHE is None:
+        with _PLUGINS_LOCK:
+            # Double-check pattern to avoid race conditions
+            if _PLUGINS_CACHE is None:
+                _PLUGINS_CACHE = {p.backend: p for p in discover_plugins()}
+    return _PLUGINS_CACHE
+
+
+def _read_json(path: Path, ctx: str) -> Optional[dict]:
+    """
+    Read and parse JSON file with consistent error handling.
+
+    Args:
+        path: Path to the JSON file to read
+        ctx: Context string for error messages (e.g., "metadata", "group")
+
+    Returns:
+        Parsed JSON data or None if reading/parsing failed
+    """
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        log.error("Failed to parse JSON (%s) '%s': %s", ctx, path, e)
+    except OSError as e:
+        log.error("OS error reading JSON (%s) '%s': %s", ctx, path, e)
+    except Exception as e:  # pylint: disable=broad-except
+        log.error("Unexpected error reading JSON (%s) '%s': %s", ctx, path, e)
+    return None
+
+
+def _resolve_group_metadata(cache_root: Path, kernel_dir: Path) -> Optional[Path]:
+    """
+    Resolve the actual metadata file path from group metadata.
+
+    Args:
+        cache_root: Root cache directory
+        kernel_dir: Directory containing the kernel files
+
+    Returns:
+        Path to the actual metadata file, or None if not found
+    """
+    grp_files = [f for f in kernel_dir.glob("*.json") if f.name.startswith("__grp__")]
+    if not grp_files:
+        return None
+
+    grp = grp_files[0]
+    group_data = _read_json(grp, "group")
+    if not group_data:
+        return None
+
+    child_paths = group_data.get("child_paths")
+    if not isinstance(child_paths, dict):
+        log.warning("Missing/invalid 'child_paths' in '%s'", grp)
+        return None
+
+    for key, path_str in child_paths.items():
+        if not key.endswith(".json"):
+            continue
+
+        p = Path(path_str)
+        if p.parent.name and p.name:
+            derived = cache_root / p.parent.name / p.name
+            if derived.is_file():
+                return derived
+
+        candidate = Path(path_str)
+        if candidate.is_file():
+            return candidate
+
+        log.debug("Child path candidate does not exist: %s", path_str)
+
+    log.warning("No valid '*.json' in 'child_paths' of '%s'", grp)
+    return None
+
+
+def iter_triton_kernels(cache_root: Path, plugins: dict) -> Iterable[Kernel]:
+    """
+    Iterate over Triton kernels in a cache directory.
+
+    Args:
+        cache_root: Root directory containing kernel subdirectories
+        plugins: Dictionary of backend plugins
+
+    Yields:
+        Valid Kernel objects with metadata parsed from cache files
+    """
+    for kernel_dir in (p for p in cache_root.iterdir() if p.is_dir()):
+        meta_path = _resolve_group_metadata(cache_root, kernel_dir)
+        if not meta_path:
+            log.debug("No group metadata JSON for %s", kernel_dir)
+            continue
+
+        data = _read_json(meta_path, "metadata")
+        if not data:
+            continue
+
+        kernel = deserialize_kernel(
+            data, kernel_dir.name, str(cache_root), kernel_dir, plugins
+        )
+        if kernel:
+            yield kernel
+        else:
+            log.warning(
+                "Skipping invalid kernel at '%s' (meta '%s')", kernel_dir, meta_path
+            )
 
 
 class CacheRepository:
@@ -40,162 +154,6 @@ class CacheRepository:
         self.root = root or get_cache_dir()
         if not self.root.exists():
             raise FileNotFoundError(f"Cache directory not found: {self.root}")
-        self.plugins = {p.backend: p for p in discover_plugins()}
-
-    def _dirs(self):
-        """
-        Yield directories within the cache root.
-
-        Returns:
-            Iterator of Path objects for each directory.
-        """
-
-        with os.scandir(self.root) as it:
-            for e in it:
-                if e.is_dir():
-                    yield Path(e.path)
-
-    def _process_group_metadata_file(
-        self, d: Path, group_meta_file: Path
-    ) -> Optional[Path]:
-        """
-        Tries to load the actual metadata path from a single group metadata file.
-        Returns the path to the actual metadata file if found, otherwise None.
-        """
-        log.debug(
-            "Processing group metadata file: %s in directory %s.",
-            group_meta_file,
-            d,
-        )
-        try:
-            group_data = json.loads(group_meta_file.read_text(encoding="utf-8"))
-            child_paths = group_data.get("child_paths")
-
-            if not child_paths or not isinstance(child_paths, dict):
-                log.warning(
-                    "Skipping kernel in '%s', group metadata '%s' "
-                    "is missing 'child_paths' or it's not a dictionary.",
-                    d,
-                    group_meta_file.name,
-                )
-                return None
-
-            for key, path_str in child_paths.items():
-                if key.endswith(".json"):
-                    # Try to get the json from the same path as the grp file first
-                    # This will fix an issue that occurs when we try to index Cache
-                    # from a container or a different host
-                    candidate_actual_meta_path = None
-
-                    path = Path(path_str)
-                    if path.parent.name and path.name:
-                        cache_key = path.parent.name
-                        kernel_name = path.name
-                        metadata_path_str = self.root / cache_key / kernel_name
-
-                        candidate_actual_meta_path = Path(metadata_path_str)
-
-                    if (
-                        candidate_actual_meta_path is not None
-                        and candidate_actual_meta_path.is_file()
-                    ):
-                        log.debug(
-                            "Derived actual metadata path %s in the same group file dir %s.",
-                            candidate_actual_meta_path,
-                            path.parent,
-                        )
-                        return candidate_actual_meta_path
-
-                    # Second attempt, get the metadata dir from the group file
-                    candidate_actual_meta_path = Path(path_str)
-
-                    if candidate_actual_meta_path.is_file():
-                        log.debug(
-                            "Derived actual metadata path %s from group file '%s' using key '%s'.",
-                            candidate_actual_meta_path,
-                            group_meta_file.name,
-                            key,
-                        )
-                        return candidate_actual_meta_path
-                    log.warning(
-                        "Path '%s' for key '%s' in group file '%s' (dir '%s') "
-                        "does not point to an existing file.",
-                        path_str,
-                        key,
-                        group_meta_file.name,
-                        d,
-                    )
-            log.warning(
-                "Skipping kernel in '%s', no valid '*.json' entry in 'child_paths' "
-                "of group metadata file '%s' pointed to an existing file.",
-                d,
-                group_meta_file.name,
-            )
-            return None
-
-        except json.JSONDecodeError as e:
-            log.error(
-                "Skipping kernel in '%s', failed to parse group metadata JSON '%s': %s",
-                d,
-                group_meta_file.name,
-                e,
-            )
-        except OSError as e:
-            log.error(
-                "Skipping kernel in '%s', OS error reading group metadata file '%s': %s",
-                d,
-                group_meta_file.name,
-                e,
-            )
-        except Exception as e:  # pylint: disable=broad-except
-            # This broad except is a fallback for truly unexpected errors during this specific step.
-            log.error(
-                "Skipping kernel in '%s', unexpected error processing group "
-                "metadata file '%s': %s",
-                d,
-                group_meta_file.name,
-                e,
-            )
-        return None
-
-    def _load_kernel_from_metadata(
-        self, d: Path, meta_path_to_load: Path
-    ) -> Optional[Kernel]:
-        """Loads and deserializes a kernel from its metadata file."""
-        try:
-            data = json.loads(meta_path_to_load.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            log.error(
-                "Skipping kernel, failed to parse metadata JSON '%s': %s",
-                meta_path_to_load,
-                e,
-            )
-            return None
-        except OSError as e:
-            log.error(
-                "Skipping kernel, OS error reading metadata file '%s': %s",
-                meta_path_to_load,
-                e,
-            )
-            return None
-        except Exception as e:  # pylint: disable=broad-except
-            log.error(
-                "Skipping kernel, unexpected error processing metadata file '%s': %s",
-                meta_path_to_load,
-                e,
-            )
-            return None
-
-        kernel = deserialize_kernel(data, d.name, str(self.root), d, self.plugins)
-        if kernel:
-            return kernel
-
-        log.warning(
-            "Skipping invalid kernel at '%s' (metadata from '%s')",
-            d,
-            meta_path_to_load,
-        )
-        return None
 
     def kernels(self) -> Iterable[Kernel]:
         """
@@ -205,29 +163,74 @@ class CacheRepository:
             Iterable of valid Kernel objects with metadata parsed from cache files.
             Invalid kernels are logged and skipped.
         """
-        for d in self._dirs():
-            meta_path_to_load: Optional[Path] = None
+        yield from iter_triton_kernels(self.root, _get_plugins())
 
-            all_json_files = list(d.glob("*.json"))
-            group_json_files = [
-                f for f in all_json_files if f.name.startswith("__grp__")
-            ]
 
-            if group_json_files:
-                meta_path_to_load = self._process_group_metadata_file(
-                    d, group_json_files[0]
-                )
-                if meta_path_to_load is None:
-                    continue
+class VllmCacheRepository:  # pylint: disable=too-few-public-methods
+    """
+    Repository for accessing and managing vLLM kernel cache files.
 
-            if not meta_path_to_load:
-                if not group_json_files:
-                    log.debug(
-                        "No group metadata JSON found for kernel in directory %s.",
-                        d,
-                    )
-                continue
+    This class provides methods to iterate through kernels in the vLLM cache directory
+    structure and extract their metadata and associated files.
+    """
 
-            kernel = self._load_kernel_from_metadata(d, meta_path_to_load)
-            if kernel:
-                yield kernel
+    def __init__(self, root: Path | None = None):
+        """
+        Initialize the vLLM cache repository.
+
+        Args:
+            root: Path to the vLLM cache directory. If None, uses ~/.cache/vllm.
+
+        Raises:
+            FileNotFoundError: If the cache directory doesn't exist.
+        """
+        self.root = root or (Path.home() / ".cache" / "vllm")
+        if not self.root.exists():
+            raise FileNotFoundError(f"vLLM cache directory not found: {self.root}")
+
+    def _find_torch_compile_cache_dirs(self) -> Iterable[tuple[str, Path]]:
+        """
+        Find torch compile cache directories in the vLLM cache root.
+
+        Yields:
+            Tuples of (vllm_hash, path_to_hash_directory)
+        """
+        torch_compile_cache = self.root / "torch_compile_cache"
+        if not torch_compile_cache.exists():
+            log.warning("No torch_compile_cache directory found in %s", self.root)
+            return
+
+        for hash_dir in torch_compile_cache.iterdir():
+            if hash_dir.is_dir():
+                yield hash_dir.name, hash_dir
+
+    def _find_rank_dirs(self, hash_dir: Path) -> Iterable[Path]:
+        """
+        Find rank directories within a vLLM hash directory.
+
+        Args:
+            hash_dir: Path to the vLLM hash directory
+
+        Yields:
+            Paths to rank directories (rank<x>_<y>)
+        TODO: see if should we add the rank on the key.
+        """
+        for rank_dir in hash_dir.iterdir():
+            if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
+                triton_cache = rank_dir / "triton_cache"
+                if triton_cache.exists():
+                    yield triton_cache
+
+    def kernels(self) -> Iterable[tuple[str, str, Kernel]]:
+        """
+        Iterate through all kernels in the vLLM cache directory.
+
+        Yields:
+            Tuples of (vllm_hash, cache_root, kernel)
+            where each kernel contains metadata parsed from cache files.
+        """
+        plugins = _get_plugins()
+        for vllm_hash, hash_dir in self._find_torch_compile_cache_dirs():
+            for triton_cache_dir in self._find_rank_dirs(hash_dir):
+                for kernel in iter_triton_kernels(triton_cache_dir, plugins):
+                    yield vllm_hash, str(self.root), kernel

@@ -4,8 +4,9 @@ Service for search Triton kernels based on criteria.
 
 from __future__ import annotations
 from typing import Any, Dict, List
-from ..data.database import Database
+from ..strategies import TritonStrategy, VllmStrategy
 from ..models.criteria import SearchCriteria
+from ..utils.mcm_constants import MODE_VLLM
 
 
 class SearchService:
@@ -13,11 +14,22 @@ class SearchService:
     Search Triton kernels based on filters
     """
 
-    def __init__(self, criteria: SearchCriteria):
+    def __init__(self, criteria: SearchCriteria, mode: str = "triton"):
         """
         Initialize the search service.
+
+        Args:
+            criteria: Search criteria for filtering kernels
+            mode: Cache mode - 'triton' for standard Triton cache, 'vllm' for vLLM cache
         """
-        self.db = Database()
+        self.mode = mode
+        # Initialize strategy based on mode
+        if mode == MODE_VLLM:
+            self.strategy = VllmStrategy()
+        else:
+            self.strategy = TritonStrategy()
+
+        self.db = self.strategy.create_database()
         self.criteria = criteria
 
     def search(self) -> List[Dict[str, Any]]:

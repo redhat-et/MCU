@@ -58,11 +58,11 @@ class TestPruningService(unittest.TestCase):
         self.mock_db_instance = MagicMock(spec=Database)
 
         self.patch_cache_repo = patch(
-            "model_cache_manager.services.prune.CacheRepository",
+            "model_cache_manager.strategies.triton_strategy.CacheRepository",
             return_value=self.mock_cache_repo_instance,
         )
         self.patch_db = patch(
-            "model_cache_manager.services.prune.Database",
+            "model_cache_manager.strategies.triton_strategy.Database",
             return_value=self.mock_db_instance,
         )
 
@@ -91,7 +91,7 @@ class TestPruningService(unittest.TestCase):
         self.patch_db.stop()
 
     @patch(
-        "model_cache_manager.services.prune.PruningService._delete_kernel",
+        "model_cache_manager.services.prune.PruningService._delete_kernel_unified",
         return_value=1024,
     )
     @patch("model_cache_manager.services.prune.Confirm.ask")
@@ -120,8 +120,15 @@ class TestPruningService(unittest.TestCase):
         mock_rich_confirm_ask.assert_not_called()
 
         self.assertEqual(mock_delete_kernel.call_count, 2)
-        mock_delete_kernel.assert_any_call("hash1", mock_session, False)
-        mock_delete_kernel.assert_any_call("hash2", mock_session, False)
+        # Check that the unified method was called with the correct KernelIdentifier objects
+        self.assertTrue(any(
+            call[0][0].hash_key == "hash1" and call[0][1] == mock_session and call[0][2] is False
+            for call in mock_delete_kernel.call_args_list
+        ))
+        self.assertTrue(any(
+            call[0][0].hash_key == "hash2" and call[0][1] == mock_session and call[0][2] is False
+            for call in mock_delete_kernel.call_args_list
+        ))
         mock_session.commit.assert_called_once()
 
         self.assertIsInstance(stats, PruneStats)
@@ -129,7 +136,7 @@ class TestPruningService(unittest.TestCase):
         self.assertAlmostEqual(stats.reclaimed, 2048 / (1024 * 1024))
 
     @patch(
-        "model_cache_manager.services.prune.PruningService._delete_kernel",
+        "model_cache_manager.services.prune.PruningService._delete_kernel_unified",
         return_value=512,
     )
     @patch("model_cache_manager.services.prune.Confirm.ask")
@@ -158,15 +165,22 @@ class TestPruningService(unittest.TestCase):
         mock_rich_confirm_ask.assert_not_called()
 
         self.assertEqual(mock_delete_kernel.call_count, 2)
-        mock_delete_kernel.assert_any_call("hash1", mock_session, True)
-        mock_delete_kernel.assert_any_call("hash3", mock_session, True)
+        # Check that the unified method was called with the correct KernelIdentifier objects
+        self.assertTrue(any(
+            call[0][0].hash_key == "hash1" and call[0][1] == mock_session and call[0][2] is True
+            for call in mock_delete_kernel.call_args_list
+        ))
+        self.assertTrue(any(
+            call[0][0].hash_key == "hash3" and call[0][1] == mock_session and call[0][2] is True
+            for call in mock_delete_kernel.call_args_list
+        ))
         mock_session.commit.assert_called_once()
 
         self.assertEqual(stats.pruned, 2)
         self.assertAlmostEqual(stats.reclaimed, 1024 / (1024 * 1024))
 
     @patch(
-        "model_cache_manager.services.prune.PruningService._delete_kernel",
+        "model_cache_manager.services.prune.PruningService._delete_kernel_unified",
         return_value=1024,
     )
     @patch("model_cache_manager.services.prune.Confirm.ask")
@@ -190,7 +204,12 @@ class TestPruningService(unittest.TestCase):
         self.mock_db_instance.search.assert_called_once_with(criteria)
         self.mock_db_instance.estimate_space.assert_called_once_with(["hash2"], IR_EXTS)
         mock_rich_confirm_ask.assert_not_called()
-        mock_delete_kernel.assert_called_once_with("hash2", mock_session, False)
+        # Check that the unified method was called with the correct KernelIdentifier object
+        self.assertEqual(mock_delete_kernel.call_count, 1)
+        call_args = mock_delete_kernel.call_args[0]
+        self.assertEqual(call_args[0].hash_key, "hash2")
+        self.assertEqual(call_args[1], mock_session)
+        self.assertEqual(call_args[2], False)
         mock_session.commit.assert_called_once()
         self.assertIsInstance(stats, PruneStats)
         self.assertEqual(stats.pruned, 1)
@@ -217,7 +236,7 @@ class TestPruningService(unittest.TestCase):
         self.assertFalse(stats.aborted)
 
     @patch("model_cache_manager.services.prune.Confirm.ask", return_value=False)
-    @patch("model_cache_manager.services.prune.PruningService._delete_kernel")
+    @patch("model_cache_manager.services.prune.PruningService._delete_kernel_unified")
     def test_prune_user_cancels_operation_when_prompted(
         self, mock_delete_kernel: MagicMock, mock_rich_confirm_ask: MagicMock
     ):
