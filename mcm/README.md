@@ -340,6 +340,7 @@ generate (especially if autotune is involved)
 ### Production Deployments
 
 - **Cache Pre-warming**: Eliminate cold-start compilation delays
-- **Container Integration**: Ship pre-compiled caches with Docker/Kubernetes deployments using mcv after using mcm warm
+- **Container Integration**: Ship pre-compiled caches with
+Docker/Kubernetes deployments using mcv after using mcm warm
 - **Multi-node Consistency**: Ensure all nodes have identical optimized kernels
 - **Version Migration**: Safely update vLLM/Triton versions with pre-validated caches
