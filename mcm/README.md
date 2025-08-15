@@ -276,7 +276,7 @@ This tracks cache hits and access patterns, updating the MCM database with runti
 Use `-v` flags for increased verbosity:
 ```bash
 mcm -v index    # WARNING level
-mcm -vv index   # INFO level  
+mcm -vv index   # INFO level
 mcm -vvv index  # DEBUG level
 ```
 
