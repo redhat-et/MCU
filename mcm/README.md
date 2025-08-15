@@ -324,8 +324,9 @@ mcm/
 │   ├── plugins/       # Backend plugins (CUDA, ROCm)
 │   ├── strategies/    # Mode strategies (Triton, vLLM)
 │   ├── runtime/       # Runtime tracking
-│   └── utils/         # Utilities and helpers
-└── tests/             # Test suite
+│   ├── utils/         # Utilities and helpers
+│   └──tests/             # Test suite
+└──
 ```
 
 ## Use Cases
