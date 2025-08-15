@@ -1,12 +1,12 @@
-# Triton Kernel Development Kit (TKDK)
+# Model Cache Utils (MCU)
 
-<img src="logo/TKDK-logo.png" alt="TKDK" width="20%" height="auto">
+<img src="logo/mcu.png" alt="MCU" width="20%" height="auto">
 
-The **Triton Kernel Development Kit (TKDK)** is a suite of tools
-designed to streamline and enhance the development workflow for
-Triton Kernel developers. Whether you're optimizing cache usage,
-monitoring kernel performance, or distributing your builds
-securely, TKDK has you covered.
+The **Model Cache Utils (MCU)** (formerly Triton Kernel Development
+Kit (TKDK)) is a suite of tools designed to streamline and enhance
+the development workflow for Model Kernel developers. Whether you're
+optimizing cache usage, monitoring kernel performance, or distributing
+your builds securely, MCU has you covered. MCU supports Triton and vLLM.
 
 ## Features
 
@@ -30,7 +30,7 @@ Write cleaner, more intuitive Triton code with high-level abstractions
 and utilities for loading, storing, and debugging GPU memory.
 
 **Triton-util was developed by [Umer Adil](mailto:umer.hayat.adil@gmail.com)**
-and generously contributed to TKDK.
+and generously contributed to MCU.
 
 For more information please see the Triton Util [readme](./triton_util/README.md).
 
@@ -39,8 +39,8 @@ For more information please see the Triton Util [readme](./triton_util/README.md
 1. Clone this repository:
 
     ```bash
-    git clone https://github.com/redhat-et/TKDK.git
-    cd TKDK
+    git clone https://github.com/redhat-et/MCU.git
+    cd MCU
     ```
 
 1. Follow setup instructions for each tool in its respective directory.
@@ -48,7 +48,7 @@ For more information please see the Triton Util [readme](./triton_util/README.md
 ## Project Structure
 
 ```bash
-TKDK/
+MCU/
 ├── mcm/           # Model Cache Manager
 ├── mcv/           # OCI packaging and signing tool
 ├── triton_util/   # Triton Utilities
@@ -65,7 +65,7 @@ Model Cache Vault ensures that your cache packages are:
 
 ## Use Cases
 
-- Improve Triton kernel cache management
+- Improve Triton/vLLM kernel cache management
 - Package and share caches across machines or Kubernetes environments.
 
 ## Contributing

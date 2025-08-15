@@ -18,7 +18,7 @@ setup(
     description="Make Triton easier - A utility package for OpenAI Triton",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/redhat-et/TKDK/triton_util",
+    url="https://github.com/redhat-et/MCU/triton_util",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
