@@ -28,3 +28,4 @@ package-dir = {"" = "."}
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["model_cache_manager*"]
+exclude = ["model_cache_manager/tests"]
