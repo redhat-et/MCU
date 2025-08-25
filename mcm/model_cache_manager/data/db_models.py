@@ -24,6 +24,7 @@ from sqlalchemy.orm import (
     relationship,
     Session as SqlaSession,
 )
+from sqlalchemy.sql.functions import rank
 
 from ..models.kernel import Kernel
 
@@ -204,7 +205,7 @@ class KernelOrm(Base, BaseKernelMixin):
 class VllmKernelOrm(Base, BaseKernelMixin):
     """
     SQLAlchemy ORM model for a vLLM Triton kernel.
-    Uses a composite primary key of (vllm_cache_root, vllm_hash, triton_cache_key).
+    Uses a composite primary key of (vllm_cache_root, vllm_hash, triton_cache_key, rank_x_y).
     """
 
     __tablename__ = "vllm_kernels"
@@ -212,6 +213,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
     vllm_cache_root: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     vllm_hash: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     triton_cache_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    rank_x_y: Mapped[str] = mapped_column(String, primary_key=True, index=True)
 
     files: Mapped[List["VllmKernelFileOrm"]] = relationship(
         "VllmKernelFileOrm",
@@ -232,7 +234,12 @@ class VllmKernelOrm(Base, BaseKernelMixin):
 
     @classmethod
     def upsert_from_dto(
-        cls, session: SqlaSession, k_data: Kernel, vllm_cache_root: str, vllm_hash: str
+        cls,
+        session: SqlaSession,
+        k_data: Kernel,
+        vllm_cache_root: str,
+        vllm_hash: str,
+        rank_x_y: str,
     ) -> None:
         """
         Creates or updates a vLLM kernel record from a Kernel DTO, including files.
@@ -243,6 +250,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 "vllm_cache_root": vllm_cache_root,
                 "vllm_hash": vllm_hash,
                 "triton_cache_key": k_data.hash,
+                "rank_x_y": rank_x_y,
             }
         )
 
@@ -250,30 +258,39 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
-            if col.name not in ("vllm_cache_root", "vllm_hash", "triton_cache_key")
+            if col.name
+            not in ("vllm_cache_root", "rank_x_y", "vllm_hash", "triton_cache_key")
         }
         stmt = stmt.on_conflict_do_update(
-            index_elements=["vllm_cache_root", "vllm_hash", "triton_cache_key"],
+            index_elements=[
+                "vllm_cache_root",
+                "rank_x_y",
+                "vllm_hash",
+                "triton_cache_key",
+            ],
             set_=update_dict,
         )
         session.execute(stmt)
         log.debug(
-            "Upserted vLLM kernel vllm_cache_root %s vllm_hash %s triton_cache_key %s",
+            "Upserted vLLM kernel vllm_cache_root %s vllm_hash %s triton_cache_key %s with rank_x_y %s",
             vllm_cache_root,
             vllm_hash,
             k_data.hash,
+            rank_x_y,
         )
 
         session.query(VllmKernelFileOrm).filter(
             VllmKernelFileOrm.vllm_cache_root == vllm_cache_root,
             VllmKernelFileOrm.vllm_hash == vllm_hash,
             VllmKernelFileOrm.triton_cache_key == k_data.hash,
+            VllmKernelFileOrm.rank_x_y == rank_x_y,
         ).delete(synchronize_session="fetch")
         log.debug(
-            "Deleted existing files for vllm_cache_root %s vllm_hash %s triton_cache_key %s",
+            "Deleted existing files for vllm_cache_root %s vllm_hash %s triton_cache_key %s and rank_x_y %s",
             vllm_cache_root,
             vllm_hash,
             k_data.hash,
+            rank_x_y,
         )
 
         for f_dto in k_data.files:
@@ -281,17 +298,19 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 vllm_cache_root=vllm_cache_root,
                 vllm_hash=vllm_hash,
                 triton_cache_key=k_data.hash,
+                rank_x_y=rank_x_y,
                 type=f_dto.file_type,
                 rel_path=f_dto.path.name,
                 size=f_dto.size,
             )
             session.add(kernel_file_orm)
         log.debug(
-            "Added %d files for vllm_cache_root %s vllm_hash %s triton_cache_key %s",
+            "Added %d files for vllm_cache_root %s vllm_hash %s triton_cache_key %s and rank_x_y %s",
             len(k_data.files),
             vllm_cache_root,
             vllm_hash,
             k_data.hash,
+            rank_x_y,
         )
 
 
@@ -332,14 +351,16 @@ class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
     vllm_cache_root: Mapped[str] = mapped_column(String)
     vllm_hash: Mapped[str] = mapped_column(String)
     triton_cache_key: Mapped[str] = mapped_column(String)
+    rank_x_y: Mapped[str] = mapped_column(String)
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["vllm_cache_root", "vllm_hash", "triton_cache_key"],
+            ["vllm_cache_root", "vllm_hash", "triton_cache_key", "rank_x_y"],
             [
                 "vllm_kernels.vllm_cache_root",
                 "vllm_kernels.vllm_hash",
                 "vllm_kernels.triton_cache_key",
+                "vllm_kernels.rank_x_y",
             ],
             ondelete="CASCADE",
         ),

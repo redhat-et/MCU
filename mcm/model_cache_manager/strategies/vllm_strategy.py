@@ -23,7 +23,7 @@ class VllmStrategy(CacheModeStrategy):
             orm_model=VllmKernelOrm,
             file_orm_model=VllmKernelFileOrm,
             hash_field="triton_cache_key",
-            primary_key_fields=["vllm_cache_root", "vllm_hash", "triton_cache_key"],
+            primary_key_fields=["vllm_cache_root", "vllm_hash", "triton_cache_key", "rank_x_y"],
             additional_duplicate_fields=["vllm_hash"]
         )
 
@@ -46,8 +46,8 @@ class VllmStrategy(CacheModeStrategy):
     def reindex_kernels(self, repo, db) -> int:
         """Perform vLLM-specific kernel reindexing."""
         updated_kernels = 0
-        for vllm_hash, vllm_cache_root, kernel in repo.kernels():
-            self.insert_kernel_strategy(db, kernel, vllm_cache_root, vllm_hash)
+        for vllm_hash, vllm_cache_root, rank_x_y, kernel in repo.kernels():
+            self.insert_kernel_strategy(db, kernel, vllm_cache_root, vllm_hash, rank_x_y)
             updated_kernels += 1
         return updated_kernels
 
@@ -55,7 +55,8 @@ class VllmStrategy(CacheModeStrategy):
         """Strategy-specific kernel insertion for vLLM."""
         vllm_cache_root = args[0] if len(args) > 0 else kwargs.get('vllm_cache_root')
         vllm_hash = args[1] if len(args) > 1 else kwargs.get('vllm_hash')
-        db.insert_kernel(k_data, vllm_cache_root, vllm_hash)
+        rank_x_y = args[2] if len(args) > 2 else kwargs.get('rank_x_y')
+        db.insert_kernel(k_data, vllm_cache_root, vllm_hash, rank_x_y)
 
     def get_cache_dir_from_row(self, row: Dict[str, Any]) -> str:
         """Get cache directory from vLLM database row."""

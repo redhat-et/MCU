@@ -108,11 +108,13 @@ class TestVllmKernelOrm(unittest.TestCase):
             mock_insert.return_value = mock_stmt
             mock_stmt.on_conflict_do_update.return_value = mock_stmt
 
+            rank_x_y = "rank_0_0"
             VllmKernelOrm.upsert_from_dto(
                 self.mock_session,
                 self.mock_kernel,
                 vllm_cache_root,
-                vllm_hash
+                vllm_hash,
+                rank_x_y
             )
 
             # Verify sqlite_insert was called
@@ -198,10 +200,11 @@ class TestVllmDatabase(unittest.TestCase):
             vllm_cache_root = "/test/cache"
             vllm_hash = "test_hash"
 
-            db.insert_kernel(self.mock_kernel, vllm_cache_root, vllm_hash)
+            rank_x_y = "rank_0_0"
+            db.insert_kernel(self.mock_kernel, vllm_cache_root, vllm_hash, rank_x_y)
 
             mock_kernel_orm.upsert_from_dto.assert_called_once_with(
-                mock_session, self.mock_kernel, vllm_cache_root, vllm_hash
+                mock_session, self.mock_kernel, vllm_cache_root, vllm_hash, rank_x_y
             )
             mock_session.commit.assert_called_once()
             mock_session.close.assert_called_once()

@@ -204,7 +204,7 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             if hash_dir.is_dir():
                 yield hash_dir.name, hash_dir
 
-    def _find_rank_dirs(self, hash_dir: Path) -> Iterable[Path]:
+    def _find_rank_dirs(self, hash_dir: Path) -> Iterable[tuple[str, Path]]:
         """
         Find rank directories within a vLLM hash directory.
 
@@ -212,25 +212,24 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             hash_dir: Path to the vLLM hash directory
 
         Yields:
-            Paths to rank directories (rank<x>_<y>)
-        TODO: see if should we add the rank on the key.
+            Tuples of (rank_x_y, triton_cache_path)
         """
         for rank_dir in hash_dir.iterdir():
             if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
                 triton_cache = rank_dir / "triton_cache"
                 if triton_cache.exists():
-                    yield triton_cache
+                    yield rank_dir.name, triton_cache
 
-    def kernels(self) -> Iterable[tuple[str, str, Kernel]]:
+    def kernels(self) -> Iterable[tuple[str, str, str, Kernel]]:
         """
         Iterate through all kernels in the vLLM cache directory.
 
         Yields:
-            Tuples of (vllm_hash, cache_root, kernel)
+            Tuples of (vllm_hash, cache_root, rank_x_y, kernel)
             where each kernel contains metadata parsed from cache files.
         """
         plugins = _get_plugins()
         for vllm_hash, hash_dir in self._find_torch_compile_cache_dirs():
-            for triton_cache_dir in self._find_rank_dirs(hash_dir):
+            for rank_x_y, triton_cache_dir in self._find_rank_dirs(hash_dir):
                 for kernel in iter_triton_kernels(triton_cache_dir, plugins):
-                    yield vllm_hash, str(self.root), kernel
+                    yield vllm_hash, str(self.root), rank_x_y, kernel

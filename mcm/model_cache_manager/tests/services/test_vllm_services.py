@@ -83,8 +83,8 @@ class TestIndexServiceVllmMode(unittest.TestCase):
 
         mock_repo_instance = MagicMock(spec=VllmCacheRepository)
         mock_repo_instance.kernels.return_value = [
-            ("vllm_hash1", "/cache/root", mock_kernel1),
-            ("vllm_hash2", "/cache/root", mock_kernel2),
+            ("vllm_hash1", "/cache/root", "rank_0_0", mock_kernel1),
+            ("vllm_hash2", "/cache/root", "rank_1_0", mock_kernel2),
         ]
         mock_vllm_repo.return_value = mock_repo_instance
 
@@ -101,10 +101,10 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         # Verify kernels were inserted with vLLM parameters
         self.assertEqual(mock_db_instance.insert_kernel.call_count, 2)
         mock_db_instance.insert_kernel.assert_any_call(
-            mock_kernel1, "/cache/root", "vllm_hash1"
+            mock_kernel1, "/cache/root", "vllm_hash1", "rank_0_0"
         )
         mock_db_instance.insert_kernel.assert_any_call(
-            mock_kernel2, "/cache/root", "vllm_hash2"
+            mock_kernel2, "/cache/root", "vllm_hash2", "rank_1_0"
         )
 
     @patch("model_cache_manager.strategies.triton_strategy.CacheRepository")

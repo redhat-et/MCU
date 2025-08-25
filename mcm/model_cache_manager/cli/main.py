@@ -30,7 +30,7 @@ from ..utils.mcm_constants import MODE_VLLM, MODE_TRITON
 log = logging.getLogger(__name__)
 app = typer.Typer(help="Model Kernel Cache Manager CLI")
 
-DEFAULT_CUDA_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.2-tcm-warm:0.0.2"
+DEFAULT_CUDA_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.2-tcm-warm:0.0.1"
 DEFAULT_ROCM_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1"
 
 LOG_LEVELS = {0: "ERROR", 1: "WARNING", 2: "INFO", 3: "DEBUG"}
