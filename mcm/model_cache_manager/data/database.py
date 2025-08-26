@@ -451,7 +451,8 @@ class VllmDatabase:
             )
             session.commit()
             log.info(
-                "vLLM Kernel %s with vllm_cache_root %s vllm_hash %s and rank_x_y %s upserted into DB.",
+                "vLLM Kernel %s with vllm_cache_root %s vllm_hash %s and "
+                "rank_x_y %s upserted into DB.",
                 k_data.hash,
                 vllm_cache_root,
                 vllm_hash,
@@ -486,7 +487,8 @@ class VllmDatabase:
         except Exception:  # pylint: disable=broad-except
             session.rollback()
             log.error(
-                "DB Error: Failed to upsert vLLM kernel %s with vllm_cache_root %s vllm_hash %s and rank_x_y %s.",
+                "DB Error: Failed to upsert vLLM kernel %s with vllm_cache_root %s "
+                "vllm_hash %s and rank_x_y %s.",
                 k_data.hash,
                 vllm_cache_root,
                 vllm_hash,

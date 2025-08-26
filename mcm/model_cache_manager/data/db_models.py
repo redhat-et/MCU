@@ -24,7 +24,6 @@ from sqlalchemy.orm import (
     relationship,
     Session as SqlaSession,
 )
-from sqlalchemy.sql.functions import rank
 
 from ..models.kernel import Kernel
 
@@ -232,6 +231,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             d["metadata"] = d.pop("kernel_metadata_json")
         return d
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @classmethod
     def upsert_from_dto(
         cls,
@@ -272,7 +272,8 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         )
         session.execute(stmt)
         log.debug(
-            "Upserted vLLM kernel vllm_cache_root %s vllm_hash %s triton_cache_key %s with rank_x_y %s",
+            "Upserted vLLM kernel vllm_cache_root %s vllm_hash %s "
+            "triton_cache_key %s with rank_x_y %s",
             vllm_cache_root,
             vllm_hash,
             k_data.hash,
@@ -286,7 +287,8 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             VllmKernelFileOrm.rank_x_y == rank_x_y,
         ).delete(synchronize_session="fetch")
         log.debug(
-            "Deleted existing files for vllm_cache_root %s vllm_hash %s triton_cache_key %s and rank_x_y %s",
+            "Deleted existing files for vllm_cache_root %s vllm_hash %s "
+            "triton_cache_key %s and rank_x_y %s",
             vllm_cache_root,
             vllm_hash,
             k_data.hash,
@@ -305,7 +307,8 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             )
             session.add(kernel_file_orm)
         log.debug(
-            "Added %d files for vllm_cache_root %s vllm_hash %s triton_cache_key %s and rank_x_y %s",
+            "Added %d files for vllm_cache_root %s vllm_hash %s "
+            "triton_cache_key %s and rank_x_y %s",
             len(k_data.files),
             vllm_cache_root,
             vllm_hash,
