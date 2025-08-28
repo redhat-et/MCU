@@ -86,8 +86,8 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir.mkdir()
 
         # Create rank directories with triton_cache subdirs
-        rank1 = hash_dir / "rank0_0"
-        rank2 = hash_dir / "rank1_0"
+        rank1 = hash_dir / "rank_0_0"
+        rank2 = hash_dir / "rank_1_0"
         rank1.mkdir()
         rank2.mkdir()
 
@@ -100,8 +100,12 @@ class TestVllmCacheRepository(unittest.TestCase):
         rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
 
         self.assertEqual(len(rank_dirs), 2)
-        self.assertIn(triton_cache1, rank_dirs)
-        self.assertIn(triton_cache2, rank_dirs)
+        rank_names = [rank_name for rank_name, _ in rank_dirs]
+        rank_paths = [rank_path for _, rank_path in rank_dirs]
+        self.assertIn("rank_0_0", rank_names)
+        self.assertIn("rank_1_0", rank_names)
+        self.assertIn(triton_cache1, rank_paths)
+        self.assertIn(triton_cache2, rank_paths)
 
     def test_find_rank_dirs_without_triton_cache(self):
         """Test finding rank directories when they don't have triton_cache subdirs."""
@@ -109,7 +113,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir.mkdir()
 
         # Create rank directories without triton_cache subdirs
-        rank1 = hash_dir / "rank0_0"
+        rank1 = hash_dir / "rank_0_0"
         rank1.mkdir()
 
         repo = VllmCacheRepository(self.vllm_cache_root)
@@ -139,7 +143,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir = torch_compile_dir / "hash123abc"
         hash_dir.mkdir()
 
-        rank_dir = hash_dir / "rank0_0"
+        rank_dir = hash_dir / "rank_0_0"
         rank_dir.mkdir()
 
         triton_cache = rank_dir / "triton_cache"
@@ -159,17 +163,19 @@ class TestVllmCacheRepository(unittest.TestCase):
         repo = VllmCacheRepository(self.vllm_cache_root)
         kernels = list(repo.kernels())
 
-        # Should have 2 kernels, each with vllm_hash and vllm_cache_root
+        # Should have 2 kernels, each with vllm_hash, vllm_cache_root, and rank_x_y
         self.assertEqual(len(kernels), 2)
 
-        vllm_hash, vllm_cache_root, kernel = kernels[0]
+        vllm_hash, vllm_cache_root, rank_x_y, kernel = kernels[0]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(vllm_cache_root, str(self.vllm_cache_root))
+        self.assertEqual(rank_x_y, "rank_0_0")
         self.assertEqual(kernel, mock_kernel1)
 
-        vllm_hash, vllm_cache_root, kernel = kernels[1]
+        vllm_hash, vllm_cache_root, rank_x_y, kernel = kernels[1]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(vllm_cache_root, str(self.vllm_cache_root))
+        self.assertEqual(rank_x_y, "rank_0_0")
         self.assertEqual(kernel, mock_kernel2)
 
     @patch('model_cache_manager.data.cache_repo.iter_triton_kernels')
@@ -186,7 +192,7 @@ class TestVllmCacheRepository(unittest.TestCase):
 
         # Create rank dirs for each hash
         for hash_dir in [hash_dir1, hash_dir2]:
-            rank_dir = hash_dir / "rank0_0"
+            rank_dir = hash_dir / "rank_0_0"
             rank_dir.mkdir()
             triton_cache = rank_dir / "triton_cache"
             triton_cache.mkdir()
@@ -211,7 +217,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         # Should have kernels from both hash directories
         self.assertEqual(len(kernels), 2)
 
-        vllm_hashes = [vllm_hash for vllm_hash, _, _ in kernels]
+        vllm_hashes = [vllm_hash for vllm_hash, _, _, _ in kernels]
         self.assertIn("hash123abc", vllm_hashes)
         self.assertIn("hash456def", vllm_hashes)
 
