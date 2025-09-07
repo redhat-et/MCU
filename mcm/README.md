@@ -303,7 +303,6 @@ Or using the environment variable:
 export TRITON_CACHE_MANAGER=model_cache_manager.runtime.tracker:MCMTrackingCacheManager
 ```
 
-
 This tracks cache hits and access patterns,
 updating the MCM database with runtime statistics.
 
