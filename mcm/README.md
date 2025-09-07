@@ -296,6 +296,7 @@ from model_cache_manager.runtime.tracker import MCMTrackingCacheManager
 # Use as drop-in replacement for Triton's CacheManager
 triton.knobs.cache.manager_class = MCMTrackingCacheManager
 ```
+
 Or using the environment variable:
 
 ```bash
