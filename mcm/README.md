@@ -285,7 +285,7 @@ The database tracks:
 - Runtime statistics (hit counts, last access time)
 - Kernel parameters (warps, stages, shared memory, etc.)
 
-## Runtime Tracking
+## Runtime Tracking (works from Triton > = 3.4.0)
 
 MCM includes a runtime tracker that can be integrated
 into your Triton code to monitor cache performance:
@@ -295,6 +295,12 @@ from model_cache_manager.runtime.tracker import MCMTrackingCacheManager
 
 # Use as drop-in replacement for Triton's CacheManager
 triton.knobs.cache.manager_class = MCMTrackingCacheManager
+```
+
+Or using the environment variable:
+
+```bash
+export TRITON_CACHE_MANAGER=model_cache_manager.runtime.tracker:MCMTrackingCacheManager
 ```
 
 This tracks cache hits and access patterns,
