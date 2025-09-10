@@ -362,21 +362,3 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
         """Find kernel directories for a given vLLM hash and triton cache key.
         Wrapper method for backward compatibility - uses utility function."""
         return find_vllm_kernel_dirs(self.cache_dir, vllm_hash, triton_cache_key)
-
-    def _delete_vllm_kernel(
-        self, vllm_hash: str, triton_cache_key: str, session, ir_only: bool
-    ) -> int:
-        """
-        Delete vLLM kernel files on disk and update db. Returns bytes freed.
-        Wrapper method for backward compatibility - uses unified deletion logic.
-
-        Args:
-            vllm_hash: The vLLM hash (used for directory structure)
-            triton_cache_key: The Triton cache key (used for DB lookups)
-            session: Database session
-            ir_only: If True, only delete IR files; if False, delete entire kernel
-        """
-        identifier = create_kernel_identifier(
-            mode=self.mode, vllm_hash=vllm_hash, triton_cache_key=triton_cache_key
-        )
-        return self._delete_kernel_unified(identifier, session, ir_only)
