@@ -13,7 +13,6 @@ from ..models.criteria import SearchCriteria
 from ..utils.mcm_constants import IR_EXTS, MODE_VLLM
 from ..utils.utils import (
     KernelIdentifier,
-    create_kernel_identifier,
     extract_identifiers_from_groups,
     get_kernel_directories,
     delete_ir_files_from_dirs,
