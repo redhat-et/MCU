@@ -16,6 +16,7 @@ from model_cache_manager.models.kernel import Kernel
 from model_cache_manager.data.cache_repo import VllmCacheRepository
 from model_cache_manager.data.database import VllmDatabase
 
+
 def create_mock_kernel(
     hash_val: str = "test_hash", name: str = "test_kernel"
 ) -> Kernel:
@@ -237,8 +238,18 @@ class TestPruningServiceVllmMode(unittest.TestCase):
         """Test basic prune functionality in vLLM mode."""
         # Mock search results - include both vllm_hash and triton_cache_key for vLLM mode
         mock_search_results = [
-            {"vllm_hash": "vllm_hash1", "triton_cache_key": "hash1", "name": "kernel1"},
-            {"vllm_hash": "vllm_hash2", "triton_cache_key": "hash2", "name": "kernel2"},
+            {
+                "vllm_hash": "vllm_hash1",
+                "triton_cache_key": "hash1",
+                "name": "kernel1",
+                "rank_x_y": "rank_0_0",
+            },
+            {
+                "vllm_hash": "vllm_hash2",
+                "triton_cache_key": "hash2",
+                "name": "kernel2",
+                "rank_x_y": "rank_0_0",
+            },
         ]
 
         mock_repo_instance = MagicMock()
@@ -252,9 +263,9 @@ class TestPruningServiceVllmMode(unittest.TestCase):
 
         service = PruningService(cache_dir=self.cache_dir, mode="vllm")
 
-        with patch.object(service, "_delete_kernel_unified", return_value=1024), patch.object(
-            service, "_confirm", return_value=True
-        ):
+        with patch.object(
+            service, "_delete_kernel_unified", return_value=1024
+        ), patch.object(service, "_confirm", return_value=True):
 
             criteria = SearchCriteria(older_than_timestamp=1000000.0)
             result = service.prune(criteria, auto_confirm=True)
