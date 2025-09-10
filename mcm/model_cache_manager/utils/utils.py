@@ -281,7 +281,7 @@ def create_kernel_identifier(mode: str, **kwargs) -> KernelIdentifier:
         vllm_hash = kwargs.get("vllm_hash")
         rank_x_y = kwargs.get("rank_x_y")
         to_check = [triton_cache_key, vllm_hash, rank_x_y]
-        if any(v is None for v in to_check):
+        if any(not v for v in to_check):
             raise ValueError(
                 "triton_cache_key, vllm_hash and rank_x_y are required for VLLM mode"
             )
