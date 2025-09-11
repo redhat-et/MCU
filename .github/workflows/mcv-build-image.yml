@@ -1,4 +1,4 @@
-name: image-build
+name: mcv-image-build
 
 # On Pull Requests, only want to build image to make sure build isn't broken, don't push to quay.io.
 # On Push to main (in repo, not forks), want to build and push image to quay.io.
@@ -7,14 +7,13 @@ on: # yamllint disable-line rule:truthy
     branches: ["*"]
     paths:
       - mcv/**
-      - "**/amd64.dockerfile"
+      - .github/workflows/mcv-build-image.yaml
   push:
     branches: [main]
-    tags:
-      - v*
     paths:
       - mcv/**
-      - "**/amd64.dockerfile"
+      - .github/workflows/mcv-build-image.yaml
+  workflow_dispatch:
 
 jobs:
   build-and-push-images:
@@ -31,7 +30,7 @@ jobs:
           - registry: quay.io
             repository: gkm
             image: mcv
-            dockerfile: ./mcv/amd64.dockerfile
+            dockerfile: ./mcv/images/amd64.dockerfile
             context: .
             tags: |
               type=ref,event=branch
@@ -93,9 +92,8 @@ jobs:
         id: build-push-image
         uses: docker/build-push-action@v6
         with:
-          platforms: linux/amd64,linux/arm64
-          # platforms: linux/amd64, linux/arm64, linux/ppc64le, linux/s390x
-          push: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' && fromJSON(steps.set-push.outputs.push_flag) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           file: ${{ matrix.image.dockerfile }}
