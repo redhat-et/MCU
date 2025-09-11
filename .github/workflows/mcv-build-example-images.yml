@@ -1,6 +1,11 @@
-name: mcv-examples-image-build
+name: MCV Example Image Build
 
 on:
+  pull_request:
+    branches: ["*"]
+    paths:
+      - mcv/**
+      - .github/workflows/mcv-build-example-images.yml
   workflow_dispatch:
 
 concurrency:
@@ -31,8 +36,20 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.9.2
 
-      - name: Login to container registry
-        uses: redhat-actions/podman-login@v1
+      - name: Setup Docker
+        uses: docker/setup-docker-action@v4
+        with:
+          set-host: true
+          # version: v27.4.0
+          # daemon-config: |
+          #   { "debug": true }
+
+      - name: Install required system packages for mcv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgpgme-dev libbtrfs-dev
+      - name: Login to quay.io (Docker)
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GH_USERNAME }}
@@ -42,11 +59,6 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.24"
-
-      - name: Install required packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgpgme-dev libbtrfs-dev
 
       - name: Prepare vendored dependencies
         working-directory: mcv
@@ -60,14 +72,19 @@ jobs:
       - name: Install mcv
         run: make mcv-install
 
-      - name: Build, sign, and push example images
+      - name: Build, sign, and push example images (Docker)
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          ORG: ${{ env.ORG }}
+          REPO: ${{ env.REPO }}
+          COSIGN_YES: ${{ env.COSIGN_YES }}
+          CONTAINER_ENGINE: docker
         shell: bash
         run: |
           set -euo pipefail
 
           repo="${REGISTRY}/${ORG}/${REPO}"
 
-          # name|tag|context_dir
           images=(
             "vector-add-cache-rocm|vector-add-cache-rocm|mcv/example/vector-add-cache-rocm"
             "vector-add-cache-cuda|vector-add-cache-cuda|mcv/example/vector-add-cache"
@@ -75,21 +92,14 @@ jobs:
           )
 
           for entry in "${images[@]}"; do
-            IFS="|" read -r name tag dir <<<"${entry}"
+            IFS="|" read -r _ tag dir <<<"${entry}"
             image="${repo}:${tag}"
 
             echo "==> Creating ${image} from ${dir}"
-            mcv -c -i "${image}" -d "${dir}"
+            mcv -c -i "${image}" -d "${dir}" -l debug
 
             echo "==> Pushing ${image}"
-            if command -v buildah &> /dev/null; then
-              buildah push "${image}"
-            elif command -v docker &> /dev/null; then
-              docker push "${image}"
-            else
-              echo "Error: No container tool (docker, buildah) found." >&2
-              exit 1
-            fi
+            docker push "${image}"
 
             echo "==> Signing ${image}"
             cosign sign "${image}"

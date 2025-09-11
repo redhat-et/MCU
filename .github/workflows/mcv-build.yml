@@ -1,4 +1,4 @@
-name: Build Model Cache Vault
+name: MCV Build
 
 on: # yamllint disable-line rule:truthy
   push:
