@@ -204,12 +204,12 @@ class KernelOrm(Base, BaseKernelMixin):
 class VllmKernelOrm(Base, BaseKernelMixin):
     """
     SQLAlchemy ORM model for a vLLM Triton kernel.
-    Uses a composite primary key of (vllm_cache_root, vllm_hash, triton_cache_key, rank_x_y).
+    Uses a composite primary key of (cache_dir, vllm_hash, triton_cache_key, rank_x_y).
     """
 
     __tablename__ = "vllm_kernels"
 
-    vllm_cache_root: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    cache_dir: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     vllm_hash: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     triton_cache_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     rank_x_y: Mapped[str] = mapped_column(String, primary_key=True, index=True)
@@ -237,7 +237,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         cls,
         session: SqlaSession,
         k_data: Kernel,
-        vllm_cache_root: str,
+        cache_dir: str,
         vllm_hash: str,
         rank_x_y: str,
     ) -> None:
@@ -247,7 +247,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         kernel_values = cls._get_common_kernel_values(k_data)
         kernel_values.update(
             {
-                "vllm_cache_root": vllm_cache_root,
+                "cache_dir": cache_dir,
                 "vllm_hash": vllm_hash,
                 "triton_cache_key": k_data.hash,
                 "rank_x_y": rank_x_y,
@@ -259,11 +259,11 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
             if col.name
-            not in ("vllm_cache_root", "rank_x_y", "vllm_hash", "triton_cache_key")
+            not in ("cache_dir", "rank_x_y", "vllm_hash", "triton_cache_key")
         }
         stmt = stmt.on_conflict_do_update(
             index_elements=[
-                "vllm_cache_root",
+                "cache_dir",
                 "rank_x_y",
                 "vllm_hash",
                 "triton_cache_key",
@@ -272,24 +272,24 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         )
         session.execute(stmt)
         log.debug(
-            "Upserted vLLM kernel vllm_cache_root %s vllm_hash %s "
+            "Upserted vLLM kernel cache_dir %s vllm_hash %s "
             "triton_cache_key %s with rank_x_y %s",
-            vllm_cache_root,
+            cache_dir,
             vllm_hash,
             k_data.hash,
             rank_x_y,
         )
 
         session.query(VllmKernelFileOrm).filter(
-            VllmKernelFileOrm.vllm_cache_root == vllm_cache_root,
+            VllmKernelFileOrm.cache_dir == cache_dir,
             VllmKernelFileOrm.vllm_hash == vllm_hash,
             VllmKernelFileOrm.triton_cache_key == k_data.hash,
             VllmKernelFileOrm.rank_x_y == rank_x_y,
         ).delete(synchronize_session="fetch")
         log.debug(
-            "Deleted existing files for vllm_cache_root %s vllm_hash %s "
+            "Deleted existing files for cache_dir %s vllm_hash %s "
             "triton_cache_key %s and rank_x_y %s",
-            vllm_cache_root,
+            cache_dir,
             vllm_hash,
             k_data.hash,
             rank_x_y,
@@ -297,7 +297,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
 
         for f_dto in k_data.files:
             kernel_file_orm = VllmKernelFileOrm(
-                vllm_cache_root=vllm_cache_root,
+                cache_dir=cache_dir,
                 vllm_hash=vllm_hash,
                 triton_cache_key=k_data.hash,
                 rank_x_y=rank_x_y,
@@ -307,10 +307,10 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             )
             session.add(kernel_file_orm)
         log.debug(
-            "Added %d files for vllm_cache_root %s vllm_hash %s "
+            "Added %d files for cache_dir %s vllm_hash %s "
             "triton_cache_key %s and rank_x_y %s",
             len(k_data.files),
-            vllm_cache_root,
+            cache_dir,
             vllm_hash,
             k_data.hash,
             rank_x_y,
@@ -351,16 +351,16 @@ class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
     )
-    vllm_cache_root: Mapped[str] = mapped_column(String)
+    cache_dir: Mapped[str] = mapped_column(String)
     vllm_hash: Mapped[str] = mapped_column(String)
     triton_cache_key: Mapped[str] = mapped_column(String)
     rank_x_y: Mapped[str] = mapped_column(String)
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["vllm_cache_root", "vllm_hash", "triton_cache_key", "rank_x_y"],
+            ["cache_dir", "vllm_hash", "triton_cache_key", "rank_x_y"],
             [
-                "vllm_kernels.vllm_cache_root",
+                "vllm_kernels.cache_dir",
                 "vllm_kernels.vllm_hash",
                 "vllm_kernels.triton_cache_key",
                 "vllm_kernels.rank_x_y",

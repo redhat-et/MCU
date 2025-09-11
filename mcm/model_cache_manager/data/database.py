@@ -434,37 +434,37 @@ class VllmDatabase:
         return self.SessionLocal()
 
     def insert_kernel(
-        self, k_data: Kernel, vllm_cache_root: str, vllm_hash: str, rank_x_y: str
+        self, k_data: Kernel, cache_dir: str, vllm_hash: str, rank_x_y: str
     ) -> None:
         """
         Upserts a vLLM kernel and its associated files into the database.
 
         Args:
             k_data: A `Kernel` DTO containing the metadata.
-            vllm_cache_root: Root path of the vLLM cache
+            cache_dir: Root path of the vLLM cache
             vllm_hash: Hash identifier for the vLLM cache group
         """
         session = self.get_session()
         try:
             VllmKernelOrm.upsert_from_dto(
-                session, k_data, vllm_cache_root, vllm_hash, rank_x_y
+                session, k_data, cache_dir, vllm_hash, rank_x_y
             )
             session.commit()
             log.info(
-                "vLLM Kernel %s with vllm_cache_root %s vllm_hash %s and "
+                "vLLM Kernel %s with cache_dir %s vllm_hash %s and "
                 "rank_x_y %s upserted into DB.",
                 k_data.hash,
-                vllm_cache_root,
+                cache_dir,
                 vllm_hash,
                 rank_x_y,
             )
         except exc.IntegrityError as e:
             session.rollback()
             log.error(
-                "Failed to upsert vLLM kernel %s with vllm_cache_root %s "
+                "Failed to upsert vLLM kernel %s with cache_dir %s "
                 "vllm_hash %s and rank_x_y %s due to a constraint violation: %s",
                 k_data.hash,
-                vllm_cache_root,
+                cache_dir,
                 vllm_hash,
                 rank_x_y,
                 e,
@@ -474,10 +474,10 @@ class VllmDatabase:
         except exc.OperationalError as e:
             session.rollback()
             log.error(
-                "Failed to upsert vLLM kernel %s with vllm_cache_root %s "
+                "Failed to upsert vLLM kernel %s with cache_dir %s "
                 "vllm_hash %s and rank_x_y %s due to a db operation issue: %s",
                 k_data.hash,
-                vllm_cache_root,
+                cache_dir,
                 vllm_hash,
                 rank_x_y,
                 e,
@@ -487,10 +487,10 @@ class VllmDatabase:
         except Exception:  # pylint: disable=broad-except
             session.rollback()
             log.error(
-                "DB Error: Failed to upsert vLLM kernel %s with vllm_cache_root %s "
+                "DB Error: Failed to upsert vLLM kernel %s with cache_dir %s "
                 "vllm_hash %s and rank_x_y %s.",
                 k_data.hash,
-                vllm_cache_root,
+                cache_dir,
                 vllm_hash,
                 rank_x_y,
                 exc_info=True,
@@ -513,7 +513,7 @@ class VllmDatabase:
         try:
             query = session.query(VllmKernelOrm)
             equality_filter_configs = [
-                ("cache_dir", VllmKernelOrm.vllm_cache_root, str),
+                ("cache_dir", VllmKernelOrm.cache_dir, str),
                 ("name", VllmKernelOrm.name, None),
                 ("backend", VllmKernelOrm.backend, None),
                 ("arch", VllmKernelOrm.arch, str),
