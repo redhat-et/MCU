@@ -25,6 +25,10 @@ mcv: ## Build mcv.
 	$(MAKE) -C mcv
 .PHONY: mcv
 
+mcv-install: ## Install mcv.
+	$(MAKE) -C mcv install
+.PHONY: mcv-install
+
 mcv-image: ## Build mcv image.
-	$(CONTAINER_TOOL) build --progress=plain -t quay.io/tkm/mcv -f mcv/images/amd64.dockerfile .
-.PHONY: mcv
+	$(CONTAINER_TOOL) build --progress=plain -t quay.io/gkm/mcv -f mcv/images/amd64.dockerfile .
+.PHONY: mcv-image
