@@ -1,5 +1,6 @@
 # Model Cache Manager (MCM)
 
+<!-- markdownlint-disable-next-line MD033 -->
 <img src="../logo/mcm.png" alt="mcm" width="20%" height="auto">
 
 A lightweight CLI tool for **indexing, searching, and managing GPU kernel caches**

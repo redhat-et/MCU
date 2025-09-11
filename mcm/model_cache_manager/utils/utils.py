@@ -195,6 +195,7 @@ class KernelIdentifier:
     mode: str
     hash_key: str  # "hash" for triton, "triton_cache_key" for vllm
     vllm_hash: Optional[str] = None  # Only used for vLLM mode
+    rank_x_y: Optional[str] = None  # Only used for vLLM mode
 
     def __str__(self) -> str:
         if self.mode == MODE_VLLM:
@@ -277,12 +278,18 @@ def create_kernel_identifier(mode: str, **kwargs) -> KernelIdentifier:
     """Factory function to create kernel identifiers."""
     if mode == MODE_VLLM:
         triton_cache_key = kwargs.get("triton_cache_key")
-        if triton_cache_key is None:
-            raise ValueError("triton_cache_key is required for VLLM mode")
+        vllm_hash = kwargs.get("vllm_hash")
+        rank_x_y = kwargs.get("rank_x_y")
+        to_check = [triton_cache_key, vllm_hash, rank_x_y]
+        if any(not v for v in to_check):
+            raise ValueError(
+                "triton_cache_key, vllm_hash and rank_x_y are required for VLLM mode"
+            )
         return KernelIdentifier(
             mode=mode,
             hash_key=triton_cache_key,
-            vllm_hash=kwargs.get("vllm_hash"),
+            vllm_hash=vllm_hash,
+            rank_x_y=rank_x_y,
         )
     hash_key = kwargs.get("hash")
     if hash_key is None:
