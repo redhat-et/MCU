@@ -1,6 +1,6 @@
 name: MCV Example Image Build
 
-on:
+on: # yamllint disable-line rule:truthy
   pull_request:
     branches: ["*"]
     paths:
@@ -14,19 +14,19 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write   # needed for keyless cosign
+  id-token: write
   packages: write
 
 env:
   REGISTRY: quay.io
   ORG: gkm
   REPO: cache-examples
-  COSIGN_YES: "true"        # auto-confirm cosign
+  COSIGN_YES: "true"
   DEBIAN_FRONTEND: noninteractive
 
 jobs:
   build:
-    name: Make build (mcv)
+    name: Build example cache images with MCV container
     runs-on: ubuntu-latest
 
     steps:
@@ -40,69 +40,84 @@ jobs:
         uses: docker/setup-docker-action@v4
         with:
           set-host: true
-          # version: v27.4.0
-          # daemon-config: |
-          #   { "debug": true }
 
-      - name: Install required system packages for mcv
+      - name: Decide publish (skip push/sign for forked PRs)
+        id: publish
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgpgme-dev libbtrfs-dev
+          if [[ "${{ github.event_name }}" != "pull_request" || "${{ github.event.pull_request.head.repo.full_name }}" == "${{ github.repository }}" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Login to quay.io (Docker)
+        if: ${{ steps.publish.outputs.publish == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.GH_USERNAME }}
           password: ${{ secrets.GH_TOKEN }}
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.24"
+      - name: Pull MCV builder image
+        run: docker pull quay.io/gkm/mcv:latest
 
-      - name: Prepare vendored dependencies
-        working-directory: mcv
-        run: |
-          go mod tidy
-          go mod vendor
-
-      - name: Build with Makefile
-        run: make mcv
-
-      - name: Install mcv
-        run: make mcv-install
-
-      - name: Build, sign, and push example images (Docker)
+      - name: Build images inside MCV container and load to host
         env:
           REGISTRY: ${{ env.REGISTRY }}
           ORG: ${{ env.ORG }}
           REPO: ${{ env.REPO }}
-          COSIGN_YES: ${{ env.COSIGN_YES }}
-          CONTAINER_ENGINE: docker
         shell: bash
         run: |
           set -euo pipefail
-
           repo="${REGISTRY}/${ORG}/${REPO}"
+          out_dir="${GITHUB_WORKSPACE}/.mcv-out"
+          mkdir -p "${out_dir}"
 
+          # tag|relative_context_dir (relative to repo root)
           images=(
-            "vector-add-cache-rocm|vector-add-cache-rocm|mcv/example/vector-add-cache-rocm"
-            "vector-add-cache-cuda|vector-add-cache-cuda|mcv/example/vector-add-cache"
-            "vllm-example|vllm-example|mcv/example/vllm-cache"
+            "vector-add-cache-rocm|mcv/example/vector-add-cache-rocm"
+            "vector-add-cache-cuda|mcv/example/vector-add-cache"
+            "vllm-example|mcv/example/vllm-cache"
           )
 
-          for entry in "${images[@]}"; do
-            IFS="|" read -r _ tag dir <<<"${entry}"
+          for e in "${images[@]}"; do
+            IFS="|" read -r tag reldir <<<"${e}"
             image="${repo}:${tag}"
+            tar="${out_dir}/${tag}.tar"
 
-            echo "==> Creating ${image} from ${dir}"
-            mcv -c -i "${image}" -d "${dir}" -l debug
+            echo "==> Building ${image} using MCV container from /work/${reldir}"
+            docker run --rm --privileged \
+              -e TAG="${tag}" \
+              -e IMAGE="${image}" \
+              -e RELDIR="${reldir}" \
+              -v "${GITHUB_WORKSPACE}:/work:rw" \
+              quay.io/gkm/mcv:latest bash -lc '
+                set -euo pipefail
+                /mcv -l info -c -i "$IMAGE" -d "/work/$RELDIR"
+                buildah push "containers-storage:$IMAGE" "docker-archive:/work/.mcv-out/$TAG.tar:$IMAGE"
+              '
 
-            echo "==> Pushing ${image}"
-            docker push "${image}"
+            echo "==> Loading ${tar} into host docker"
+            docker load -i "${tar}"
+          done
 
-            echo "==> Signing ${image}"
-            cosign sign "${image}"
-
-            echo "==> Done: ${image}"
+      - name: Push & sign images
+        if: ${{ steps.publish.outputs.publish == 'true' }}
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          ORG: ${{ env.ORG }}
+          REPO: ${{ env.REPO }}
+          COSIGN_YES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="${REGISTRY}/${ORG}/${REPO}"
+          images=(vector-add-cache-rocm vector-add-cache-cuda vllm-example)
+          for tag in "${images[@]}"; do
+            img="${repo}:${tag}"
+            echo "==> Pushing ${img}"
+            docker push "${img}"
+            echo "==> Signing ${img}"
+            cosign sign "${img}"
           done
