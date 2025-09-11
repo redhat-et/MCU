@@ -1,4 +1,4 @@
-name: Tag new model cache vault release
+name: MCV Tag New Release
 
 on:  # yamllint disable-line rule:truthy
   workflow_dispatch:
