@@ -1,0 +1,98 @@
+name: mcv-examples-image-build
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write   # needed for keyless cosign
+  packages: write
+
+env:
+  REGISTRY: quay.io
+  ORG: gkm
+  REPO: cache-examples
+  COSIGN_YES: "true"        # auto-confirm cosign
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  build:
+    name: Make build (mcv)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.9.2
+
+      - name: Login to container registry
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GH_USERNAME }}
+          password: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgpgme-dev libbtrfs-dev
+
+      - name: Prepare vendored dependencies
+        working-directory: mcv
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Build with Makefile
+        run: make mcv
+
+      - name: Install mcv
+        run: make mcv-install
+
+      - name: Build, sign, and push example images
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          repo="${REGISTRY}/${ORG}/${REPO}"
+
+          # name|tag|context_dir
+          images=(
+            "vector-add-cache-rocm|vector-add-cache-rocm|mcv/example/vector-add-cache-rocm"
+            "vector-add-cache-cuda|vector-add-cache-cuda|mcv/example/vector-add-cache"
+            "vllm-example|vllm-example|mcv/example/vllm-cache"
+          )
+
+          for entry in "${images[@]}"; do
+            IFS="|" read -r name tag dir <<<"${entry}"
+            image="${repo}:${tag}"
+
+            echo "==> Creating ${image} from ${dir}"
+            mcv -c -i "${image}" -d "${dir}"
+
+            echo "==> Pushing ${image}"
+            if command -v buildah &> /dev/null; then
+              buildah push "${image}"
+            elif command -v docker &> /dev/null; then
+              docker push "${image}"
+            else
+              echo "Error: No container tool (docker, buildah) found." >&2
+              exit 1
+            fi
+
+            echo "==> Signing ${image}"
+            cosign sign "${image}"
+
+            echo "==> Done: ${image}"
+          done
