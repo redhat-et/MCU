@@ -7,12 +7,12 @@ on: # yamllint disable-line rule:truthy
     branches: ["*"]
     paths:
       - mcv/**
-      - .github/workflows/mcv-build-image.yaml
+      - .github/workflows/mcv-build-image.yml
   push:
     branches: [main]
     paths:
       - mcv/**
-      - .github/workflows/mcv-build-image.yaml
+      - .github/workflows/mcv-build-image.yml
   workflow_dispatch:
 
 jobs:
