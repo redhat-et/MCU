@@ -76,7 +76,9 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
             log.info("No kernels matched pruning criteria – nothing to do.")
             return PruneStats(0, 0)
 
-        reclaimed = self.db.estimate_space(hash_list, IR_EXTS)
+        reclaimed = self.db.estimate_space(
+            hash_list, IR_EXTS if delete_ir_only else None
+        )
         if not auto_confirm and not self._confirm(
             len(hash_list), reclaimed, delete_ir_only
         ):
@@ -269,6 +271,7 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
 
         # Update kernel total size
         if kernel_record:
+            session.refresh(kernel_record)
             kernel_record.total_size = sum(f.size or 0 for f in kernel_record.files)
 
         return freed
