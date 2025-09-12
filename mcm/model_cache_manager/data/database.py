@@ -184,7 +184,7 @@ class Database:
                         tuple_(
                             KernelFileOrm.kernel_hash, KernelFileOrm.kernel_cache_dir
                         ).in_(kernel_ids_to_clear)
-                    ).delete(synchronize_session=False)
+                    ).delete(synchronize_session='evaluate')
 
                 # Insert/update kernels
                 for k_data, cache_dir in batch:
