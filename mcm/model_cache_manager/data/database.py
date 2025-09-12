@@ -637,7 +637,7 @@ class VllmDatabase:
         kernel_info: Tuple[Kernel, str, str, str],
     ) -> None:
         """Upsert a single vLLM kernel.
-        
+
         Args:
             session: Database session
             kernel_info: Tuple of (k_data, cache_dir, vllm_hash, rank_x_y)
