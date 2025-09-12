@@ -1,4 +1,4 @@
-name: mcv-image-build
+name: MCV Image Build
 
 # On Pull Requests, only want to build image to make sure build isn't broken, don't push to quay.io.
 # On Push to main (in repo, not forks), want to build and push image to quay.io.
