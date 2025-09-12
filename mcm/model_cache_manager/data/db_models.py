@@ -81,7 +81,7 @@ class BaseKernelMixin:  # pylint: disable=too-few-public-methods
     )
 
     @classmethod
-    def _get_common_kernel_values(cls, k_data: Kernel) -> Dict[str, Any]:
+    def get_common_kernel_values(cls, k_data: Kernel) -> Dict[str, Any]:
         """Get common kernel field values from a Kernel DTO."""
         return {
             "backend": k_data.backend,
@@ -152,7 +152,7 @@ class KernelOrm(Base, BaseKernelMixin):
         """
         Creates or updates a kernel record from a Kernel DTO, including files.
         """
-        kernel_values = cls._get_common_kernel_values(k_data)
+        kernel_values = cls.get_common_kernel_values(k_data)
         kernel_values.update(
             {
                 "hash": k_data.hash,
@@ -231,6 +231,33 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             d["metadata"] = d.pop("kernel_metadata_json")
         return d
 
+    @staticmethod
+    def get_vllm_kernel_values(
+        k_data: Kernel, cache_dir: str, vllm_hash: str, rank_x_y: str
+    ) -> Dict[str, Any]:
+        """
+        Get vLLM-specific kernel values.
+
+        Args:
+            k_data: Kernel data
+            cache_dir: Cache directory path
+            vllm_hash: vLLM hash
+            rank_x_y: Rank identifier
+
+        Returns:
+            Dictionary with vLLM kernel values
+        """
+        kernel_values = VllmKernelOrm.get_common_kernel_values(k_data)
+        kernel_values.update(
+            {
+                "cache_dir": cache_dir,
+                "vllm_hash": vllm_hash,
+                "triton_cache_key": k_data.hash,
+                "rank_x_y": rank_x_y,
+            }
+        )
+        return kernel_values
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @classmethod
     def upsert_from_dto(
@@ -244,14 +271,8 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         """
         Creates or updates a vLLM kernel record from a Kernel DTO, including files.
         """
-        kernel_values = cls._get_common_kernel_values(k_data)
-        kernel_values.update(
-            {
-                "cache_dir": cache_dir,
-                "vllm_hash": vllm_hash,
-                "triton_cache_key": k_data.hash,
-                "rank_x_y": rank_x_y,
-            }
+        kernel_values = cls.get_vllm_kernel_values(
+            k_data, cache_dir, vllm_hash, rank_x_y
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)

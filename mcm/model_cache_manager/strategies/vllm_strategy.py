@@ -53,14 +53,12 @@ class VllmStrategy(CacheModeStrategy):
         )
 
     def reindex_kernels(self, repo, db) -> int:
-        """Perform vLLM-specific kernel reindexing."""
-        updated_kernels = 0
+        """Perform vLLM-specific kernel reindexing using bulk insert."""
+        kernels_data = []
         for vllm_hash, cache_dir, rank_x_y, kernel in repo.kernels():
-            self.insert_kernel_strategy(
-                db, kernel, cache_dir, vllm_hash, rank_x_y
-            )
-            updated_kernels += 1
-        return updated_kernels
+            kernels_data.append((kernel, cache_dir, vllm_hash, rank_x_y))
+
+        return db.bulk_insert_kernels(kernels_data)
 
     def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
         """Strategy-specific kernel insertion for vLLM."""

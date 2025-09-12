@@ -7,10 +7,12 @@ for interacting with the kernel cache database. It uses ORM models (SqlAlchemy).
 """
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, List, Set, Iterable
 import collections
-from sqlalchemy import and_, exc, or_, func
+import logging
+from typing import Any, Dict, List, Set, Iterable, Tuple
+
+from sqlalchemy import and_, exc, or_, func, tuple_
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from .db_config import engine, SessionLocal, DB_PATH, create_engine_and_session
 from .db_models import (
@@ -103,6 +105,110 @@ class Database:
             raise
         finally:
             session.close()
+
+    def _prepare_batch_data(self, batch: List[Tuple[Kernel, str]]) -> Tuple[List, List]:
+        """Prepare kernel IDs and file values for batch processing."""
+        kernel_ids_to_clear = []
+        file_values_list = []
+
+        for k_data, cache_dir in batch:
+            k_data.cache_dir = str(cache_dir)
+            kernel_ids_to_clear.append((k_data.hash, str(cache_dir)))
+
+            # Collect file values for bulk insert
+            for f_dto in k_data.files:
+                file_values_list.append(
+                    {
+                        "kernel_hash": k_data.hash,
+                        "kernel_cache_dir": str(cache_dir),
+                        "type": f_dto.file_type,
+                        "rel_path": f_dto.path.name,
+                        "size": f_dto.size,
+                    }
+                )
+
+        return kernel_ids_to_clear, file_values_list
+
+    def _upsert_kernel(self, session: SqlaSession, k_data: Kernel, cache_dir: str) -> None:
+        """Upsert a single kernel."""
+        kernel_values = KernelOrm.get_common_kernel_values(k_data)
+        kernel_values.update(
+            {
+                "hash": k_data.hash,
+                "cache_dir": str(cache_dir),
+            }
+        )
+
+        stmt = sqlite_insert(KernelOrm).values(kernel_values)
+        update_dict = {
+            col.name: getattr(stmt.excluded, col.name)
+            for col in KernelOrm.__table__.columns
+            if col.name not in ("hash", "cache_dir")
+        }
+        session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["hash", "cache_dir"], set_=update_dict
+            )
+        )
+
+    def bulk_insert_kernels(
+        self, kernels_data: List[Tuple[Kernel, str]], batch_size: int = 1000
+    ) -> int:
+        """
+        Bulk insert multiple kernels efficiently.
+
+        Args:
+            kernels_data: List of tuples containing (Kernel, cache_dir)
+            batch_size: Number of kernels to insert per transaction
+
+        Returns:
+            Number of kernels inserted
+        """
+        if not kernels_data:
+            log.info("No kernels to insert")
+            return 0
+
+        session = self.get_session()
+        inserted_count = 0
+
+        try:
+            for i in range(0, len(kernels_data), batch_size):
+                batch = kernels_data[i : i + batch_size]
+
+                # Prepare batch data
+                kernel_ids_to_clear, file_values_list = self._prepare_batch_data(batch)
+
+                # Delete all files for batch kernels in one query
+                if kernel_ids_to_clear:
+                    session.query(KernelFileOrm).filter(
+                        tuple_(
+                            KernelFileOrm.kernel_hash, KernelFileOrm.kernel_cache_dir
+                        ).in_(kernel_ids_to_clear)
+                    ).delete(synchronize_session=False)
+
+                # Insert/update kernels
+                for k_data, cache_dir in batch:
+                    self._upsert_kernel(session, k_data, cache_dir)
+                    inserted_count += 1
+
+                # Bulk insert all files at once
+                if file_values_list:
+                    session.bulk_insert_mappings(KernelFileOrm, file_values_list)
+
+                session.commit()
+                log.info(
+                    "Batch of %d kernels committed (%d total so far)",
+                    len(batch),
+                    inserted_count,
+                )
+
+        except Exception as e:
+            session.rollback()
+            log.error("Bulk insert failed: %s", e, exc_info=True)
+            raise
+        finally:
+            session.close()
+        return inserted_count
 
     def search(self, criteria: SearchCriteria) -> List[Dict[str, Any]]:
         """
@@ -498,6 +604,136 @@ class VllmDatabase:
             raise
         finally:
             session.close()
+
+    def _prepare_vllm_batch_data(
+        self, batch: List[Tuple[Kernel, str, str, str]]
+    ) -> Tuple[List, List]:
+        """Prepare vLLM kernel IDs and file values for batch processing."""
+        kernel_ids_to_clear = []
+        file_values_list = []
+
+        for k_data, cache_dir, vllm_hash, rank_x_y in batch:
+            kernel_ids_to_clear.append((cache_dir, vllm_hash, k_data.hash, rank_x_y))
+
+            # Collect file values for bulk insert
+            for f_dto in k_data.files:
+                file_values_list.append(
+                    {
+                        "cache_dir": cache_dir,
+                        "vllm_hash": vllm_hash,
+                        "triton_cache_key": k_data.hash,
+                        "rank_x_y": rank_x_y,
+                        "type": f_dto.file_type,
+                        "rel_path": f_dto.path.name,
+                        "size": f_dto.size,
+                    }
+                )
+
+        return kernel_ids_to_clear, file_values_list
+
+    def _upsert_vllm_kernel(
+        self,
+        session: SqlaSession,
+        kernel_info: Tuple[Kernel, str, str, str],
+    ) -> None:
+        """Upsert a single vLLM kernel.
+        
+        Args:
+            session: Database session
+            kernel_info: Tuple of (k_data, cache_dir, vllm_hash, rank_x_y)
+        """
+        k_data, cache_dir, vllm_hash, rank_x_y = kernel_info
+        kernel_values = VllmKernelOrm.get_vllm_kernel_values(
+            k_data, cache_dir, vllm_hash, rank_x_y
+        )
+
+        stmt = sqlite_insert(VllmKernelOrm).values(kernel_values)
+        update_dict = {
+            col.name: getattr(stmt.excluded, col.name)
+            for col in VllmKernelOrm.__table__.columns
+            if col.name
+            not in (
+                "cache_dir",
+                "vllm_hash",
+                "triton_cache_key",
+                "rank_x_y",
+            )
+        }
+        session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[
+                    "cache_dir",
+                    "vllm_hash",
+                    "triton_cache_key",
+                    "rank_x_y",
+                ],
+                set_=update_dict,
+            )
+        )
+
+    def bulk_insert_kernels(
+        self, kernels_data: List[Tuple[Kernel, str, str, str]], batch_size: int = 1000
+    ) -> int:
+        """
+        Bulk insert multiple vLLM kernels efficiently.
+
+        Args:
+            kernels_data: List of tuples containing (Kernel, cache_dir, vllm_hash, rank_x_y)
+            batch_size: Number of kernels to insert per transaction
+
+        Returns:
+            Number of kernels inserted
+        """
+        if not kernels_data:
+            log.info("No vLLM kernels to insert")
+            return 0
+
+        session = self.get_session()
+        inserted_count = 0
+
+        try:
+            for i in range(0, len(kernels_data), batch_size):
+                batch = kernels_data[i : i + batch_size]
+
+                # Prepare batch data
+                kernel_ids_to_clear, file_values_list = self._prepare_vllm_batch_data(
+                    batch
+                )
+
+                # Delete all files for batch kernels in one query
+                if kernel_ids_to_clear:
+                    session.query(VllmKernelFileOrm).filter(
+                        tuple_(
+                            VllmKernelFileOrm.cache_dir,
+                            VllmKernelFileOrm.vllm_hash,
+                            VllmKernelFileOrm.triton_cache_key,
+                            VllmKernelFileOrm.rank_x_y,
+                        ).in_(kernel_ids_to_clear)
+                    ).delete(synchronize_session=False)
+
+                # Insert/update kernels
+                for kernel_info in batch:
+                    self._upsert_vllm_kernel(session, kernel_info)
+                    inserted_count += 1
+
+                # Bulk insert all files at once
+                if file_values_list:
+                    session.bulk_insert_mappings(VllmKernelFileOrm, file_values_list)
+
+                session.commit()
+                log.info(
+                    "Batch of %d vLLM kernels committed (%d total so far)",
+                    len(batch),
+                    inserted_count,
+                )
+
+        except Exception as e:
+            session.rollback()
+            log.error("Bulk insert failed: %s", e, exc_info=True)
+            raise
+        finally:
+            session.close()
+        return inserted_count
 
     def search(self, criteria: SearchCriteria) -> List[Dict[str, Any]]:
         """

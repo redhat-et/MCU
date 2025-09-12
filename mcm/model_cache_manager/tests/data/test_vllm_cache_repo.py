@@ -38,7 +38,7 @@ class TestVllmCacheRepository(unittest.TestCase):
 
     def test_init_with_default_directory(self):
         """Test initializing VllmCacheRepository with default directory."""
-        with patch('pathlib.Path.home') as mock_home:
+        with patch("pathlib.Path.home") as mock_home:
             mock_home.return_value = self.temp_dir
             default_vllm_cache = self.temp_dir / ".cache" / "vllm"
             default_vllm_cache.mkdir(parents=True, exist_ok=True)
@@ -49,7 +49,10 @@ class TestVllmCacheRepository(unittest.TestCase):
     def test_find_torch_compile_cache_dirs_empty(self):
         """Test finding torch compile cache directories when none exist."""
         repo = VllmCacheRepository(self.cache_dir)
-        dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        dirs = list(repo._find_torch_compile_cache_dirs())
+        # pylint: enable=protected-access
         self.assertEqual(len(dirs), 0)
 
     def test_find_torch_compile_cache_dirs_with_dirs(self):
@@ -64,7 +67,10 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir2.mkdir()
 
         repo = VllmCacheRepository(self.cache_dir)
-        dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        dirs = list(repo._find_torch_compile_cache_dirs())
+        # pylint: enable=protected-access
 
         self.assertEqual(len(dirs), 2)
         hash_names = [hash_name for hash_name, _ in dirs]
@@ -77,7 +83,10 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir.mkdir()
 
         repo = VllmCacheRepository(self.cache_dir)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        rank_dirs = list(repo._find_rank_dirs(hash_dir))
+        # pylint: enable=protected-access
         self.assertEqual(len(rank_dirs), 0)
 
     def test_find_rank_dirs_with_rank_dirs(self):
@@ -97,7 +106,10 @@ class TestVllmCacheRepository(unittest.TestCase):
         triton_cache2.mkdir()
 
         repo = VllmCacheRepository(self.cache_dir)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        rank_dirs = list(repo._find_rank_dirs(hash_dir))
+        # pylint: enable=protected-access
 
         self.assertEqual(len(rank_dirs), 2)
         rank_names = [rank_name for rank_name, _ in rank_dirs]
@@ -117,11 +129,14 @@ class TestVllmCacheRepository(unittest.TestCase):
         rank1.mkdir()
 
         repo = VllmCacheRepository(self.cache_dir)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        rank_dirs = list(repo._find_rank_dirs(hash_dir))
+        # pylint: enable=protected-access
 
         self.assertEqual(len(rank_dirs), 0)
 
-    @patch('model_cache_manager.data.cache_repo.CacheRepository')
+    @patch("model_cache_manager.data.cache_repo.CacheRepository")
     def test_kernels_empty_structure(self, mock_cache_repo_class):
         """Test kernels method with empty vLLM structure."""
         mock_cache_repo = MagicMock()
@@ -133,7 +148,7 @@ class TestVllmCacheRepository(unittest.TestCase):
 
         self.assertEqual(len(kernels), 0)
 
-    @patch('model_cache_manager.data.cache_repo.iter_triton_kernels')
+    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
     def test_kernels_with_structure_and_kernels(self, mock_iter_triton_kernels):
         """Test kernels method with vLLM structure containing kernels."""
         # Create vLLM directory structure
@@ -178,7 +193,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         self.assertEqual(rank_x_y, "rank_0_0")
         self.assertEqual(kernel, mock_kernel2)
 
-    @patch('model_cache_manager.data.cache_repo.iter_triton_kernels')
+    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
     def test_kernels_multiple_hash_dirs(self, mock_iter_triton_kernels):
         """Test kernels method with multiple hash directories."""
         # Create vLLM directory structure with multiple hash dirs

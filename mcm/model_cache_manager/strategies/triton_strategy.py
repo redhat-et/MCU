@@ -24,7 +24,7 @@ class TritonStrategy(CacheModeStrategy):
             file_orm_model=KernelFileOrm,
             hash_field="hash",
             primary_key_fields=["hash", "cache_dir"],
-            additional_duplicate_fields=[]
+            additional_duplicate_fields=[],
         )
 
     def create_database(self):
@@ -37,20 +37,17 @@ class TritonStrategy(CacheModeStrategy):
 
     def extract_identifiers_from_row(self, row: Dict[str, Any]) -> KernelIdentifier:
         """Extract kernel identifier from Triton database row."""
-        return create_kernel_identifier(
-            mode="triton",
-            hash=row["hash"]
-        )
+        return create_kernel_identifier(mode="triton", hash=row["hash"])
 
     def reindex_kernels(self, repo, db) -> int:
-        """Perform Triton-specific kernel reindexing."""
-        updated_kernels = 0
+        """Perform Triton-specific kernel reindexing using bulk insert."""
+        kernels_data = []
         for kernel in repo.kernels():
-            self.insert_kernel_strategy(db, kernel, str(repo.root))
-            updated_kernels += 1
-        return updated_kernels
+            kernels_data.append((kernel, str(repo.root)))
+
+        return db.bulk_insert_kernels(kernels_data)
 
     def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
         """Strategy-specific kernel insertion for Triton."""
-        cache_dir = args[0] if args else kwargs.get('cache_dir')
+        cache_dir = args[0] if args else kwargs.get("cache_dir")
         db.insert_kernel(k_data, cache_dir)
