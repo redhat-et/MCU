@@ -18,8 +18,8 @@ class TestVllmCacheRepository(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.temp_dir = Path(tempfile.mkdtemp())
-        self.vllm_cache_root = self.temp_dir / "vllm_cache"
-        self.vllm_cache_root.mkdir(parents=True, exist_ok=True)
+        self.cache_dir = self.temp_dir / "vllm_cache"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):
         """Clean up after each test method."""
@@ -27,8 +27,8 @@ class TestVllmCacheRepository(unittest.TestCase):
 
     def test_init_with_existing_directory(self):
         """Test initializing VllmCacheRepository with existing directory."""
-        repo = VllmCacheRepository(self.vllm_cache_root)
-        self.assertEqual(repo.root, self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
+        self.assertEqual(repo.root, self.cache_dir)
 
     def test_init_with_nonexistent_directory(self):
         """Test initializing VllmCacheRepository with non-existent directory."""
@@ -48,14 +48,14 @@ class TestVllmCacheRepository(unittest.TestCase):
 
     def test_find_torch_compile_cache_dirs_empty(self):
         """Test finding torch compile cache directories when none exist."""
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
         self.assertEqual(len(dirs), 0)
 
     def test_find_torch_compile_cache_dirs_with_dirs(self):
         """Test finding torch compile cache directories when they exist."""
         # Create mock vLLM structure
-        torch_compile_dir = self.vllm_cache_root / "torch_compile_cache"
+        torch_compile_dir = self.cache_dir / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
         hash_dir1 = torch_compile_dir / "hash123abc"
@@ -63,7 +63,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir1.mkdir()
         hash_dir2.mkdir()
 
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
 
         self.assertEqual(len(dirs), 2)
@@ -73,16 +73,16 @@ class TestVllmCacheRepository(unittest.TestCase):
 
     def test_find_rank_dirs_empty(self):
         """Test finding rank directories when none exist."""
-        hash_dir = self.vllm_cache_root / "test_hash"
+        hash_dir = self.cache_dir / "test_hash"
         hash_dir.mkdir()
 
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
         self.assertEqual(len(rank_dirs), 0)
 
     def test_find_rank_dirs_with_rank_dirs(self):
         """Test finding rank directories when they exist."""
-        hash_dir = self.vllm_cache_root / "test_hash"
+        hash_dir = self.cache_dir / "test_hash"
         hash_dir.mkdir()
 
         # Create rank directories with triton_cache subdirs
@@ -96,7 +96,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         triton_cache1.mkdir()
         triton_cache2.mkdir()
 
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
 
         self.assertEqual(len(rank_dirs), 2)
@@ -109,14 +109,14 @@ class TestVllmCacheRepository(unittest.TestCase):
 
     def test_find_rank_dirs_without_triton_cache(self):
         """Test finding rank directories when they don't have triton_cache subdirs."""
-        hash_dir = self.vllm_cache_root / "test_hash"
+        hash_dir = self.cache_dir / "test_hash"
         hash_dir.mkdir()
 
         # Create rank directories without triton_cache subdirs
         rank1 = hash_dir / "rank_0_0"
         rank1.mkdir()
 
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
 
         self.assertEqual(len(rank_dirs), 0)
@@ -128,7 +128,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         mock_cache_repo.kernels.return_value = []
         mock_cache_repo_class.return_value = mock_cache_repo
 
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         kernels = list(repo.kernels())
 
         self.assertEqual(len(kernels), 0)
@@ -137,7 +137,7 @@ class TestVllmCacheRepository(unittest.TestCase):
     def test_kernels_with_structure_and_kernels(self, mock_iter_triton_kernels):
         """Test kernels method with vLLM structure containing kernels."""
         # Create vLLM directory structure
-        torch_compile_dir = self.vllm_cache_root / "torch_compile_cache"
+        torch_compile_dir = self.cache_dir / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
         hash_dir = torch_compile_dir / "hash123abc"
@@ -160,21 +160,21 @@ class TestVllmCacheRepository(unittest.TestCase):
 
         mock_iter_triton_kernels.return_value = [mock_kernel1, mock_kernel2]
 
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         kernels = list(repo.kernels())
 
-        # Should have 2 kernels, each with vllm_hash, vllm_cache_root, and rank_x_y
+        # Should have 2 kernels, each with vllm_hash, cache_dir, and rank_x_y
         self.assertEqual(len(kernels), 2)
 
-        vllm_hash, vllm_cache_root, rank_x_y, kernel = kernels[0]
+        vllm_hash, cache_dir, rank_x_y, kernel = kernels[0]
         self.assertEqual(vllm_hash, "hash123abc")
-        self.assertEqual(vllm_cache_root, str(self.vllm_cache_root))
+        self.assertEqual(cache_dir, str(self.cache_dir))
         self.assertEqual(rank_x_y, "rank_0_0")
         self.assertEqual(kernel, mock_kernel1)
 
-        vllm_hash, vllm_cache_root, rank_x_y, kernel = kernels[1]
+        vllm_hash, cache_dir, rank_x_y, kernel = kernels[1]
         self.assertEqual(vllm_hash, "hash123abc")
-        self.assertEqual(vllm_cache_root, str(self.vllm_cache_root))
+        self.assertEqual(cache_dir, str(self.cache_dir))
         self.assertEqual(rank_x_y, "rank_0_0")
         self.assertEqual(kernel, mock_kernel2)
 
@@ -182,7 +182,7 @@ class TestVllmCacheRepository(unittest.TestCase):
     def test_kernels_multiple_hash_dirs(self, mock_iter_triton_kernels):
         """Test kernels method with multiple hash directories."""
         # Create vLLM directory structure with multiple hash dirs
-        torch_compile_dir = self.vllm_cache_root / "torch_compile_cache"
+        torch_compile_dir = self.cache_dir / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
         hash_dir1 = torch_compile_dir / "hash123abc"
@@ -211,7 +211,7 @@ class TestVllmCacheRepository(unittest.TestCase):
 
         mock_iter_triton_kernels.side_effect = side_effect
 
-        repo = VllmCacheRepository(self.vllm_cache_root)
+        repo = VllmCacheRepository(self.cache_dir)
         kernels = list(repo.kernels())
 
         # Should have kernels from both hash directories

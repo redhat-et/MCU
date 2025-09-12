@@ -98,7 +98,7 @@ class TestVllmKernelOrm(unittest.TestCase):
 
     def test_upsert_from_dto(self):
         """Test upsert_from_dto method."""
-        vllm_cache_root = "/test/vllm/cache"
+        cache_dir = "/test/vllm/cache"
         vllm_hash = "test_vllm_hash"
 
         with patch('model_cache_manager.data.db_models.sqlite_insert') as mock_insert, \
@@ -112,7 +112,7 @@ class TestVllmKernelOrm(unittest.TestCase):
             VllmKernelOrm.upsert_from_dto(
                 self.mock_session,
                 self.mock_kernel,
-                vllm_cache_root,
+                cache_dir,
                 vllm_hash,
                 rank_x_y
             )
@@ -123,7 +123,7 @@ class TestVllmKernelOrm(unittest.TestCase):
             # Verify kernel values were set correctly
             if hasattr(mock_stmt.values, 'call_args') and mock_stmt.values.call_args:
                 kernel_values = mock_stmt.values.call_args[0][0]
-                self.assertEqual(kernel_values["vllm_cache_root"], vllm_cache_root)
+                self.assertEqual(kernel_values["cache_dir"], cache_dir)
                 self.assertEqual(kernel_values["vllm_hash"], vllm_hash)
                 self.assertEqual(kernel_values["triton_cache_key"], "test_hash")
 
@@ -135,14 +135,14 @@ class TestVllmKernelOrm(unittest.TestCase):
         """Test to_dict method inherited from BaseKernelMixin."""
         # Create a mock VllmKernelOrm instance
         vllm_kernel = VllmKernelOrm()
-        vllm_kernel.vllm_cache_root = "/test/cache"
+        vllm_kernel.cache_dir = "/test/cache"
         vllm_kernel.vllm_hash = "test_hash"
         vllm_kernel.triton_cache_key = "triton_key"
         vllm_kernel.kernel_metadata_json = {"test": "metadata"}
 
         # Mock the __table__.columns attribute
         mock_column1 = MagicMock()
-        mock_column1.key = "vllm_cache_root"
+        mock_column1.key = "cache_dir"
         mock_column2 = MagicMock()
         mock_column2.key = "vllm_hash"
         mock_column3 = MagicMock()
@@ -197,14 +197,14 @@ class TestVllmDatabase(unittest.TestCase):
              patch('model_cache_manager.data.database.VllmKernelOrm') as mock_kernel_orm:
 
             db = VllmDatabase()
-            vllm_cache_root = "/test/cache"
+            cache_dir = "/test/cache"
             vllm_hash = "test_hash"
 
             rank_x_y = "rank_0_0"
-            db.insert_kernel(self.mock_kernel, vllm_cache_root, vllm_hash, rank_x_y)
+            db.insert_kernel(self.mock_kernel, cache_dir, vllm_hash, rank_x_y)
 
             mock_kernel_orm.upsert_from_dto.assert_called_once_with(
-                mock_session, self.mock_kernel, vllm_cache_root, vllm_hash, rank_x_y
+                mock_session, self.mock_kernel, cache_dir, vllm_hash, rank_x_y
             )
             mock_session.commit.assert_called_once()
             mock_session.close.assert_called_once()
