@@ -177,9 +177,9 @@ class TestVllmDatabase(unittest.TestCase):
     @patch("model_cache_manager.data.database.create_engine_and_session")
     def test_init(self, mock_create_engine_session):
         """Test VllmDatabase initialization."""
-        mock_engine = MagicMock()
-        mock_session_local = MagicMock()
-        mock_create_engine_session.return_value = (mock_engine, mock_session_local)
+        mock_engine, mock_session_local, _ = setup_engine_and_session_mock(
+            mock_create_engine_session
+        )
 
         with patch("model_cache_manager.data.database.Base") as mock_base:
             db = VllmDatabase()
@@ -192,11 +192,7 @@ class TestVllmDatabase(unittest.TestCase):
     @patch("model_cache_manager.data.database.create_engine_and_session")
     def test_insert_kernel_success(self, mock_create_engine_session):
         """Test successful kernel insertion."""
-        mock_engine = MagicMock()
-        mock_session_local = MagicMock()
-        mock_session = MagicMock()
-        mock_session_local.return_value = mock_session
-        mock_create_engine_session.return_value = (mock_engine, mock_session_local)
+        _, _, mock_session = setup_engine_and_session_mock(mock_create_engine_session)
 
         with patch("model_cache_manager.data.database.Base"), patch(
             "model_cache_manager.data.database.VllmKernelOrm"
@@ -292,11 +288,7 @@ class TestVllmDatabase(unittest.TestCase):
     @patch("model_cache_manager.data.database.create_engine_and_session")
     def test_search_with_criteria(self, mock_create_engine_session):
         """Test search method with various criteria."""
-        mock_engine = MagicMock()
-        mock_session_local = MagicMock()
-        mock_session = MagicMock()
-        mock_session_local.return_value = mock_session
-        mock_create_engine_session.return_value = (mock_engine, mock_session_local)
+        _, _, mock_session = setup_engine_and_session_mock(mock_create_engine_session)
 
         # Mock query results
         mock_kernel_orm = MagicMock()
@@ -331,11 +323,7 @@ class TestVllmDatabase(unittest.TestCase):
     @patch("model_cache_manager.data.database.create_engine_and_session")
     def test_search_with_time_filters(self, mock_create_engine_session):
         """Test search method with time-based filters."""
-        mock_engine = MagicMock()
-        mock_session_local = MagicMock()
-        mock_session = MagicMock()
-        mock_session_local.return_value = mock_session
-        mock_create_engine_session.return_value = (mock_engine, mock_session_local)
+        _, _, mock_session = setup_engine_and_session_mock(mock_create_engine_session)
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -369,9 +357,7 @@ class TestVllmDatabase(unittest.TestCase):
     @patch("model_cache_manager.data.database.create_engine_and_session")
     def test_close(self, mock_create_engine_session):
         """Test database close method."""
-        mock_engine = MagicMock()
-        mock_session_local = MagicMock()
-        mock_create_engine_session.return_value = (mock_engine, mock_session_local)
+        mock_engine, _, _ = setup_engine_and_session_mock(mock_create_engine_session)
 
         with patch("model_cache_manager.data.database.Base"):
             db = VllmDatabase()

@@ -83,18 +83,22 @@ class BaseKernelMixin:  # pylint: disable=too-few-public-methods
     @classmethod
     def get_common_kernel_values(cls, k_data: Kernel) -> Dict[str, Any]:
         """
-        Extracts and returns a dictionary of common kernel field values from a Kernel data transfer object (DTO).
+        Extracts and returns a dictionary of common kernel field values from
+        a Kernel data transfer object (DTO).
 
-        This method is used to map the attributes of a Kernel instance to a dictionary suitable for database insertion
-        or update operations. The returned dictionary contains key-value pairs corresponding to the fields defined
-        in the ORM model.
+        This method is used to map the attributes of a Kernel instance to a
+        dictionary suitable for database insertion
+        or update operations. The returned dictionary contains key-value
+        pairs corresponding to the fields defined in the ORM model.
 
         Args:
             k_data (Kernel): The Kernel DTO instance containing kernel metadata and configuration.
 
         Returns:
-            Dict[str, Any]: A dictionary mapping field names to their corresponding values extracted from the
-            Kernel DTO. This includes fields such as backend, arch, name, warp_size, num_warps, and others.
+            Dict[str, Any]: A dictionary mapping field names to their corresponding 
+            values extracted from the
+            Kernel DTO. This includes fields such as backend, arch,
+            name, warp_size, num_warps, and others.
             The 'total_size' field is computed as the sum of the sizes of all files in k_data.files.
         """
         return {

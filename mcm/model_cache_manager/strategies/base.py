@@ -14,6 +14,7 @@ from ..utils.utils import KernelIdentifier, build_common_search_filters
 @dataclass
 class CacheConfig:
     """Configuration for cache mode strategy."""
+
     orm_model: Type
     file_orm_model: Type
     hash_field: str
