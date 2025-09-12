@@ -295,7 +295,7 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
             ir_rows = (
                 session.query(config.file_orm_model)
                 .filter(
-                    config.file_orm_model.vllm_cache_root == str(self.cache_dir),
+                    config.file_orm_model.cache_dir == str(self.cache_dir),
                     config.file_orm_model.vllm_hash == identifier.vllm_hash,
                     config.file_orm_model.triton_cache_key == identifier.hash_key,
                     config.file_orm_model.rank_x_y == identifier.rank_x_y,

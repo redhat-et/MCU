@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Type, List, Dict, Any
 
-from ..utils.utils import KernelIdentifier
+from ..utils.utils import KernelIdentifier, build_common_search_filters
 
 
 @dataclass
@@ -49,10 +49,21 @@ class CacheModeStrategy(ABC):
     def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
         """Strategy-specific kernel insertion."""
 
-    @abstractmethod
     def get_cache_dir_from_row(self, row: Dict[str, Any]) -> str:
         """Get cache directory path from database row."""
+        return row.get("cache_dir", "")
 
-    @abstractmethod
     def build_search_filters(self, criteria, orm_class) -> List:
-        """Build mode-specific search filters for database queries."""
+        """Build search filters for database queries.
+
+        Default implementation for common filter configuration.
+        Subclasses can override if they need different behavior.
+        """
+        equality_filter_configs = [
+            ("cache_dir", orm_class.cache_dir, str),
+            ("name", orm_class.name, None),
+            ("backend", orm_class.backend, None),
+            ("arch", orm_class.arch, str),
+        ]
+
+        return build_common_search_filters(criteria, orm_class, equality_filter_configs)
