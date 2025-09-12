@@ -95,7 +95,7 @@ class BaseKernelMixin:  # pylint: disable=too-few-public-methods
             k_data (Kernel): The Kernel DTO instance containing kernel metadata and configuration.
 
         Returns:
-            Dict[str, Any]: A dictionary mapping field names to their corresponding 
+            Dict[str, Any]: A dictionary mapping field names to their corresponding
             values extracted from the
             Kernel DTO. This includes fields such as backend, arch,
             name, warp_size, num_warps, and others.
