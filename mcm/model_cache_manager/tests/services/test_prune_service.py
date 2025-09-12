@@ -115,7 +115,7 @@ class TestPruningService(unittest.TestCase):
 
         self.mock_db_instance.search.assert_called_once_with(criteria)
         self.mock_db_instance.estimate_space.assert_called_once_with(
-            ["hash1", "hash2"], IR_EXTS
+            ["hash1", "hash2"], None
         )
         mock_rich_confirm_ask.assert_not_called()
 
@@ -202,7 +202,7 @@ class TestPruningService(unittest.TestCase):
         )
 
         self.mock_db_instance.search.assert_called_once_with(criteria)
-        self.mock_db_instance.estimate_space.assert_called_once_with(["hash2"], IR_EXTS)
+        self.mock_db_instance.estimate_space.assert_called_once_with(["hash2"], None)
         mock_rich_confirm_ask.assert_not_called()
         # Check that the unified method was called with the correct KernelIdentifier object
         self.assertEqual(mock_delete_kernel.call_count, 1)
