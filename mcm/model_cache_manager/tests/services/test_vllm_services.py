@@ -91,6 +91,7 @@ class TestIndexServiceVllmMode(unittest.TestCase):
 
         mock_db_instance = MagicMock(spec=VllmDatabase)
         mock_db_instance.search.return_value = []  # No existing kernels
+        mock_db_instance.bulk_insert_kernels.return_value = 2
         mock_vllm_db.return_value = mock_db_instance
 
         service = IndexService(cache_dir=self.cache_dir, mode="vllm")
@@ -99,13 +100,12 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         self.assertEqual(updated, 2)
         self.assertEqual(current, 0)
 
-        # Verify kernels were inserted with vLLM parameters
-        self.assertEqual(mock_db_instance.insert_kernel.call_count, 2)
-        mock_db_instance.insert_kernel.assert_any_call(
-            mock_kernel1, "/cache/root", "vllm_hash1", "rank_0_0"
-        )
-        mock_db_instance.insert_kernel.assert_any_call(
-            mock_kernel2, "/cache/root", "vllm_hash2", "rank_1_0"
+        # Verify bulk_insert_kernels was called with vLLM parameters
+        mock_db_instance.bulk_insert_kernels.assert_called_once_with(
+            [
+                (mock_kernel1, "/cache/root", "vllm_hash1", "rank_0_0"),
+                (mock_kernel2, "/cache/root", "vllm_hash2", "rank_1_0"),
+            ]
         )
 
     @patch("model_cache_manager.strategies.triton_strategy.CacheRepository")
@@ -123,6 +123,7 @@ class TestIndexServiceVllmMode(unittest.TestCase):
 
         mock_db_instance = MagicMock()
         mock_db_instance.search.return_value = []
+        mock_db_instance.bulk_insert_kernels.return_value = 2
         mock_db.return_value = mock_db_instance
 
         service = IndexService(cache_dir=self.cache_dir, mode="triton")
@@ -131,13 +132,9 @@ class TestIndexServiceVllmMode(unittest.TestCase):
         self.assertEqual(updated, 2)
         self.assertEqual(current, 0)
 
-        # Verify kernels were inserted with triton parameters
-        self.assertEqual(mock_db_instance.insert_kernel.call_count, 2)
-        mock_db_instance.insert_kernel.assert_any_call(
-            mock_kernel1, str(self.cache_dir)
-        )
-        mock_db_instance.insert_kernel.assert_any_call(
-            mock_kernel2, str(self.cache_dir)
+        # Verify bulk_insert_kernels was called with correct parameters
+        mock_db_instance.bulk_insert_kernels.assert_called_once_with(
+            [(mock_kernel1, str(self.cache_dir)), (mock_kernel2, str(self.cache_dir))]
         )
 
 

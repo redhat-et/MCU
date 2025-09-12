@@ -13,6 +13,7 @@ from ..data.db_models import VllmKernelOrm, VllmKernelFileOrm
 from ..utils.utils import (
     KernelIdentifier,
     create_kernel_identifier,
+    process_kernels_in_batches,
 )
 
 
@@ -52,15 +53,23 @@ class VllmStrategy(CacheModeStrategy):
             rank_x_y=row["rank_x_y"],
         )
 
-    def reindex_kernels(self, repo, db) -> int:
-        """Perform vLLM-specific kernel reindexing."""
-        updated_kernels = 0
-        for vllm_hash, cache_dir, rank_x_y, kernel in repo.kernels():
-            self.insert_kernel_strategy(
-                db, kernel, cache_dir, vllm_hash, rank_x_y
-            )
-            updated_kernels += 1
-        return updated_kernels
+    def reindex_kernels(self, repo, db, batch_size: int = 1000) -> int:
+        """Perform vLLM-specific kernel reindexing using streaming bulk insert.
+
+        Args:
+            repo: Repository to read kernels from
+            db: Database to insert kernels into
+            batch_size: Number of kernels to accumulate before bulk inserting
+
+        Returns:
+            Total number of kernels inserted
+        """
+        # Create generator that yields kernel data tuples
+        kernels_iterator = (
+            (kernel, cache_dir, vllm_hash, rank_x_y)
+            for vllm_hash, cache_dir, rank_x_y, kernel in repo.kernels()
+        )
+        return process_kernels_in_batches(kernels_iterator, db, batch_size)
 
     def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
         """Strategy-specific kernel insertion for vLLM."""
