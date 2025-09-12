@@ -83,7 +83,7 @@ class TestBaseKernelMixin(unittest.TestCase):
     """Test suite for the BaseKernelMixin."""
 
     def test_get_common_kernel_values(self):
-        """Test _get_common_kernel_values method."""
+        """Test get_common_kernel_values method."""
         mock_kernel = create_mock_kernel()
 
         values = BaseKernelMixin.get_common_kernel_values(mock_kernel)
