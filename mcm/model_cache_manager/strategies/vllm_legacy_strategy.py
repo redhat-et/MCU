@@ -1,5 +1,5 @@
 """
-Strategy implementation for new vLLM cache mode.
+Strategy implementation for legacy vLLM cache mode.
 """
 
 from __future__ import annotations
@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Dict, Any
 
 from .base import CacheModeStrategy, CacheConfig
-from ..data.database import VllmDatabase
-from ..data.cache_repo import VllmCacheRepository
-from ..data.db_models import VllmKernelOrm, VllmKernelFileOrm
+from ..data.database import VllmLegacyDatabase
+from ..data.cache_repo import VllmLegacyCacheRepository
+from ..data.db_models import VllmLegacyKernelOrm, VllmLegacyKernelFileOrm
 from ..utils.utils import (
     KernelIdentifier,
     create_kernel_identifier,
@@ -17,49 +17,44 @@ from ..utils.utils import (
 )
 
 
-class VllmStrategy(CacheModeStrategy):
-    """Strategy for handling new vLLM cache mode operations."""
+class VllmLegacyStrategy(CacheModeStrategy):
+    """Strategy for handling legacy vLLM cache mode operations."""
 
     @property
     def config(self) -> CacheConfig:
-        """Return new vLLM cache configuration."""
+        """Return legacy vLLM cache configuration."""
         return CacheConfig(
-            orm_model=VllmKernelOrm,
-            file_orm_model=VllmKernelFileOrm,
+            orm_model=VllmLegacyKernelOrm,
+            file_orm_model=VllmLegacyKernelFileOrm,
             hash_field="triton_cache_key",
             primary_key_fields=[
                 "cache_dir",
                 "vllm_hash",
                 "triton_cache_key",
                 "rank_x_y",
-                "artifact_shape",
             ],
-            additional_duplicate_fields=["vllm_hash", "artifact_shape"],
+            additional_duplicate_fields=["vllm_hash"],
         )
 
     def create_database(self):
-        """Create VllmDatabase instance for new vLLM mode."""
-        return VllmDatabase()
+        """Create VllmLegacyDatabase instance for legacy vLLM mode."""
+        return VllmLegacyDatabase()
 
     def create_repository(self, cache_dir: Path):
-        """Create VllmCacheRepository instance for new vLLM mode."""
-        return VllmCacheRepository(cache_dir)
+        """Create VllmLegacyCacheRepository instance for legacy vLLM mode."""
+        return VllmLegacyCacheRepository(cache_dir)
 
     def extract_identifiers_from_row(self, row: Dict[str, Any]) -> KernelIdentifier:
-        """Extract kernel identifier from new vLLM database row."""
-        identifier = create_kernel_identifier(
-            mode="vllm",
+        """Extract kernel identifier from legacy vLLM database row."""
+        return create_kernel_identifier(
+            mode="vllm-legacy",
             vllm_hash=row["vllm_hash"],
             triton_cache_key=row["triton_cache_key"],
             rank_x_y=row["rank_x_y"],
         )
-        # Add artifact_shape as an attribute if present
-        if "artifact_shape" in row:
-            identifier.artifact_shape = row["artifact_shape"]
-        return identifier
 
     def reindex_kernels(self, repo, db, batch_size: int = 1000) -> int:
-        """Perform new vLLM-specific kernel reindexing using streaming bulk insert.
+        """Perform legacy vLLM-specific kernel reindexing using streaming bulk insert.
 
         Args:
             repo: Repository to read kernels from
@@ -71,16 +66,14 @@ class VllmStrategy(CacheModeStrategy):
         """
         # Create generator that yields kernel data tuples
         kernels_iterator = (
-            (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
-            for vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel in repo.kernels()
+            (kernel, cache_dir, vllm_hash, rank_x_y)
+            for vllm_hash, cache_dir, rank_x_y, kernel in repo.kernels()
         )
         return process_kernels_in_batches(kernels_iterator, db, batch_size)
 
     def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
-        """Strategy-specific kernel insertion for new vLLM."""
+        """Strategy-specific kernel insertion for legacy vLLM."""
         cache_dir = args[0] if len(args) > 0 else kwargs.get("cache_dir")
         vllm_hash = args[1] if len(args) > 1 else kwargs.get("vllm_hash")
         rank_x_y = args[2] if len(args) > 2 else kwargs.get("rank_x_y")
-        artifact_shape = args[3] if len(args) > 3 else kwargs.get("artifact_shape")
-        best_config = args[4] if len(args) > 4 else kwargs.get("best_config")
-        db.insert_kernel(k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
+        db.insert_kernel(k_data, cache_dir, vllm_hash, rank_x_y)

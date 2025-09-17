@@ -4,9 +4,9 @@ Service for search Triton kernels based on criteria.
 
 from __future__ import annotations
 from typing import Any, Dict, List
-from ..strategies import TritonStrategy, VllmStrategy
+from ..strategies import TritonStrategy, VllmStrategy, VllmLegacyStrategy
 from ..models.criteria import SearchCriteria
-from ..utils.mcm_constants import MODE_VLLM
+from ..utils.mcm_constants import MODE_VLLM, MODE_VLLM_LEGACY
 
 
 class SearchService:
@@ -26,6 +26,8 @@ class SearchService:
         # Initialize strategy based on mode
         if mode == MODE_VLLM:
             self.strategy = VllmStrategy()
+        elif mode == MODE_VLLM_LEGACY:
+            self.strategy = VllmLegacyStrategy()
         else:
             self.strategy = TritonStrategy()
 

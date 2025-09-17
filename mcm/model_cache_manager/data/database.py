@@ -21,6 +21,8 @@ from .db_models import (
     KernelFileOrm,
     VllmKernelOrm,
     VllmKernelFileOrm,
+    VllmLegacyKernelOrm,
+    VllmLegacyKernelFileOrm,
     SqlaSession,
 )
 
@@ -28,6 +30,7 @@ from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
 from ..utils.mcm_constants import IR_EXTS
 from ..utils.utils import build_common_search_filters
+from .vllm_legacy_database import VllmLegacyDatabase  # noqa: F401
 
 log = logging.getLogger(__name__)
 
@@ -496,7 +499,7 @@ class Database:
 
 class VllmDatabase:
     """
-    Manages database interactions for vLLM kernel metadata.
+    Manages database interactions for new vLLM kernel metadata.
     """
 
     def __init__(self) -> None:
@@ -506,7 +509,7 @@ class VllmDatabase:
             "vllm"
         )  # pylint: disable=invalid-name
         self._ensure_schema()
-        log.info("vLLM Database service interface initialized successfully.")
+        log.info("New vLLM Database service interface initialized successfully.")
 
     def estimate_space(self, hashes: Iterable[str], f_ext: Set[str] | None) -> int:
         """Sum the sizes of artefacts that would be deleted."""
@@ -540,29 +543,34 @@ class VllmDatabase:
         return self.SessionLocal()
 
     def insert_kernel(
-        self, k_data: Kernel, cache_dir: str, vllm_hash: str, rank_x_y: str
+        self, k_data: Kernel, cache_dir: str, vllm_hash: str, rank_x_y: str,
+        artifact_shape: str, best_config: str | None = None
     ) -> None:
         """
-        Upserts a vLLM kernel and its associated files into the database.
+        Upserts a new vLLM kernel and its associated files into the database.
 
         Args:
             k_data: A `Kernel` DTO containing the metadata.
             cache_dir: Root path of the vLLM cache
             vllm_hash: Hash identifier for the vLLM cache group
+            rank_x_y: Rank identifier
+            artifact_shape: Artifact shape directory name
+            best_config: Optional JSON string for best config
         """
         session = self.get_session()
         try:
             VllmKernelOrm.upsert_from_dto(
-                session, k_data, cache_dir, vllm_hash, rank_x_y
+                session, k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config
             )
             session.commit()
             log.info(
-                "vLLM Kernel %s with cache_dir %s vllm_hash %s and "
-                "rank_x_y %s upserted into DB.",
+                "New vLLM Kernel %s with cache_dir %s vllm_hash %s, "
+                "rank_x_y %s, and artifact_shape %s upserted into DB.",
                 k_data.hash,
                 cache_dir,
                 vllm_hash,
                 rank_x_y,
+                artifact_shape,
             )
         except exc.IntegrityError as e:
             session.rollback()
