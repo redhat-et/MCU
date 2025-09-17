@@ -309,6 +309,21 @@ updating the MCM database with runtime statistics.
 
 ## Advanced Usage
 
+### Environment Variables
+
+MCM supports configuration through environment variables.
+All environment variables use the `MCM_` prefix and are case-insensitive.
+
+#### Available Environment Variables
+
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `MCM_MODEL_CACHE_DIR` | `~/.triton/cache` | default Triton kernel cache dir |
+| `MCM_MODEL_CACHE_DIR_VLLM` | `~/.cache/vllm` | default vLLM cache dir |
+| `MCM_DATA_DIR` | Platform-specific | MCM's database and metadata |
+| `MCM_DB_FILENAME` | `cache.db` | Base filename for the SQLite database |
+| `MCM_LOG_LEVEL` | `INFO` | Logging level |
+
 ### Verbose Logging
 
 Use `-v` flags for increased verbosity:

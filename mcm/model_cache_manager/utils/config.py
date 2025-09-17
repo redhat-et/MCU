@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     This class defines the default paths and settings used throughout the application.
     It supports overriding via environment variables prefixed with MCM_.
+    For example MCM_DATA_DIR will edit data_dir variable
     """
 
     model_cache_dir: Path = Field(
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
             )
         ) / "model-cache-manager"
     )
-    db_filename: str = "cache.db"
+    db_filename: str = "cache_"
     log_level: str = "INFO"
 
     model_config = {
