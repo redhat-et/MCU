@@ -26,6 +26,7 @@ from sqlalchemy.orm import (
 )
 
 from ..models.kernel import Kernel
+from ..utils.strategy_constants import VLLM_EXTENDED_PRIMARY_FIELDS
 
 
 log = logging.getLogger(__name__)
@@ -369,7 +370,9 @@ class VllmKernelOrm(Base, BaseKernelMixin):
     triton_cache_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     rank_x_y: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     artifact_shape: Mapped[str] = mapped_column(String, primary_key=True, index=True)
-    best_config: Mapped[Optional[str]] = mapped_column(String)  # JSON string for best config
+    best_config: Mapped[Optional[str]] = mapped_column(
+        String
+    )  # JSON string for best config
 
     files: Mapped[List["VllmKernelFileOrm"]] = relationship(
         "VllmKernelFileOrm",
@@ -390,8 +393,12 @@ class VllmKernelOrm(Base, BaseKernelMixin):
 
     @staticmethod
     def get_vllm_kernel_values(
-        k_data: Kernel, cache_dir: str, vllm_hash: str, rank_x_y: str,
-        artifact_shape: str, best_config: Optional[str] = None
+        k_data: Kernel,
+        cache_dir: str,
+        vllm_hash: str,
+        rank_x_y: str,
+        artifact_shape: str,
+        best_config: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get new vLLM-specific kernel values.
@@ -444,7 +451,13 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
             if col.name
-            not in ("cache_dir", "rank_x_y", "vllm_hash", "triton_cache_key", "artifact_shape")
+            not in (
+                "cache_dir",
+                "rank_x_y",
+                "vllm_hash",
+                "triton_cache_key",
+                "artifact_shape",
+            )
         }
         stmt = stmt.on_conflict_do_update(
             index_elements=[
@@ -582,7 +595,7 @@ class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["cache_dir", "vllm_hash", "triton_cache_key", "rank_x_y", "artifact_shape"],
+            VLLM_EXTENDED_PRIMARY_FIELDS,
             [
                 "vllm_kernels.cache_dir",
                 "vllm_kernels.vllm_hash",

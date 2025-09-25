@@ -7,7 +7,6 @@ for interacting with the kernel cache database. It uses ORM models (SqlAlchemy).
 """
 from __future__ import annotations
 
-import collections
 import logging
 from typing import Any, Dict, List, Set, Iterable, Tuple
 
@@ -21,8 +20,6 @@ from .db_models import (
     KernelFileOrm,
     VllmKernelOrm,
     VllmKernelFileOrm,
-    VllmLegacyKernelOrm,
-    VllmLegacyKernelFileOrm,
     SqlaSession,
 )
 
@@ -30,6 +27,8 @@ from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel
 from ..utils.mcm_constants import IR_EXTS
 from ..utils.utils import build_common_search_filters
+from . import database_utils
+from .database_utils import create_file_orm_dict
 from .vllm_legacy_database import VllmLegacyDatabase  # noqa: F401
 
 log = logging.getLogger(__name__)
@@ -49,12 +48,7 @@ class Database:
 
     def _ensure_schema(self) -> None:
         """Ensures database schema (tables, indexes) exists."""
-        try:
-            Base.metadata.create_all(bind=self.engine)
-            log.info("Database schema verified/created at %s.", DB_PATH)
-        except Exception as e:  # pylint: disable=broad-except
-            log.error("Fatal error creating database schema: %s", e, exc_info=True)
-            raise
+        database_utils.ensure_schema(self.engine)
 
     def get_session(self) -> SqlaSession:
         """Returns a new database session."""
@@ -132,7 +126,9 @@ class Database:
 
         return kernel_ids_to_clear, file_values_list
 
-    def _upsert_kernel(self, session: SqlaSession, k_data: Kernel, cache_dir: str) -> None:
+    def _upsert_kernel(
+        self, session: SqlaSession, k_data: Kernel, cache_dir: str
+    ) -> None:
         """Upsert a single kernel."""
         kernel_values = KernelOrm.get_common_kernel_values(k_data)
         kernel_values.update(
@@ -187,7 +183,7 @@ class Database:
                         tuple_(
                             KernelFileOrm.kernel_hash, KernelFileOrm.kernel_cache_dir
                         ).in_(kernel_ids_to_clear)
-                    ).delete(synchronize_session='evaluate')
+                    ).delete(synchronize_session="evaluate")
 
                 # Insert/update kernels
                 for k_data, cache_dir in batch:
@@ -253,42 +249,6 @@ class Database:
         finally:
             session.close()
 
-    @staticmethod
-    def _are_kernel_metadata_jsons_duplicates(metadata1: Any, metadata2: Any) -> bool:
-        """
-        Compares two kernel metadata dictionaries field by field.
-        Kernels are considered duplicates if their metadata JSON objects:
-        1. Are identical (0 differences).
-        2. Differ *only* in a field named 'hash' within the JSON content
-        (1 difference, specific to 'hash').
-        They are NOT duplicates if they differ in 2 or more fields, or if they differ in 1 field
-        that is NOT named 'hash'.
-        TODO : we will probably change it since we can get more metadata from inductor
-        """
-        differences_count = 0
-        hash_field_differed = False
-
-        all_keys: Set[str] = set(metadata1.keys()) | set(metadata2.keys())
-
-        for key in all_keys:
-            value1 = metadata1.get(key)
-            value2 = metadata2.get(key)
-
-            if value1 != value2:
-                differences_count += 1
-                if key == "hash":
-                    hash_field_differed = True
-
-            if differences_count >= 2:
-                return False
-
-        if differences_count == 0:
-            return True
-        if differences_count == 1:
-            return hash_field_differed
-
-        return False
-
     # pylint: disable=too-many-locals
     # we'll change this logic
     def find_duplicates(self) -> List[List[Dict[str, Any]]]:
@@ -301,7 +261,9 @@ class Database:
         Returns a list of lists, where each inner list contains dictionaries of duplicate kernels,
         sorted by 'modified_time' (oldest first).
         """
-        return Database.find_duplicates_generic(self.SessionLocal, KernelOrm, "hash")
+        return database_utils.find_duplicates_generic(
+            self.SessionLocal, KernelOrm, "hash"
+        )
 
     def estimate_space(self, hashes: Iterable[str], f_ext: Set[str] | None) -> int:
         """Sum the sizes of artefacts that would be deleted."""
@@ -324,177 +286,6 @@ class Database:
         if self.engine:
             self.engine.dispose()
             log.info("Database engine connection pool disposed.")
-
-    @staticmethod
-    def find_duplicates_generic(
-        session_factory,
-        orm_class,
-        hash_field: str,
-        additional_fields: List[str] | None = None,
-    ) -> List[List[Dict[str, Any]]]:
-        """
-        Generic method to find duplicate kernels for any ORM class.
-
-        Args:
-            session_factory: SQLAlchemy session factory function
-            orm_class: The ORM class (KernelOrm or VllmKernelOrm)
-            hash_field: Primary hash field name ("hash" for triton, "triton_cache_key" for vllm)
-            additional_fields: Additional fields to include in the result (e.g., ["vllm_hash"])
-        """
-        session = session_factory()
-        try:
-            kernel_data = Database._query_all_kernels(
-                session, orm_class, hash_field, additional_fields
-            )
-            if not kernel_data:
-                return []
-
-            kernel_dicts = Database._build_kernel_dictionaries(
-                kernel_data, hash_field, additional_fields
-            )
-            grouped_kernels = Database._group_kernels_by_name_and_size(
-                kernel_dicts, hash_field
-            )
-            duplicate_groups = Database._find_duplicate_groups_in_groups(
-                grouped_kernels
-            )
-
-            log.debug(
-                "Found %s sets of duplicate kernels using %s "
-                "(grouped by name, JSON metadata identical or "
-                "differs only in internal 'hash' field).",
-                len(duplicate_groups),
-                orm_class.__name__,
-            )
-            return duplicate_groups
-
-        except Exception as e:  # pylint: disable=broad-except
-            log.error(
-                "DB Find Duplicates (%s): Failed: %s",
-                orm_class.__name__,
-                e,
-                exc_info=True,
-            )
-            return []
-        finally:
-            session.close()
-
-    @staticmethod
-    def _query_all_kernels(
-        session, orm_class, hash_field: str, additional_fields: List[str] | None = None
-    ):
-        """Query all kernels with required fields."""
-        base_fields = [
-            getattr(orm_class, hash_field),
-            orm_class.name,
-            orm_class.kernel_metadata_json,
-            orm_class.modified_time,
-            orm_class.backend,
-            orm_class.arch,
-            orm_class.triton_version,
-            orm_class.total_size,
-        ]
-
-        if additional_fields:
-            for field_name in additional_fields:
-                base_fields.append(getattr(orm_class, field_name))
-
-        return session.query(*base_fields).order_by(orm_class.modified_time.asc()).all()
-
-    @staticmethod
-    def _build_kernel_dictionaries(
-        kernel_data, hash_field: str, additional_fields: List[str] | None = None
-    ) -> List[Dict[str, Any]]:
-        """Build kernel dictionaries from ORM query results."""
-        kernel_list_of_dicts: List[Dict[str, Any]] = []
-
-        for k in kernel_data:
-            kernel_dict = {
-                hash_field: getattr(k, hash_field),
-                "name": k.name,
-                "metadata": k.kernel_metadata_json,
-                "modified_time": k.modified_time,
-                "backend": k.backend,
-                "arch": k.arch,
-                "triton_version": k.triton_version,
-                "total_size": k.total_size,
-            }
-
-            if additional_fields:
-                for field_name in additional_fields:
-                    kernel_dict[field_name] = getattr(k, field_name)
-
-            kernel_list_of_dicts.append(kernel_dict)
-
-        return kernel_list_of_dicts
-
-    @staticmethod
-    def _group_kernels_by_name_and_size(
-        kernel_dicts: List[Dict[str, Any]], hash_field: str
-    ) -> Dict:
-        """Group kernels by name and total size."""
-        grouped_kernels = collections.defaultdict(list)
-
-        for kernel_dict in kernel_dicts:
-            hash_val = kernel_dict.get(hash_field, "")
-            name_val = kernel_dict.get("name", "")
-            size_val = kernel_dict.get("total_size")
-            log.debug(
-                "%s %s name %s total_size %s", hash_field, hash_val, name_val, size_val
-            )
-            grouping_key = (name_val, size_val)
-            grouped_kernels[grouping_key].append(kernel_dict)
-
-        return grouped_kernels
-
-    @staticmethod
-    def _find_duplicate_groups_in_groups(
-        grouped_kernels: Dict,
-    ) -> List[List[Dict[str, Any]]]:
-        """Find duplicate groups within name/size groups."""
-        final_duplicate_groups: List[List[Dict[str, Any]]] = []
-
-        for kernels_with_same_name_size in grouped_kernels.values():
-            if len(kernels_with_same_name_size) < 2:
-                continue
-
-            duplicate_sets = Database._find_duplicates_in_single_group(
-                kernels_with_same_name_size
-            )
-            final_duplicate_groups.extend(duplicate_sets)
-
-        return final_duplicate_groups
-
-    @staticmethod
-    def _find_duplicates_in_single_group(
-        kernels: List[Dict[str, Any]],
-    ) -> List[List[Dict[str, Any]]]:
-        """Find duplicate sets within a single name/size group."""
-        processed = [False] * len(kernels)
-        duplicate_sets = []
-
-        for i, _ in enumerate(kernels):
-            if processed[i]:
-                continue
-
-            current_duplicate_set = [kernels[i]]
-            processed[i] = True
-
-            for j in range(i + 1, len(kernels)):
-                if processed[j]:
-                    continue
-
-                if Database._are_kernel_metadata_jsons_duplicates(
-                    kernels[i].get("metadata"),
-                    kernels[j].get("metadata"),
-                ):
-                    current_duplicate_set.append(kernels[j])
-                    processed[j] = True
-
-            if len(current_duplicate_set) > 1:
-                duplicate_sets.append(current_duplicate_set)
-
-        return duplicate_sets
 
 
 class VllmDatabase:
@@ -531,20 +322,20 @@ class VllmDatabase:
 
     def _ensure_schema(self) -> None:
         """Ensures database schema (tables, indexes) exists."""
-        try:
-            Base.metadata.create_all(bind=self.engine)
-            log.info("Database schema verified/created at %s.", DB_PATH)
-        except Exception as e:  # pylint: disable=broad-except
-            log.error("Fatal error creating database schema: %s", e, exc_info=True)
-            raise
+        database_utils.ensure_schema(self.engine)
 
     def get_session(self) -> SqlaSession:
         """Returns a new database session."""
         return self.SessionLocal()
 
     def insert_kernel(
-        self, k_data: Kernel, cache_dir: str, vllm_hash: str, rank_x_y: str,
-        artifact_shape: str, best_config: str | None = None
+        self,
+        k_data: Kernel,
+        cache_dir: str,
+        vllm_hash: str,
+        rank_x_y: str,
+        artifact_shape: str,
+        best_config: str | None = None,
     ) -> None:
         """
         Upserts a new vLLM kernel and its associated files into the database.
@@ -558,135 +349,126 @@ class VllmDatabase:
             best_config: Optional JSON string for best config
         """
         session = self.get_session()
-        try:
+
+        def operation():
             VllmKernelOrm.upsert_from_dto(
-                session, k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config
-            )
-            session.commit()
-            log.info(
-                "New vLLM Kernel %s with cache_dir %s vllm_hash %s, "
-                "rank_x_y %s, and artifact_shape %s upserted into DB.",
-                k_data.hash,
+                session,
+                k_data,
                 cache_dir,
                 vllm_hash,
                 rank_x_y,
                 artifact_shape,
+                best_config,
             )
-        except exc.IntegrityError as e:
-            session.rollback()
-            log.error(
-                "Failed to upsert vLLM kernel %s with cache_dir %s "
-                "vllm_hash %s and rank_x_y %s due to a constraint violation: %s",
-                k_data.hash,
-                cache_dir,
-                vllm_hash,
-                rank_x_y,
-                e,
-                exc_info=True,
-            )
-            raise
-        except exc.OperationalError as e:
-            session.rollback()
-            log.error(
-                "Failed to upsert vLLM kernel %s with cache_dir %s "
-                "vllm_hash %s and rank_x_y %s due to a db operation issue: %s",
-                k_data.hash,
-                cache_dir,
-                vllm_hash,
-                rank_x_y,
-                e,
-                exc_info=True,
-            )
-            raise
-        except Exception:  # pylint: disable=broad-except
-            session.rollback()
-            log.error(
-                "DB Error: Failed to upsert vLLM kernel %s with cache_dir %s "
-                "vllm_hash %s and rank_x_y %s.",
-                k_data.hash,
-                cache_dir,
-                vllm_hash,
-                rank_x_y,
-                exc_info=True,
-            )
-            raise
-        finally:
-            session.close()
+
+        extra_args = {"artifact_shape": artifact_shape}
+        if best_config:
+            extra_args["best_config"] = best_config
+
+        database_utils.handle_kernel_insert(
+            session, operation, k_data, cache_dir, vllm_hash, rank_x_y,
+            extra_args=extra_args, error_prefix="New vLLM "
+        )
 
     def _prepare_vllm_batch_data(
-        self, batch: List[Tuple[Kernel, str, str, str]]
+        self, batch: List[Tuple]
     ) -> Tuple[List, List]:
-        """Prepare vLLM kernel IDs and file values for batch processing."""
+        """Prepare vLLM kernel IDs and file values for batch processing.
+
+        Handles both old format (4 values) and new format (6 values with artifact_shape and best_config).
+        """
         kernel_ids_to_clear = []
         file_values_list = []
 
-        for k_data, cache_dir, vllm_hash, rank_x_y in batch:
-            kernel_ids_to_clear.append((cache_dir, vllm_hash, k_data.hash, rank_x_y))
+        for item in batch:
+            # Handle both old (4 values) and new (6 values) formats
+            if len(item) == 4:
+                # Legacy format: (kernel, cache_dir, vllm_hash, rank_x_y)
+                k_data, cache_dir, vllm_hash, rank_x_y = item
+                artifact_shape = None
+            elif len(item) == 6:
+                # New format: (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
+                k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config = item
+            else:
+                raise ValueError(f"Expected 4 or 6 values in batch item, got {len(item)}")
+
+            # For new structure, we need to include artifact_shape in the key
+            if artifact_shape is not None:
+                kernel_ids_to_clear.append((cache_dir, vllm_hash, k_data.hash, rank_x_y, artifact_shape))
+            else:
+                kernel_ids_to_clear.append((cache_dir, vllm_hash, k_data.hash, rank_x_y))
 
             # Collect file values for bulk insert
             for f_dto in k_data.files:
-                file_values_list.append(
-                    {
-                        "cache_dir": cache_dir,
-                        "vllm_hash": vllm_hash,
-                        "triton_cache_key": k_data.hash,
-                        "rank_x_y": rank_x_y,
-                        "type": f_dto.file_type,
-                        "rel_path": f_dto.path.name,
-                        "size": f_dto.size,
-                    }
+                file_val = create_file_orm_dict(
+                    cache_dir, vllm_hash, k_data.hash, rank_x_y, f_dto
                 )
+                if artifact_shape is not None:
+                    file_val["artifact_shape"] = artifact_shape
+                file_values_list.append(file_val)
 
         return kernel_ids_to_clear, file_values_list
 
     def _upsert_vllm_kernel(
         self,
         session: SqlaSession,
-        kernel_info: Tuple[Kernel, str, str, str],
+        kernel_info: Tuple,
     ) -> None:
         """Upsert a single vLLM kernel.
 
         Args:
             session: Database session
-            kernel_info: Tuple of (k_data, cache_dir, vllm_hash, rank_x_y)
+            kernel_info: Tuple of (k_data, cache_dir, vllm_hash, rank_x_y) or
+                        (k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
         """
-        k_data, cache_dir, vllm_hash, rank_x_y = kernel_info
+        # Handle both old (4 values) and new (6 values) formats
+        if len(kernel_info) == 4:
+            k_data, cache_dir, vllm_hash, rank_x_y = kernel_info
+            artifact_shape = None
+            best_config = None
+        elif len(kernel_info) == 6:
+            k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config = kernel_info
+        else:
+            raise ValueError(f"Expected 4 or 6 values in kernel_info, got {len(kernel_info)}")
+
+        # Always use the new method signature which handles both cases
         kernel_values = VllmKernelOrm.get_vllm_kernel_values(
-            k_data, cache_dir, vllm_hash, rank_x_y
+            k_data, cache_dir, vllm_hash, rank_x_y,
+            artifact_shape=artifact_shape or "",  # Use empty string if None
+            best_config=best_config
         )
 
         stmt = sqlite_insert(VllmKernelOrm).values(kernel_values)
+        # For new vLLM structure, artifact_shape is part of the primary key
+        primary_key_fields = [
+            "cache_dir",
+            "vllm_hash",
+            "triton_cache_key",
+            "rank_x_y",
+            "artifact_shape",  # Always included in primary key for VllmKernelOrm
+        ]
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in VllmKernelOrm.__table__.columns
-            if col.name
-            not in (
-                "cache_dir",
-                "vllm_hash",
-                "triton_cache_key",
-                "rank_x_y",
-            )
+            if col.name not in primary_key_fields
         }
         session.execute(
             stmt.on_conflict_do_update(
-                index_elements=[
-                    "cache_dir",
-                    "vllm_hash",
-                    "triton_cache_key",
-                    "rank_x_y",
-                ],
+                index_elements=primary_key_fields,
                 set_=update_dict,
             )
         )
 
     def bulk_insert_kernels(
-        self, kernels_data: List[Tuple[Kernel, str, str, str]], batch_size: int = 1000
+        self, kernels_data: List[Tuple], batch_size: int = 1000
     ) -> int:
         """
         Bulk insert multiple vLLM kernels efficiently.
 
         Args:
-            kernels_data: List of tuples containing (Kernel, cache_dir, vllm_hash, rank_x_y)
+            kernels_data: List of tuples containing either:
+                - (Kernel, cache_dir, vllm_hash, rank_x_y) for legacy format or
+                - (Kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config) for new format
             batch_size: Number of kernels to insert per transaction
 
         Returns:
@@ -710,14 +492,28 @@ class VllmDatabase:
 
                 # Delete all files for batch kernels in one query
                 if kernel_ids_to_clear:
-                    session.query(VllmKernelFileOrm).filter(
-                        tuple_(
-                            VllmKernelFileOrm.cache_dir,
-                            VllmKernelFileOrm.vllm_hash,
-                            VllmKernelFileOrm.triton_cache_key,
-                            VllmKernelFileOrm.rank_x_y,
-                        ).in_(kernel_ids_to_clear)
-                    ).delete(synchronize_session=False)
+                    # Check if we have artifact_shape in the data (5-element tuples vs 4-element)
+                    if kernel_ids_to_clear and len(kernel_ids_to_clear[0]) == 5:
+                        # New structure with artifact_shape
+                        session.query(VllmKernelFileOrm).filter(
+                            tuple_(
+                                VllmKernelFileOrm.cache_dir,
+                                VllmKernelFileOrm.vllm_hash,
+                                VllmKernelFileOrm.triton_cache_key,
+                                VllmKernelFileOrm.rank_x_y,
+                                VllmKernelFileOrm.artifact_shape,
+                            ).in_(kernel_ids_to_clear)
+                        ).delete(synchronize_session=False)
+                    else:
+                        # Legacy structure without artifact_shape
+                        session.query(VllmKernelFileOrm).filter(
+                            tuple_(
+                                VllmKernelFileOrm.cache_dir,
+                                VllmKernelFileOrm.vllm_hash,
+                                VllmKernelFileOrm.triton_cache_key,
+                                VllmKernelFileOrm.rank_x_y,
+                            ).in_(kernel_ids_to_clear)
+                        ).delete(synchronize_session=False)
 
                 # Insert/update kernels
                 for kernel_info in batch:
@@ -776,7 +572,34 @@ class VllmDatabase:
                 len(results_orm),
                 criteria,
             )
-            return [kernel_orm.to_dict() for kernel_orm in results_orm]
+            # Add is_best flag to results and filter if only_best is specified
+            results = []
+            import json
+
+            for kernel_orm in results_orm:
+                kernel_dict = kernel_orm.to_dict()
+                # Check if this kernel is the best one by comparing triton_cache_key with triton_cache_hash in best_config
+                is_best = False
+                if kernel_orm.best_config:
+                    try:
+                        best_config_data = json.loads(kernel_orm.best_config)
+                        # A kernel is best if its triton_cache_key matches the triton_cache_hash in best_config
+                        is_best = (kernel_orm.triton_cache_key == best_config_data.get('triton_cache_hash'))
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                # If only_best is specified, skip non-best kernels
+                if criteria.only_best and not is_best:
+                    continue
+
+                kernel_dict['is_best'] = is_best
+                results.append(kernel_dict)
+
+            log.debug(
+                "vLLM DB Search: Returning %d results after filtering.",
+                len(results),
+            )
+            return results
         except Exception:  # pylint: disable=broad-except
             log.error(
                 "vLLM DB Search: Failed for criteria %s.", criteria, exc_info=True
@@ -796,7 +619,7 @@ class VllmDatabase:
         sorted by 'modified_time' (oldest first).
         """
         # Use the static generic method from Database class
-        return Database.find_duplicates_generic(
+        return database_utils.find_duplicates_generic(
             self.SessionLocal, VllmKernelOrm, "triton_cache_key", ["vllm_hash"]
         )
 

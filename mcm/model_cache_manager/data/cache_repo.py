@@ -186,7 +186,9 @@ class VllmLegacyCacheRepository:  # pylint: disable=too-few-public-methods
         """
         self.root = root or (Path.home() / ".cache" / "vllm")
         if not self.root.exists():
-            raise FileNotFoundError(f"Legacy vLLM cache directory not found: {self.root}")
+            raise FileNotFoundError(
+                f"Legacy vLLM cache directory not found: {self.root}"
+            )
 
     def _find_torch_compile_cache_dirs(self) -> Iterable[tuple[str, Path]]:
         """
@@ -273,7 +275,9 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             if hash_dir.is_dir():
                 yield hash_dir.name, hash_dir
 
-    def _find_artifact_kernels(self, rank_dir: Path, rank_name: str) -> Iterable[tuple[str, str, Kernel]]:
+    def _find_artifact_kernels(
+        self, rank_dir: Path, rank_name: str
+    ) -> Iterable[tuple[str, str, Kernel]]:
         """
         Find kernels within artifact_shape directories for a rank.
 
@@ -287,19 +291,21 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         backbone_dir = rank_dir / "backbone"
         if not backbone_dir.exists():
             return
-            
+
         plugins = _get_plugins()
         for artifact_dir in backbone_dir.iterdir():
-            if artifact_dir.is_dir() and artifact_dir.name.startswith("artifact_shape_"):
+            if artifact_dir.is_dir() and artifact_dir.name.startswith(
+                "artifact_shape_"
+            ):
                 # Look for best config files
                 best_config = None
                 for config_path in artifact_dir.rglob("*.best_config"):
                     try:
                         best_config = config_path.read_text()
-                        break  # Use first best_config found
+                        break  # todo check this Use first best_config found
                     except Exception as e:
                         log.debug("Could not read best config %s: %s", config_path, e)
-                
+
                 # Look for triton cache kernels
                 triton_dir = artifact_dir / "triton"
                 if triton_dir.exists():
@@ -319,5 +325,11 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         for vllm_hash, hash_dir in self._find_torch_compile_cache_dirs():
             for rank_dir in hash_dir.iterdir():
                 if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
-                    for artifact_shape, best_config, kernel in self._find_artifact_kernels(rank_dir, rank_dir.name):
-                        yield vllm_hash, str(self.root), rank_dir.name, artifact_shape, best_config, kernel
+                    for (
+                        artifact_shape,
+                        best_config,
+                        kernel,
+                    ) in self._find_artifact_kernels(rank_dir, rank_dir.name):
+                        yield vllm_hash, str(
+                            self.root
+                        ), rank_dir.name, artifact_shape, best_config, kernel

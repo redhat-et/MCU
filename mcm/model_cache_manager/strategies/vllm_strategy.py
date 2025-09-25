@@ -15,6 +15,7 @@ from ..utils.utils import (
     create_kernel_identifier,
     process_kernels_in_batches,
 )
+from ..utils.strategy_constants import VLLM_EXTENDED_PRIMARY_FIELDS, VLLM_HASH_FIELD
 
 
 class VllmStrategy(CacheModeStrategy):
@@ -26,14 +27,8 @@ class VllmStrategy(CacheModeStrategy):
         return CacheConfig(
             orm_model=VllmKernelOrm,
             file_orm_model=VllmKernelFileOrm,
-            hash_field="triton_cache_key",
-            primary_key_fields=[
-                "cache_dir",
-                "vllm_hash",
-                "triton_cache_key",
-                "rank_x_y",
-                "artifact_shape",
-            ],
+            hash_field=VLLM_HASH_FIELD,
+            primary_key_fields=VLLM_EXTENDED_PRIMARY_FIELDS,
             additional_duplicate_fields=["vllm_hash", "artifact_shape"],
         )
 
@@ -83,4 +78,6 @@ class VllmStrategy(CacheModeStrategy):
         rank_x_y = args[2] if len(args) > 2 else kwargs.get("rank_x_y")
         artifact_shape = args[3] if len(args) > 3 else kwargs.get("artifact_shape")
         best_config = args[4] if len(args) > 4 else kwargs.get("best_config")
-        db.insert_kernel(k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
+        db.insert_kernel(
+            k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config
+        )

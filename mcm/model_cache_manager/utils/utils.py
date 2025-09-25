@@ -156,6 +156,28 @@ def _has_vllm_legacy_cache_structure(cache_dir: Path) -> bool:
     return False
 
 
+def _has_artifact_shape_with_triton(backbone_dir: Path) -> bool:
+    """Check if backbone directory has artifact_shape subdirectories with triton."""
+    for item in backbone_dir.iterdir():
+        if item.is_dir() and item.name.startswith("artifact_shape_"):
+            triton_dir = item / "triton"
+            if triton_dir.exists():
+                return True
+    return False
+
+
+def _has_valid_rank_structure(hash_dir: Path) -> bool:
+    """Check if hash directory has valid rank structure with new vLLM format."""
+    for rank_dir in hash_dir.iterdir():
+        if not (rank_dir.is_dir() and rank_dir.name.startswith("rank")):
+            continue
+
+        backbone = rank_dir / "backbone"
+        if backbone.exists() and _has_artifact_shape_with_triton(backbone):
+            return True
+    return False
+
+
 def _has_vllm_cache_structure(cache_dir: Path) -> bool:
     """Check if directory has new vLLM cache structure."""
     torch_compile_cache = cache_dir / "torch_compile_cache"
@@ -164,23 +186,8 @@ def _has_vllm_cache_structure(cache_dir: Path) -> bool:
 
     # Look for hash directories containing rank subdirectories
     for hash_dir in torch_compile_cache.iterdir():
-        if not hash_dir.is_dir():
-            continue
-
-        # Look for rank directories pattern rank<x>_<y>
-        for rank_dir in hash_dir.iterdir():
-            if not (rank_dir.is_dir() and rank_dir.name.startswith("rank")):
-                continue
-
-            # Check for backbone directory with artifact_shape subdirectories (new structure)
-            backbone = rank_dir / "backbone"
-            if backbone.exists():
-                for item in backbone.iterdir():
-                    if item.is_dir() and item.name.startswith("artifact_shape_"):
-                        # Check if there's a triton directory inside
-                        triton_dir = item / "triton"
-                        if triton_dir.exists():
-                            return True
+        if hash_dir.is_dir() and _has_valid_rank_structure(hash_dir):
+            return True
     return False
 
 
@@ -192,7 +199,7 @@ def detect_cache_mode(cache_dir: Path) -> str:
         cache_dir: Path to the cache directory
 
     Returns:
-        'vllm' for new vLLM structure, 'vllm-legacy' for old vLLM structure, 
+        'vllm' for new vLLM structure, 'vllm-legacy' for old vLLM structure,
         'triton' otherwise
     """
     if not cache_dir.exists():
@@ -259,40 +266,84 @@ def find_vllm_legacy_kernel_dirs(
     return kernel_dirs
 
 
+def _find_kernel_dirs_in_triton(triton_dir: Path, triton_cache_key: str) -> List[Path]:
+    """Find kernel directories within a triton directory."""
+    kernel_dirs = []
+    for sub_dir in triton_dir.iterdir():
+        if sub_dir.is_dir():
+            kernel_dir = sub_dir / triton_cache_key
+            if kernel_dir.exists():
+                kernel_dirs.append(kernel_dir)
+    return kernel_dirs
+
+
+def _process_specific_artifact_shape(
+    backbone_dir: Path, artifact_shape: str, triton_cache_key: str
+) -> List[Path]:
+    """Process a specific artifact_shape directory."""
+    artifact_dir = backbone_dir / artifact_shape
+    if not artifact_dir.exists():
+        return []
+
+    triton_dir = artifact_dir / "triton"
+    if not triton_dir.exists():
+        return []
+
+    return _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)
+
+
+def _process_all_artifact_shapes(
+    backbone_dir: Path, triton_cache_key: str
+) -> List[Path]:
+    """Process all artifact_shape directories in backbone."""
+    kernel_dirs = []
+    for artifact_dir in backbone_dir.iterdir():
+        if not (artifact_dir.is_dir() and
+                artifact_dir.name.startswith("artifact_shape_")):
+            continue
+
+        triton_dir = artifact_dir / "triton"
+        if triton_dir.exists():
+            kernel_dirs.extend(
+                _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)
+            )
+    return kernel_dirs
+
+
+def _process_rank_directory(
+    rank_dir: Path, triton_cache_key: str, artifact_shape: Optional[str]
+) -> List[Path]:
+    """Process a single rank directory."""
+    if not (rank_dir.is_dir() and rank_dir.name.startswith("rank")):
+        return []
+
+    backbone_dir = rank_dir / "backbone"
+    if not backbone_dir.exists():
+        return []
+
+    if artifact_shape:
+        return _process_specific_artifact_shape(
+            backbone_dir, artifact_shape, triton_cache_key
+        )
+    return _process_all_artifact_shapes(backbone_dir, triton_cache_key)
+
+
 def find_vllm_kernel_dirs(
-    cache_dir: Path, vllm_hash: str, triton_cache_key: str, artifact_shape: Optional[str] = None
+    cache_dir: Path,
+    vllm_hash: str,
+    triton_cache_key: str,
+    artifact_shape: Optional[str] = None
 ) -> List[Path]:
     """Find kernel directories for new vLLM structure."""
     vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
-    kernel_dirs = []
+    if not vllm_root_dir.exists():
+        return []
 
-    if vllm_root_dir.exists():
-        for rank_dir in vllm_root_dir.iterdir():
-            if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
-                backbone_dir = rank_dir / "backbone"
-                if backbone_dir.exists():
-                    # If artifact_shape is specified, look only in that directory
-                    if artifact_shape:
-                        artifact_dir = backbone_dir / artifact_shape
-                        if artifact_dir.exists():
-                            triton_dir = artifact_dir / "triton"
-                            if triton_dir.exists():
-                                for sub_dir in triton_dir.iterdir():
-                                    if sub_dir.is_dir():
-                                        kernel_dir = sub_dir / triton_cache_key
-                                        if kernel_dir.exists():
-                                            kernel_dirs.append(kernel_dir)
-                    else:
-                        # Search all artifact_shape directories
-                        for artifact_dir in backbone_dir.iterdir():
-                            if artifact_dir.is_dir() and artifact_dir.name.startswith("artifact_shape_"):
-                                triton_dir = artifact_dir / "triton"
-                                if triton_dir.exists():
-                                    for sub_dir in triton_dir.iterdir():
-                                        if sub_dir.is_dir():
-                                            kernel_dir = sub_dir / triton_cache_key
-                                            if kernel_dir.exists():
-                                                kernel_dirs.append(kernel_dir)
+    kernel_dirs = []
+    for rank_dir in vllm_root_dir.iterdir():
+        kernel_dirs.extend(
+            _process_rank_directory(rank_dir, triton_cache_key, artifact_shape)
+        )
     return kernel_dirs
 
 
@@ -306,7 +357,7 @@ def get_kernel_directories(
         return find_vllm_legacy_kernel_dirs(
             cache_dir, identifier.vllm_hash, identifier.hash_key
         )
-    elif mode == MODE_VLLM:
+    if mode == MODE_VLLM:
         if identifier.vllm_hash is None:
             raise ValueError("vllm_hash cannot be None for VLLM mode")
         # For new vLLM, we might need to pass artifact_shape if available
@@ -354,14 +405,14 @@ def delete_kernel_directories(kernel_dirs: List[Path]) -> int:
 
 def create_kernel_identifier(mode: str, **kwargs) -> KernelIdentifier:
     """Factory function to create kernel identifiers."""
-    if mode == MODE_VLLM:
+    if mode in (MODE_VLLM, "vllm-legacy"):
         triton_cache_key = kwargs.get("triton_cache_key")
         vllm_hash = kwargs.get("vllm_hash")
         rank_x_y = kwargs.get("rank_x_y")
         to_check = [triton_cache_key, vllm_hash, rank_x_y]
         if any(not v for v in to_check):
             raise ValueError(
-                "triton_cache_key, vllm_hash and rank_x_y are required for VLLM mode"
+                f"triton_cache_key, vllm_hash and rank_x_y are required for {mode} mode"
             )
         return KernelIdentifier(
             mode=mode,

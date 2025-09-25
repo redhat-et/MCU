@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 from model_cache_manager.models.kernel import Kernel, KernelFile
-from model_cache_manager.tests.data.test_utils import (
+from model_cache_manager.tests.test_utils import (
     setup_kernel_orm_mock,
     setup_sqlite_insert_mock,
     setup_query_mock,

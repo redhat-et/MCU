@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from .base import CacheModeStrategy, CacheConfig
-from ..data.database import VllmLegacyDatabase
+from ..data.vllm_legacy_database import VllmLegacyDatabase
 from ..data.cache_repo import VllmLegacyCacheRepository
 from ..data.db_models import VllmLegacyKernelOrm, VllmLegacyKernelFileOrm
 from ..utils.utils import (
@@ -15,6 +15,7 @@ from ..utils.utils import (
     create_kernel_identifier,
     process_kernels_in_batches,
 )
+from ..utils.strategy_constants import VLLM_COMMON_PRIMARY_FIELDS, VLLM_HASH_FIELD
 
 
 class VllmLegacyStrategy(CacheModeStrategy):
@@ -26,13 +27,8 @@ class VllmLegacyStrategy(CacheModeStrategy):
         return CacheConfig(
             orm_model=VllmLegacyKernelOrm,
             file_orm_model=VllmLegacyKernelFileOrm,
-            hash_field="triton_cache_key",
-            primary_key_fields=[
-                "cache_dir",
-                "vllm_hash",
-                "triton_cache_key",
-                "rank_x_y",
-            ],
+            hash_field=VLLM_HASH_FIELD,
+            primary_key_fields=VLLM_COMMON_PRIMARY_FIELDS,
             additional_duplicate_fields=["vllm_hash"],
         )
 
