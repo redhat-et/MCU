@@ -348,3 +348,32 @@ def build_common_search_filters(
         active_filters.append(orm_class.modified_time > criteria.younger_than_timestamp)
 
     return active_filters
+
+
+def process_kernels_in_batches(kernels_iterator, db, batch_size: int = 1000) -> int:
+    """Process kernels from iterator in batches and bulk insert them.
+
+    Args:
+        kernels_iterator: Iterator yielding kernel data tuples
+        db: Database to insert kernels into
+        batch_size: Number of kernels to accumulate before bulk inserting
+
+    Returns:
+        Total number of kernels inserted
+    """
+    kernels_batch = []
+    total_inserted = 0
+
+    for kernel_data in kernels_iterator:
+        kernels_batch.append(kernel_data)
+
+        # Insert batch when it reaches the batch size
+        if len(kernels_batch) >= batch_size:
+            total_inserted += db.bulk_insert_kernels(kernels_batch)
+            kernels_batch = []  # Reset batch
+
+    # Insert any remaining kernels
+    if kernels_batch:
+        total_inserted += db.bulk_insert_kernels(kernels_batch)
+
+    return total_inserted

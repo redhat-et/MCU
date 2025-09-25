@@ -6,9 +6,10 @@ This module provides functions to get standard paths used by the application.
 
 from pathlib import Path
 from model_cache_manager.utils.config import settings
+from model_cache_manager.utils.mcm_constants import MODE_TRITON, MODE_VLLM
 
 
-def get_cache_dir(mode: str = 'triton') -> Path:
+def get_cache_dir(mode: str = MODE_TRITON) -> Path:
     """
     Get the path to the Triton cache directory.
 
@@ -16,12 +17,12 @@ def get_cache_dir(mode: str = 'triton') -> Path:
         Path to the Triton cache directory.
     """
 
-    if mode == "vllm":
+    if mode == MODE_VLLM:
         return settings.model_cache_dir_vllm
     return settings.model_cache_dir
 
 
-def get_db_path(mode: str = "triton") -> Path:
+def get_db_path(mode: str = MODE_TRITON) -> Path:
     """
     Get the path to the database file.
 
@@ -31,6 +32,5 @@ def get_db_path(mode: str = "triton") -> Path:
     Returns:
         Path to the SQLite database file.
     """
-    if mode == "vllm":
-        return settings.data_dir / "cache_vllm.db"
-    return settings.data_dir / settings.db_filename
+    db_filename = f"{settings.db_filename}{mode}.db"
+    return settings.data_dir / db_filename
