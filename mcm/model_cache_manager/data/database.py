@@ -30,6 +30,18 @@ from ..utils.utils import build_common_search_filters
 from . import database_utils
 from .database_utils import create_file_orm_dict
 
+# Batch item format constants for vLLM kernels
+# (kernel, cache_dir, vllm_hash, rank_x_y)
+VLLM_LEGACY_BATCH_ITEM_LENGTH = 4
+# (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
+VLLM_NEW_BATCH_ITEM_LENGTH = 6
+
+# Kernel ID tuple length constants for database operations
+# (cache_dir, vllm_hash, triton_hash, rank_x_y)
+VLLM_LEGACY_KERNEL_ID_LENGTH = 4
+# (cache_dir, vllm_hash, triton_hash, rank_x_y, artifact_shape)
+VLLM_NEW_KERNEL_ID_LENGTH = 5
+
 log = logging.getLogger(__name__)
 
 
@@ -378,19 +390,21 @@ class VllmDatabase:
         file_values_list = []
 
         for item in batch:
-            # Handle both old (4 values) and new (6 values) formats
-            if len(item) == 4:
+            # Handle both legacy and new vLLM batch formats
+            if len(item) == VLLM_LEGACY_BATCH_ITEM_LENGTH:
                 # Legacy format: (kernel, cache_dir, vllm_hash, rank_x_y)
                 k_data, cache_dir, vllm_hash, rank_x_y = item
                 artifact_shape = None
-            elif len(item) == 6:
+            elif len(item) == VLLM_NEW_BATCH_ITEM_LENGTH:
                 # New format: (kernel, cache_dir, vllm_hash, rank_x_y,
                 # artifact_shape, best_config)
                 (k_data, cache_dir, vllm_hash, rank_x_y,
                  artifact_shape, _best_config) = item
             else:
                 raise ValueError(
-                    f"Expected 4 or 6 values in batch item, got {len(item)}"
+                    f"Expected {VLLM_LEGACY_BATCH_ITEM_LENGTH} or "
+                    f"{VLLM_NEW_BATCH_ITEM_LENGTH} values in batch item, "
+                    f"got {len(item)}"
                 )
 
             # For new structure, we need to include artifact_shape in the key
@@ -424,15 +438,19 @@ class VllmDatabase:
             kernel_info: Tuple of (k_data, cache_dir, vllm_hash, rank_x_y) or
                         (k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
         """
-        # Handle both old (4 values) and new (6 values) formats
-        if len(kernel_info) == 4:
+        # Handle both legacy and new vLLM formats
+        if len(kernel_info) == VLLM_LEGACY_BATCH_ITEM_LENGTH:
             k_data, cache_dir, vllm_hash, rank_x_y = kernel_info
             artifact_shape = ""
             best_config = None
-        elif len(kernel_info) == 6:
+        elif len(kernel_info) == VLLM_NEW_BATCH_ITEM_LENGTH:
             k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config = kernel_info
         else:
-            raise ValueError(f"Expected 4 or 6 values in kernel_info, got {len(kernel_info)}")
+            raise ValueError(
+                f"Expected {VLLM_LEGACY_BATCH_ITEM_LENGTH} or "
+                f"{VLLM_NEW_BATCH_ITEM_LENGTH} values in kernel_info, "
+                f"got {len(kernel_info)}"
+            )
 
         # Create VllmKernelMetadata object
         vllm_meta = VllmKernelMetadata(
@@ -500,8 +518,11 @@ class VllmDatabase:
 
                 # Delete all files for batch kernels in one query
                 if kernel_ids_to_clear:
-                    # Check if we have artifact_shape in the data (5-element tuples vs 4-element)
-                    if kernel_ids_to_clear and len(kernel_ids_to_clear[0]) == 5:
+                    # Check if we have artifact_shape in the data
+                    has_artifact_shape = (
+                        len(kernel_ids_to_clear[0]) == VLLM_NEW_KERNEL_ID_LENGTH
+                    )
+                    if kernel_ids_to_clear and has_artifact_shape:
                         # New structure with artifact_shape
                         session.query(VllmKernelFileOrm).filter(
                             tuple_(
