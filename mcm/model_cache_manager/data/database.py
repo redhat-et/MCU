@@ -7,15 +7,15 @@ for interacting with the kernel cache database. It uses ORM models (SqlAlchemy).
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict, List, Set, Iterable, Tuple
 
 from sqlalchemy import and_, exc, or_, func, tuple_
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from .db_config import engine, SessionLocal, DB_PATH, create_engine_and_session
+from .db_config import engine, SessionLocal, create_engine_and_session
 from .db_models import (
-    Base,
     KernelOrm,
     KernelFileOrm,
     VllmKernelOrm,
@@ -29,7 +29,6 @@ from ..utils.mcm_constants import IR_EXTS
 from ..utils.utils import build_common_search_filters
 from . import database_utils
 from .database_utils import create_file_orm_dict
-from .vllm_legacy_database import VllmLegacyDatabase  # noqa: F401
 
 log = logging.getLogger(__name__)
 
@@ -332,6 +331,7 @@ class VllmDatabase:
         self,
         k_data: Kernel,
         cache_dir: str,
+        *,
         vllm_hash: str,
         rank_x_y: str,
         artifact_shape: str,
@@ -365,17 +365,23 @@ class VllmDatabase:
         if best_config:
             extra_args["best_config"] = best_config
 
-        database_utils.handle_kernel_insert(
-            session, operation, k_data, cache_dir, vllm_hash, rank_x_y,
-            extra_args=extra_args, error_prefix="New vLLM "
+        context = database_utils.KernelInsertContext(
+            kernel_data=k_data,
+            cache_dir=cache_dir,
+            vllm_hash=vllm_hash,
+            rank_x_y=rank_x_y,
+            extra_args=extra_args,
+            error_prefix="New vLLM "
         )
+        database_utils.handle_kernel_insert(session, operation, context)
 
     def _prepare_vllm_batch_data(
         self, batch: List[Tuple]
     ) -> Tuple[List, List]:
         """Prepare vLLM kernel IDs and file values for batch processing.
 
-        Handles both old format (4 values) and new format (6 values with artifact_shape and best_config).
+        Handles both old format (4 values) and new format
+        (6 values with artifact_shape and best_config).
         """
         kernel_ids_to_clear = []
         file_values_list = []
@@ -387,14 +393,20 @@ class VllmDatabase:
                 k_data, cache_dir, vllm_hash, rank_x_y = item
                 artifact_shape = None
             elif len(item) == 6:
-                # New format: (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
-                k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config = item
+                # New format: (kernel, cache_dir, vllm_hash, rank_x_y,
+                # artifact_shape, best_config)
+                (k_data, cache_dir, vllm_hash, rank_x_y,
+                 artifact_shape, _best_config) = item
             else:
-                raise ValueError(f"Expected 4 or 6 values in batch item, got {len(item)}")
+                raise ValueError(
+                    f"Expected 4 or 6 values in batch item, got {len(item)}"
+                )
 
             # For new structure, we need to include artifact_shape in the key
             if artifact_shape is not None:
-                kernel_ids_to_clear.append((cache_dir, vllm_hash, k_data.hash, rank_x_y, artifact_shape))
+                kernel_ids_to_clear.append(
+                    (cache_dir, vllm_hash, k_data.hash, rank_x_y, artifact_shape)
+                )
             else:
                 kernel_ids_to_clear.append((cache_dir, vllm_hash, k_data.hash, rank_x_y))
 
@@ -468,7 +480,8 @@ class VllmDatabase:
         Args:
             kernels_data: List of tuples containing either:
                 - (Kernel, cache_dir, vllm_hash, rank_x_y) for legacy format or
-                - (Kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config) for new format
+                - (Kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape,
+                  best_config) for new format
             batch_size: Number of kernels to insert per transaction
 
         Returns:
@@ -572,19 +585,23 @@ class VllmDatabase:
                 len(results_orm),
                 criteria,
             )
-            # Add is_best flag to results and filter if only_best is specified
+
             results = []
-            import json
 
             for kernel_orm in results_orm:
                 kernel_dict = kernel_orm.to_dict()
-                # Check if this kernel is the best one by comparing triton_cache_key with triton_cache_hash in best_config
+                # Check if this kernel is the best one by comparing
+                # triton_cache_key with triton_cache_hash in best_config
                 is_best = False
                 if kernel_orm.best_config:
                     try:
                         best_config_data = json.loads(kernel_orm.best_config)
-                        # A kernel is best if its triton_cache_key matches the triton_cache_hash in best_config
-                        is_best = (kernel_orm.triton_cache_key == best_config_data.get('triton_cache_hash'))
+                        # A kernel is best if its triton_cache_key matches
+                        # the triton_cache_hash in best_config
+                        triton_cache_hash = best_config_data.get(
+                            'triton_cache_hash'
+                        )
+                        is_best = kernel_orm.triton_cache_key == triton_cache_hash
                     except (json.JSONDecodeError, TypeError):
                         pass
 

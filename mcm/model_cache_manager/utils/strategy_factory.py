@@ -2,6 +2,7 @@
 Strategy factory for creating appropriate strategy instances based on mode.
 """
 
+# pylint: disable=relative-beyond-top-level
 from ..utils.mcm_constants import MODE_VLLM, MODE_VLLM_LEGACY
 
 
@@ -16,13 +17,13 @@ def create_strategy(mode: str):
         An instance of the appropriate strategy class
     """
     # Import here to avoid circular dependencies
+    # pylint: disable=import-outside-toplevel,relative-beyond-top-level
     from ..strategies.vllm_strategy import VllmStrategy
     from ..strategies.vllm_legacy_strategy import VllmLegacyStrategy
     from ..strategies.triton_strategy import TritonStrategy
 
     if mode == MODE_VLLM:
         return VllmStrategy()
-    elif mode == MODE_VLLM_LEGACY:
+    if mode == MODE_VLLM_LEGACY:
         return VllmLegacyStrategy()
-    else:
-        return TritonStrategy()
+    return TritonStrategy()

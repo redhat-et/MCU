@@ -6,6 +6,7 @@ Database and VllmLegacyDatabase classes to avoid circular imports.
 """
 import collections
 import logging
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
@@ -15,6 +16,17 @@ from .db_models import Base
 from ..models.kernel import Kernel
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class KernelInsertContext:
+    """Context for kernel insert operations."""
+    kernel_data: Kernel
+    cache_dir: str
+    vllm_hash: str
+    rank_x_y: str
+    extra_args: Dict[str, Any] = field(default_factory=dict)
+    error_prefix: str = ""
 
 
 def find_duplicates_generic(
@@ -235,12 +247,7 @@ def ensure_schema(engine) -> None:
 def handle_kernel_insert(
     session: Session,
     operation: Callable,
-    kernel_data: Kernel,
-    cache_dir: str,
-    vllm_hash: str,
-    rank_x_y: str,
-    extra_args: Optional[dict] = None,
-    error_prefix: str = "",
+    context: KernelInsertContext,
 ) -> None:
     """
     Handle database insert/upsert operations with standardized error handling.
@@ -248,29 +255,26 @@ def handle_kernel_insert(
     Args:
         session: Database session
         operation: The database operation to perform
-        kernel_data: Kernel DTO containing metadata
-        cache_dir: Root path of the cache
-        vllm_hash: Hash identifier for the vLLM cache group
-        rank_x_y: Rank identifier
-        extra_args: Additional arguments for logging
-        error_prefix: Prefix for error messages to distinguish legacy vs new
+        context: Context containing kernel data and metadata
     """
-    error_prefix = error_prefix or ""
-    extra_args = extra_args or {}
-
     try:
         operation()
         session.commit()
 
         # Build log message
         log_msg = (
-            f"{error_prefix}Kernel %s with cache_dir %s vllm_hash %s and "
+            f"{context.error_prefix}Kernel %s with cache_dir %s vllm_hash %s and "
             f"rank_x_y %s"
         )
-        log_args = [kernel_data.hash, cache_dir, vllm_hash, rank_x_y]
+        log_args = [
+            context.kernel_data.hash,
+            context.cache_dir,
+            context.vllm_hash,
+            context.rank_x_y
+        ]
 
         # Add extra arguments if provided
-        for key, value in extra_args.items():
+        for key, value in context.extra_args.items():
             log_msg += f" and {key} %s"
             log_args.append(value)
 
@@ -279,79 +283,47 @@ def handle_kernel_insert(
 
     except exc.IntegrityError as e:
         session.rollback()
-        _log_kernel_error(
-            error_prefix,
-            "constraint violation",
-            kernel_data.hash,
-            cache_dir,
-            vllm_hash,
-            rank_x_y,
-            extra_args,
-            e,
-        )
+        _log_kernel_error(context, "constraint violation", e)
         raise
     except exc.OperationalError as e:
         session.rollback()
-        _log_kernel_error(
-            error_prefix,
-            "db operation issue",
-            kernel_data.hash,
-            cache_dir,
-            vllm_hash,
-            rank_x_y,
-            extra_args,
-            e,
-        )
+        _log_kernel_error(context, "db operation issue", e)
         raise
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         session.rollback()
-        _log_kernel_error(
-            error_prefix,
-            None,
-            kernel_data.hash,
-            cache_dir,
-            vllm_hash,
-            rank_x_y,
-            extra_args,
-            None,
-        )
+        _log_kernel_error(context, None, None)
         raise
     finally:
         session.close()
 
 
 def _log_kernel_error(
-    error_prefix: str,
+    context: KernelInsertContext,
     error_type: Optional[str],
-    kernel_hash: str,
-    cache_dir: str,
-    vllm_hash: str,
-    rank_x_y: str,
-    extra_args: dict,
     exception: Optional[Exception],
 ) -> None:
     """
     Helper to log kernel-related errors consistently.
 
     Args:
-        error_prefix: Prefix for error messages
+        context: Context containing kernel data and metadata
         error_type: Type of error (e.g., "constraint violation")
-        kernel_hash: Hash of the kernel
-        cache_dir: Cache directory path
-        vllm_hash: vLLM hash identifier
-        rank_x_y: Rank identifier
-        extra_args: Additional arguments for logging
         exception: The exception that occurred
     """
     if error_type and exception:
         log_msg = (
-            f"Failed to upsert {error_prefix}kernel %s with cache_dir %s "
+            f"Failed to upsert {context.error_prefix}kernel %s with cache_dir %s "
             f"vllm_hash %s and rank_x_y %s"
         )
-        log_args = [kernel_hash, cache_dir, vllm_hash, rank_x_y]
+        log_args = [
+            context.kernel_data.hash,
+            context.cache_dir,
+            context.vllm_hash,
+            context.rank_x_y
+        ]
 
         # Add extra arguments
-        for key, value in extra_args.items():
+        for key, value in context.extra_args.items():
             log_msg += f" and {key} %s"
             log_args.append(value)
 
@@ -362,13 +334,18 @@ def _log_kernel_error(
     else:
         # Generic error
         log_msg = (
-            f"DB Error: Failed to upsert {error_prefix}kernel %s with cache_dir %s "
-            f"vllm_hash %s and rank_x_y %s"
+            f"DB Error: Failed to upsert {context.error_prefix}kernel %s with "
+            f"cache_dir %s vllm_hash %s and rank_x_y %s"
         )
-        log_args = [kernel_hash, cache_dir, vllm_hash, rank_x_y]
+        log_args = [
+            context.kernel_data.hash,
+            context.cache_dir,
+            context.vllm_hash,
+            context.rank_x_y
+        ]
 
         # Add extra arguments
-        for key, value in extra_args.items():
+        for key, value in context.extra_args.items():
             log_msg += f" and {key} %s"
             log_args.append(value)
 
@@ -427,6 +404,7 @@ def bulk_insert_kernels_generic(
             batch = kernels_data[i : i + batch_size]
 
             # Prepare batch data using instance-specific method
+            # pylint: disable=protected-access  # Intentional call to db_instance's _prepare_batch method
             kernel_batch_data, file_batch_data = db_instance._prepare_batch(batch)
 
             if kernel_batch_data:

@@ -4,12 +4,11 @@ Legacy vLLM Database module for managing kernel metadata.
 
 from typing import List, Set, Dict, Any, Iterable, Tuple
 import logging
-from sqlalchemy import exc, or_, func, and_, tuple_
+from sqlalchemy import or_, func, and_, tuple_
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from .db_config import create_engine_and_session, DB_PATH
+from .db_config import create_engine_and_session
 from .db_models import (
-    Base,
     VllmLegacyKernelOrm,
     VllmLegacyKernelFileOrm,
     SqlaSession,
@@ -78,10 +77,14 @@ class VllmLegacyDatabase:
                 session, k_data, cache_dir, vllm_hash, rank_x_y
             )
 
-        database_utils.handle_kernel_insert(
-            session, operation, k_data, cache_dir, vllm_hash, rank_x_y,
+        context = database_utils.KernelInsertContext(
+            kernel_data=k_data,
+            cache_dir=cache_dir,
+            vllm_hash=vllm_hash,
+            rank_x_y=rank_x_y,
             error_prefix="Legacy vLLM "
         )
+        database_utils.handle_kernel_insert(session, operation, context)
 
     def search(self, criteria: SearchCriteria) -> List[Dict[str, Any]]:
         """

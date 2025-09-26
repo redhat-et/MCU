@@ -276,14 +276,14 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
                 yield hash_dir.name, hash_dir
 
     def _find_artifact_kernels(
-        self, rank_dir: Path, rank_name: str
+        self, rank_dir: Path, _rank_name: str
     ) -> Iterable[tuple[str, str, Kernel]]:
         """
         Find kernels within artifact_shape directories for a rank.
 
         Args:
             rank_dir: Path to the rank directory
-            rank_name: Name of the rank directory
+            _rank_name: Name of the rank directory (unused but required for interface)
 
         Yields:
             Tuples of (artifact_shape, best_config, kernel)
@@ -294,25 +294,26 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
 
         plugins = _get_plugins()
         for artifact_dir in backbone_dir.iterdir():
-            if artifact_dir.is_dir() and artifact_dir.name.startswith(
-                "artifact_shape_"
-            ):
-                # Look for best config files
-                best_config = None
-                for config_path in artifact_dir.rglob("*.best_config"):
-                    try:
-                        best_config = config_path.read_text()
-                        break  # todo check this Use first best_config found
-                    except Exception as e:
-                        log.debug("Could not read best config %s: %s", config_path, e)
+            if not (artifact_dir.is_dir() and artifact_dir.name.startswith("artifact_shape_")):
+                continue
 
-                # Look for triton cache kernels
-                triton_dir = artifact_dir / "triton"
-                if triton_dir.exists():
-                    for sub_dir in triton_dir.iterdir():
-                        if sub_dir.is_dir():
-                            for kernel in iter_triton_kernels(sub_dir, plugins):
-                                yield artifact_dir.name, best_config, kernel
+            best_config = None
+            for config_path in artifact_dir.rglob("*.best_config"):
+                try:
+                    best_config = config_path.read_text()
+                    break
+                except (OSError, IOError, PermissionError, UnicodeDecodeError) as e:
+                    log.debug("Could not read best config %s: %s", config_path, e)
+
+            triton_dir = artifact_dir / "triton"
+            if not triton_dir.exists():
+                continue
+
+            for sub_dir in triton_dir.iterdir():
+                if not sub_dir.is_dir():
+                    continue
+                for kernel in iter_triton_kernels(sub_dir, plugins):
+                    yield artifact_dir.name, best_config, kernel
 
     def kernels(self) -> Iterable[tuple[str, str, str, str, str | None, Kernel]]:
         """

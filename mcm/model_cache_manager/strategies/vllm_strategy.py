@@ -67,7 +67,8 @@ class VllmStrategy(CacheModeStrategy):
         # Create generator that yields kernel data tuples
         kernels_iterator = (
             (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
-            for vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel in repo.kernels()
+            for vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel
+            in repo.kernels()
         )
         return process_kernels_in_batches(kernels_iterator, db, batch_size)
 

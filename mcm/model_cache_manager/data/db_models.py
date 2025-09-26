@@ -360,7 +360,8 @@ class VllmLegacyKernelOrm(Base, BaseKernelMixin):
 class VllmKernelOrm(Base, BaseKernelMixin):
     """
     SQLAlchemy ORM model for a new vLLM Triton kernel.
-    Uses a composite primary key of (cache_dir, vllm_hash, triton_cache_key, rank_x_y, artifact_shape).
+    Uses a composite primary key of (cache_dir, vllm_hash, triton_cache_key,
+    rank_x_y, artifact_shape).
     """
 
     __tablename__ = "vllm_kernels"
@@ -395,6 +396,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
     def get_vllm_kernel_values(
         k_data: Kernel,
         cache_dir: str,
+        *,
         vllm_hash: str,
         rank_x_y: str,
         artifact_shape: str,
@@ -443,7 +445,9 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         Creates or updates a new vLLM kernel record from a Kernel DTO, including files.
         """
         kernel_values = cls.get_vllm_kernel_values(
-            k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config
+            k_data, cache_dir,
+            vllm_hash=vllm_hash, rank_x_y=rank_x_y,
+            artifact_shape=artifact_shape, best_config=best_config
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)
