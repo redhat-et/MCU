@@ -223,6 +223,7 @@ class VllmLegacyDatabase:
         session = self.get_session()
         inserted_count = 0
 
+        # pylint: disable=duplicate-code  # Similar pattern in database.py
         try:
             for i in range(0, len(kernels_data), batch_size):
                 batch = kernels_data[i : i + batch_size]

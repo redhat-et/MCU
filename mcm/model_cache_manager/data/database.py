@@ -24,7 +24,7 @@ from .db_models import (
 )
 
 from ..models.criteria import SearchCriteria
-from ..models.kernel import Kernel
+from ..models.kernel import Kernel, VllmKernelMetadata
 from ..utils.mcm_constants import IR_EXTS
 from ..utils.utils import build_common_search_filters
 from . import database_utils
@@ -169,6 +169,7 @@ class Database:
         session = self.get_session()
         inserted_count = 0
 
+        # pylint: disable=duplicate-code  # Similar pattern in vllm_legacy_database.py
         try:
             for i in range(0, len(kernels_data), batch_size):
                 batch = kernels_data[i : i + batch_size]
@@ -331,11 +332,7 @@ class VllmDatabase:
         self,
         k_data: Kernel,
         cache_dir: str,
-        *,
-        vllm_hash: str,
-        rank_x_y: str,
-        artifact_shape: str,
-        best_config: str | None = None,
+        vllm_meta: VllmKernelMetadata,
     ) -> None:
         """
         Upserts a new vLLM kernel and its associated files into the database.
@@ -343,10 +340,7 @@ class VllmDatabase:
         Args:
             k_data: A `Kernel` DTO containing the metadata.
             cache_dir: Root path of the vLLM cache
-            vllm_hash: Hash identifier for the vLLM cache group
-            rank_x_y: Rank identifier
-            artifact_shape: Artifact shape directory name
-            best_config: Optional JSON string for best config
+            vllm_meta: vLLM-specific metadata (hash, rank, artifact_shape, etc.)
         """
         session = self.get_session()
 
@@ -355,21 +349,18 @@ class VllmDatabase:
                 session,
                 k_data,
                 cache_dir,
-                vllm_hash,
-                rank_x_y,
-                artifact_shape,
-                best_config,
+                vllm_meta,
             )
 
-        extra_args = {"artifact_shape": artifact_shape}
-        if best_config:
-            extra_args["best_config"] = best_config
+        extra_args = {"artifact_shape": vllm_meta.artifact_shape}
+        if vllm_meta.best_config:
+            extra_args["best_config"] = vllm_meta.best_config
 
         context = database_utils.KernelInsertContext(
             kernel_data=k_data,
             cache_dir=cache_dir,
-            vllm_hash=vllm_hash,
-            rank_x_y=rank_x_y,
+            vllm_hash=vllm_meta.vllm_hash,
+            rank_x_y=vllm_meta.rank_x_y,
             extra_args=extra_args,
             error_prefix="New vLLM "
         )
@@ -436,18 +427,22 @@ class VllmDatabase:
         # Handle both old (4 values) and new (6 values) formats
         if len(kernel_info) == 4:
             k_data, cache_dir, vllm_hash, rank_x_y = kernel_info
-            artifact_shape = None
+            artifact_shape = ""
             best_config = None
         elif len(kernel_info) == 6:
             k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config = kernel_info
         else:
             raise ValueError(f"Expected 4 or 6 values in kernel_info, got {len(kernel_info)}")
 
-        # Always use the new method signature which handles both cases
-        kernel_values = VllmKernelOrm.get_vllm_kernel_values(
-            k_data, cache_dir, vllm_hash, rank_x_y,
-            artifact_shape=artifact_shape or "",  # Use empty string if None
+        # Create VllmKernelMetadata object
+        vllm_meta = VllmKernelMetadata(
+            vllm_hash=vllm_hash,
+            rank_x_y=rank_x_y,
+            artifact_shape=artifact_shape or "",
             best_config=best_config
+        )
+        kernel_values = VllmKernelOrm.get_vllm_kernel_values(
+            k_data, cache_dir, vllm_meta
         )
 
         stmt = sqlite_insert(VllmKernelOrm).values(kernel_values)

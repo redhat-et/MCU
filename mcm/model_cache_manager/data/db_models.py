@@ -25,7 +25,7 @@ from sqlalchemy.orm import (
     Session as SqlaSession,
 )
 
-from ..models.kernel import Kernel
+from ..models.kernel import Kernel, VllmKernelMetadata
 from ..utils.strategy_constants import VLLM_EXTENDED_PRIMARY_FIELDS
 
 
@@ -396,11 +396,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
     def get_vllm_kernel_values(
         k_data: Kernel,
         cache_dir: str,
-        *,
-        vllm_hash: str,
-        rank_x_y: str,
-        artifact_shape: str,
-        best_config: Optional[str] = None,
+        vllm_meta: VllmKernelMetadata,
     ) -> Dict[str, Any]:
         """
         Get new vLLM-specific kernel values.
@@ -408,10 +404,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         Args:
             k_data: Kernel data
             cache_dir: Cache directory path
-            vllm_hash: vLLM hash
-            rank_x_y: Rank identifier
-            artifact_shape: Artifact shape directory name
-            best_config: Optional JSON string for best config
+            vllm_meta: vLLM-specific metadata
 
         Returns:
             Dictionary with new vLLM kernel values
@@ -420,34 +413,28 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         kernel_values.update(
             {
                 "cache_dir": cache_dir,
-                "vllm_hash": vllm_hash,
+                "vllm_hash": vllm_meta.vllm_hash,
                 "triton_cache_key": k_data.hash,
-                "rank_x_y": rank_x_y,
-                "artifact_shape": artifact_shape,
-                "best_config": best_config,
+                "rank_x_y": vllm_meta.rank_x_y,
+                "artifact_shape": vllm_meta.artifact_shape,
+                "best_config": vllm_meta.best_config,
             }
         )
         return kernel_values
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @classmethod
     def upsert_from_dto(
         cls,
         session: SqlaSession,
         k_data: Kernel,
         cache_dir: str,
-        vllm_hash: str,
-        rank_x_y: str,
-        artifact_shape: str,
-        best_config: Optional[str] = None,
+        vllm_meta: VllmKernelMetadata,
     ) -> None:
         """
         Creates or updates a new vLLM kernel record from a Kernel DTO, including files.
         """
         kernel_values = cls.get_vllm_kernel_values(
-            k_data, cache_dir,
-            vllm_hash=vllm_hash, rank_x_y=rank_x_y,
-            artifact_shape=artifact_shape, best_config=best_config
+            k_data, cache_dir, vllm_meta
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)
@@ -478,34 +465,34 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             "Upserted new vLLM kernel cache_dir %s vllm_hash %s "
             "triton_cache_key %s with rank_x_y %s",
             cache_dir,
-            vllm_hash,
+            vllm_meta.vllm_hash,
             k_data.hash,
-            rank_x_y,
+            vllm_meta.rank_x_y,
         )
 
         session.query(VllmKernelFileOrm).filter(
             VllmKernelFileOrm.cache_dir == cache_dir,
-            VllmKernelFileOrm.vllm_hash == vllm_hash,
+            VllmKernelFileOrm.vllm_hash == vllm_meta.vllm_hash,
             VllmKernelFileOrm.triton_cache_key == k_data.hash,
-            VllmKernelFileOrm.rank_x_y == rank_x_y,
-            VllmKernelFileOrm.artifact_shape == artifact_shape,
+            VllmKernelFileOrm.rank_x_y == vllm_meta.rank_x_y,
+            VllmKernelFileOrm.artifact_shape == vllm_meta.artifact_shape,
         ).delete(synchronize_session="fetch")
         log.debug(
             "Deleted existing files for cache_dir %s vllm_hash %s "
             "triton_cache_key %s and rank_x_y %s",
             cache_dir,
-            vllm_hash,
+            vllm_meta.vllm_hash,
             k_data.hash,
-            rank_x_y,
+            vllm_meta.rank_x_y,
         )
 
         for f_dto in k_data.files:
             kernel_file_orm = VllmKernelFileOrm(
                 cache_dir=cache_dir,
-                vllm_hash=vllm_hash,
+                vllm_hash=vllm_meta.vllm_hash,
                 triton_cache_key=k_data.hash,
-                rank_x_y=rank_x_y,
-                artifact_shape=artifact_shape,
+                rank_x_y=vllm_meta.rank_x_y,
+                artifact_shape=vllm_meta.artifact_shape,
                 type=f_dto.file_type,
                 rel_path=f_dto.path.name,
                 size=f_dto.size,
@@ -516,9 +503,9 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             "triton_cache_key %s and rank_x_y %s",
             len(k_data.files),
             cache_dir,
-            vllm_hash,
+            vllm_meta.vllm_hash,
             k_data.hash,
-            rank_x_y,
+            vllm_meta.rank_x_y,
         )
 
 

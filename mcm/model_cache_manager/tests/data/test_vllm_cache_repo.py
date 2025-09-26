@@ -115,7 +115,9 @@ class TestVllmCacheRepository(unittest.TestCase):
         repo = VllmCacheRepository(self.cache_dir)
         # Testing protected method is ok in unit tests
         # pylint: disable=protected-access
-        with patch("model_cache_manager.data.cache_repo.iter_triton_kernels") as mock_iter:
+        with patch(
+            "model_cache_manager.data.cache_repo.iter_triton_kernels"
+        ) as mock_iter:
             mock_kernel = MagicMock(spec=Kernel)
             mock_kernel.hash = "test_kernel"
             mock_iter.return_value = [mock_kernel]
@@ -155,6 +157,7 @@ class TestVllmCacheRepository(unittest.TestCase):
 
         self.assertEqual(len(kernels), 0)
 
+    # pylint: disable=too-many-locals
     @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
     def test_kernels_with_structure_and_kernels(self, mock_iter_triton_kernels):
         """Test kernels method with vLLM structure containing kernels."""
@@ -195,7 +198,8 @@ class TestVllmCacheRepository(unittest.TestCase):
         repo = VllmCacheRepository(self.cache_dir)
         kernels = list(repo.kernels())
 
-        # Should have 2 kernels, each with vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, and kernel
+        # Should have 2 kernels, each with vllm_hash, cache_dir, rank_x_y, artifact_shape,
+        #  best_config, and kernel
         self.assertEqual(len(kernels), 2)
 
         vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel = kernels[0]

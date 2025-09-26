@@ -15,6 +15,7 @@ from ..utils.utils import (
     create_kernel_identifier,
     process_kernels_in_batches,
 )
+from ..models.kernel import VllmKernelMetadata
 from ..utils.strategy_constants import VLLM_EXTENDED_PRIMARY_FIELDS, VLLM_HASH_FIELD
 
 
@@ -67,18 +68,24 @@ class VllmStrategy(CacheModeStrategy):
         # Create generator that yields kernel data tuples
         kernels_iterator = (
             (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
-            for vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel
-            in repo.kernels()
+            for vllm_hash, cache_dir, rank_x_y, artifact_shape,
+            best_config, kernel in repo.kernels()
         )
         return process_kernels_in_batches(kernels_iterator, db, batch_size)
 
     def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
         """Strategy-specific kernel insertion for new vLLM."""
+
         cache_dir = args[0] if len(args) > 0 else kwargs.get("cache_dir")
         vllm_hash = args[1] if len(args) > 1 else kwargs.get("vllm_hash")
         rank_x_y = args[2] if len(args) > 2 else kwargs.get("rank_x_y")
         artifact_shape = args[3] if len(args) > 3 else kwargs.get("artifact_shape")
         best_config = args[4] if len(args) > 4 else kwargs.get("best_config")
-        db.insert_kernel(
-            k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config
+
+        vllm_meta = VllmKernelMetadata(
+            vllm_hash=vllm_hash,
+            rank_x_y=rank_x_y,
+            artifact_shape=artifact_shape,
+            best_config=best_config,
         )
+        db.insert_kernel(k_data, cache_dir, vllm_meta)

@@ -16,32 +16,9 @@ from model_cache_manager.utils.mcm_constants import IR_EXTS
 
 from model_cache_manager.data.cache_repo import CacheRepository
 from model_cache_manager.data.database import Database
+from model_cache_manager.tests.test_utils import create_mock_kernel_data
 
 logging.disable(logging.CRITICAL)
-
-
-# pylint: disable=too-many-arguments
-# pylint: disable=too-many-positional-arguments
-def create_mock_kernel_data(
-    hash_val: str,
-    name: str,
-    backend: str = "cuda",
-    arch: str = "80",
-    mod_time_offset_secs: int = 0,
-    total_size_bytes: int = 1024,
-    runtime_hits: int = 0,
-) -> dict:
-    """Helper to create consistent mock kernel data dictionary."""
-    base_timestamp = 1747681046.0
-    return {
-        "hash": hash_val,
-        "name": name,
-        "backend": backend,
-        "arch": arch,
-        "modified_time": base_timestamp + mod_time_offset_secs,
-        "total_size": total_size_bytes,
-        "runtime_hits": runtime_hits,
-    }
 
 
 # pylint: disable=too-many-arguments

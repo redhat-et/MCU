@@ -9,7 +9,7 @@ import time
 
 from model_cache_manager.data.database import VllmDatabase
 from model_cache_manager.data.db_models import VllmKernelOrm, BaseKernelMixin
-from model_cache_manager.models.kernel import Kernel, KernelFile
+from model_cache_manager.models.kernel import Kernel, KernelFile, VllmKernelMetadata
 from model_cache_manager.models.criteria import SearchCriteria
 from model_cache_manager.tests.test_utils import (
     setup_kernel_orm_mock,
@@ -118,8 +118,13 @@ class TestVllmKernelOrm(unittest.TestCase):
 
             rank_x_y = "rank_0_0"
             artifact_shape = "artifact_shape_0"
+            vllm_meta = VllmKernelMetadata(
+                vllm_hash=vllm_hash,
+                rank_x_y=rank_x_y,
+                artifact_shape=artifact_shape
+            )
             VllmKernelOrm.upsert_from_dto(
-                self.mock_session, self.mock_kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape
+                self.mock_session, self.mock_kernel, cache_dir, vllm_meta
             )
 
             # Verify sqlite_insert was called
@@ -202,14 +207,25 @@ class TestVllmDatabase(unittest.TestCase):
             db = VllmDatabase()
             cache_dir = "/test/cache"
             vllm_hash = "test_hash"
-
             rank_x_y = "rank_0_0"
             artifact_shape = "test_shape"
-            db.insert_kernel(self.mock_kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape)
 
-            mock_kernel_orm.upsert_from_dto.assert_called_once_with(
-                mock_session, self.mock_kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, None
+            vllm_meta = VllmKernelMetadata(
+                vllm_hash=vllm_hash,
+                rank_x_y=rank_x_y,
+                artifact_shape=artifact_shape
             )
+            db.insert_kernel(self.mock_kernel, cache_dir, vllm_meta)
+
+            # Verify that upsert_from_dto was called with the correct arguments
+            mock_kernel_orm.upsert_from_dto.assert_called_once()
+            args = mock_kernel_orm.upsert_from_dto.call_args[0]
+            self.assertEqual(args[0], mock_session)
+            self.assertEqual(args[1], self.mock_kernel)
+            self.assertEqual(args[2], cache_dir)
+            self.assertEqual(args[3].vllm_hash, vllm_hash)
+            self.assertEqual(args[3].rank_x_y, rank_x_y)
+            self.assertEqual(args[3].artifact_shape, artifact_shape)
             mock_session.commit.assert_called_once()
             mock_session.close.assert_called_once()
 
@@ -361,7 +377,7 @@ class TestVllmDatabase(unittest.TestCase):
         """Test database close method."""
         mock_engine, _, _ = setup_engine_and_session_mock(mock_create_engine_session)
 
-        with patch("model_cache_manager.data.database.Base"):
+        with patch("model_cache_manager.data.database_utils.ensure_schema"):
             db = VllmDatabase()
             db.close()
 

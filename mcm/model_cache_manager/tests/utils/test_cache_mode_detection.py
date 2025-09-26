@@ -67,7 +67,7 @@ class TestCacheModeDetection(unittest.TestCase):
 
     def test_detect_vllm_new_cache_structure(self):
         """Test detection of new vLLM cache structure with artifact_shape."""
-        # Create new vLLM structure: torch_compile_cache/<hash>/rank_x_y/backbone/artifact_shape_*/triton/
+        # Create vLLM structure: torch_compile_cache/<hash>/rank_x_y/...
         vllm_dir = self.temp_dir / "vllm_new"
         torch_compile = vllm_dir / "torch_compile_cache"
         hash_dir = torch_compile / "some_vllm_hash"
@@ -125,8 +125,8 @@ class TestCacheModeDetection(unittest.TestCase):
         # Add best config file
         config_dir = artifact_dir / "tc"
         config_dir.mkdir(parents=True)
-        config_file = config_dir / "c9a602056cc9b1b064df88926431e018c36128fddcc7dbb9864e464e27a34c1a.best_config"
-        config_file.write_text('{"XBLOCK": 512, "num_warps": 8}')
+        cfg_file = config_dir / "c9a602056cc9b1.best_config"
+        cfg_file.write_text('{"XBLOCK": 512, "num_warps": 8}')
 
         mode = detect_cache_mode(vllm_dir)
         self.assertEqual(mode, MODE_VLLM)
