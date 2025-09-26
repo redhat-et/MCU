@@ -42,6 +42,10 @@ VLLM_LEGACY_KERNEL_ID_LENGTH = 4
 # (cache_dir, vllm_hash, triton_hash, rank_x_y, artifact_shape)
 VLLM_NEW_KERNEL_ID_LENGTH = 5
 
+# Best config field names
+BEST_CONFIG_TRITON_HASH_KEY = 'triton_cache_hash'
+KERNEL_DICT_IS_BEST_KEY = 'is_best'
+
 log = logging.getLogger(__name__)
 
 
@@ -615,7 +619,7 @@ class VllmDatabase:
                         # A kernel is best if its triton_cache_key matches
                         # the triton_cache_hash in best_config
                         triton_cache_hash = best_config_data.get(
-                            'triton_cache_hash'
+                            BEST_CONFIG_TRITON_HASH_KEY
                         )
                         is_best = kernel_orm.triton_cache_key == triton_cache_hash
                     except (json.JSONDecodeError, TypeError):
@@ -625,7 +629,7 @@ class VllmDatabase:
                 if criteria.only_best and not is_best:
                     continue
 
-                kernel_dict['is_best'] = is_best
+                kernel_dict[KERNEL_DICT_IS_BEST_KEY] = is_best
                 results.append(kernel_dict)
 
             log.debug(

@@ -405,7 +405,7 @@ def delete_kernel_directories(kernel_dirs: List[Path]) -> int:
 
 def create_kernel_identifier(mode: str, **kwargs) -> KernelIdentifier:
     """Factory function to create kernel identifiers."""
-    if mode in (MODE_VLLM, "vllm-legacy"):
+    if mode in (MODE_VLLM, MODE_VLLM_LEGACY):
         triton_cache_key = kwargs.get("triton_cache_key")
         vllm_hash = kwargs.get("vllm_hash")
         rank_x_y = kwargs.get("rank_x_y")

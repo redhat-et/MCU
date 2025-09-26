@@ -15,6 +15,9 @@ from .db_config import DB_PATH
 from .db_models import Base
 from ..models.kernel import Kernel
 
+# Field name constant for metadata comparison
+HASH_FIELD_NAME = "hash"
+
 log = logging.getLogger(__name__)
 
 
@@ -222,10 +225,10 @@ def _are_kernel_metadata_jsons_duplicates(metadata1: Any, metadata2: Any) -> boo
 
         if val1 != val2:
             differences_count += 1
-            if key == "hash":
+            if key == HASH_FIELD_NAME:
                 hash_field_differed = True
 
-    # Return True if exactly 0 differences OR exactly 1 difference in the 'hash' field
+    # Return True if exactly 0 differences OR exactly 1 difference in the hash field
     return differences_count == 0 or (differences_count == 1 and hash_field_differed)
 
 
