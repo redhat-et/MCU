@@ -102,6 +102,8 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
     )
     table.add_column("Hash", style="dim", width=15, overflow="fold")
     table.add_column("Name", style="cyan", min_width=20, overflow="fold")
+    if mode == MODE_VLLM:
+        table.add_column("Best", style="bold yellow", width=4)
     table.add_column("Hits", style="green", min_width=5, overflow="fold")
     table.add_column("Last Access", style="magenta", width=18)
     table.add_column("Backend", style="green", width=5)
@@ -124,20 +126,33 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
             MODE_TRITON: lambda r: r.get("hash", "N/A")[:12] + "...",
             MODE_VLLM: lambda r: r.get("vllm_hash", "N/A"),
         }
-        hash_mode = hash_display_strategies.get(mode, lambda r: r.get("hash", "N/A"))(row_dict)
-
-        table.add_row(
-            hash_mode,
-            row_dict.get("name", "N/A"),
-            num_hits_str,
-            last_time_str,
-            row_dict.get("backend", "N/A"),
-            row_dict.get("arch", "N/A"),
-            row_dict.get("triton_version", "N/A"),
-            str(row_dict.get("num_warps", "N/A")),
-            total_size_str,
-            str(row_dict.get("cache_dir", "N/A")),
+        hash_mode = hash_display_strategies.get(mode, lambda r: r.get("hash", "N/A"))(
+            row_dict
         )
+
+        # Build row data based on mode
+        row_data = [hash_mode, row_dict.get("name", "N/A")]
+
+        # Add BEST indicator for vLLM mode
+        if mode == MODE_VLLM:
+            is_best = row_dict.get("is_best", False)
+            row_data.append("Y" if is_best else "")
+
+        # Add remaining columns
+        row_data.extend(
+            [
+                num_hits_str,
+                last_time_str,
+                row_dict.get("backend", "N/A"),
+                row_dict.get("arch", "N/A"),
+                row_dict.get("triton_version", "N/A"),
+                str(row_dict.get("num_warps", "N/A")),
+                total_size_str,
+                str(row_dict.get("cache_dir", "N/A")),
+            ]
+        )
+
+        table.add_row(*row_data)
 
     rich.print(table)
 
@@ -260,6 +275,7 @@ def _execute_search_command(options: CommonSearchOptions) -> None:
             younger_than_timestamp=younger_ts,
             cache_hit_lower=options.cache_hit_lower,
             cache_hit_higher=options.cache_hit_higher,
+            only_best=options.only_best,
         )
 
         with service_ctx(SearchService, criteria=criteria, mode=mode) as svc:
@@ -295,6 +311,11 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     cache_hit_higher: Optional[int] = get_common_search_options()["cache_hit_higher"],
     cache_dir: Optional[Path] = get_common_search_options()["cache_dir"],
     mode: Optional[str] = get_common_search_options()["mode"],
+    only_best: bool = typer.Option(
+        False,
+        "--only-best",
+        help="For vLLM mode: show only kernels with best configuration.",
+    ),
 ):
     """
     Search for indexed kernels based on various SearchCriteria.
@@ -309,6 +330,7 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
+        only_best=only_best,
     )
     _execute_search_command(options)
 

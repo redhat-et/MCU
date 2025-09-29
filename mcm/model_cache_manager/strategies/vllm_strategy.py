@@ -1,5 +1,5 @@
 """
-Strategy implementation for vLLM cache mode.
+Strategy implementation for new vLLM cache mode.
 """
 
 from __future__ import annotations
@@ -15,46 +15,47 @@ from ..utils.utils import (
     create_kernel_identifier,
     process_kernels_in_batches,
 )
+from ..models.kernel import VllmKernelMetadata
+from ..utils.strategy_constants import VLLM_EXTENDED_PRIMARY_FIELDS, VLLM_HASH_FIELD
 
 
 class VllmStrategy(CacheModeStrategy):
-    """Strategy for handling vLLM cache mode operations."""
+    """Strategy for handling new vLLM cache mode operations."""
 
     @property
     def config(self) -> CacheConfig:
-        """Return vLLM cache configuration."""
+        """Return new vLLM cache configuration."""
         return CacheConfig(
             orm_model=VllmKernelOrm,
             file_orm_model=VllmKernelFileOrm,
-            hash_field="triton_cache_key",
-            primary_key_fields=[
-                "cache_dir",
-                "vllm_hash",
-                "triton_cache_key",
-                "rank_x_y",
-            ],
-            additional_duplicate_fields=["vllm_hash"],
+            hash_field=VLLM_HASH_FIELD,
+            primary_key_fields=VLLM_EXTENDED_PRIMARY_FIELDS,
+            additional_duplicate_fields=["vllm_hash", "artifact_shape"],
         )
 
     def create_database(self):
-        """Create VllmDatabase instance for vLLM mode."""
+        """Create VllmDatabase instance for new vLLM mode."""
         return VllmDatabase()
 
     def create_repository(self, cache_dir: Path):
-        """Create VllmCacheRepository instance for vLLM mode."""
+        """Create VllmCacheRepository instance for new vLLM mode."""
         return VllmCacheRepository(cache_dir)
 
     def extract_identifiers_from_row(self, row: Dict[str, Any]) -> KernelIdentifier:
-        """Extract kernel identifier from vLLM database row."""
-        return create_kernel_identifier(
+        """Extract kernel identifier from new vLLM database row."""
+        identifier = create_kernel_identifier(
             mode="vllm",
             vllm_hash=row["vllm_hash"],
             triton_cache_key=row["triton_cache_key"],
             rank_x_y=row["rank_x_y"],
         )
+        # Add artifact_shape as an attribute if present
+        if "artifact_shape" in row:
+            identifier.artifact_shape = row["artifact_shape"]
+        return identifier
 
     def reindex_kernels(self, repo, db, batch_size: int = 1000) -> int:
-        """Perform vLLM-specific kernel reindexing using streaming bulk insert.
+        """Perform new vLLM-specific kernel reindexing using streaming bulk insert.
 
         Args:
             repo: Repository to read kernels from
@@ -66,14 +67,25 @@ class VllmStrategy(CacheModeStrategy):
         """
         # Create generator that yields kernel data tuples
         kernels_iterator = (
-            (kernel, cache_dir, vllm_hash, rank_x_y)
-            for vllm_hash, cache_dir, rank_x_y, kernel in repo.kernels()
+            (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
+            for vllm_hash, cache_dir, rank_x_y, artifact_shape,
+            best_config, kernel in repo.kernels()
         )
         return process_kernels_in_batches(kernels_iterator, db, batch_size)
 
     def insert_kernel_strategy(self, db, k_data, *args, **kwargs) -> None:
-        """Strategy-specific kernel insertion for vLLM."""
+        """Strategy-specific kernel insertion for new vLLM."""
+
         cache_dir = args[0] if len(args) > 0 else kwargs.get("cache_dir")
         vllm_hash = args[1] if len(args) > 1 else kwargs.get("vllm_hash")
         rank_x_y = args[2] if len(args) > 2 else kwargs.get("rank_x_y")
-        db.insert_kernel(k_data, cache_dir, vllm_hash, rank_x_y)
+        artifact_shape = args[3] if len(args) > 3 else kwargs.get("artifact_shape")
+        best_config = args[4] if len(args) > 4 else kwargs.get("best_config")
+
+        vllm_meta = VllmKernelMetadata(
+            vllm_hash=vllm_hash,
+            rank_x_y=rank_x_y,
+            artifact_shape=artifact_shape,
+            best_config=best_config,
+        )
+        db.insert_kernel(k_data, cache_dir, vllm_meta)

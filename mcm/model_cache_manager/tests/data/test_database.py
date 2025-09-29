@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 from model_cache_manager.models.kernel import Kernel, KernelFile
-from model_cache_manager.tests.data.test_utils import (
+from model_cache_manager.tests.test_utils import (
     setup_kernel_orm_mock,
     setup_sqlite_insert_mock,
     setup_query_mock,
@@ -82,13 +82,13 @@ class TestDatabase(unittest.TestCase):
     @patch("model_cache_manager.data.database.sqlite_insert")
     @patch("model_cache_manager.data.database.KernelFileOrm")
     @patch("model_cache_manager.data.database.KernelOrm")
-    @patch("model_cache_manager.data.database.Base")
+    @patch("model_cache_manager.data.database_utils.ensure_schema")
     @patch("model_cache_manager.data.database.create_engine_and_session")
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def test_bulk_insert_kernels_success(
         self,
         mock_create_engine_session,
-        mock_base,  # pylint: disable=unused-argument
+        mock_ensure_schema,  # pylint: disable=unused-argument
         mock_kernel_orm,
         mock_file_orm,
         mock_sqlite_insert,
