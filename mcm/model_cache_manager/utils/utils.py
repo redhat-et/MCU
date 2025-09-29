@@ -12,7 +12,12 @@ from dataclasses import dataclass
 import rich
 import typer
 
-from model_cache_manager.utils.mcm_constants import MODE_TRITON, MODE_VLLM, MODE_VLLM_LEGACY
+from model_cache_manager.utils.mcm_constants import (
+    MODE_TRITON,
+    MODE_VLLM,
+    MODE_VLLM_LEGACY,
+    ARTIFACT_SHAPE_PREFIX,
+)
 
 
 def format_size(size_bytes: int | float) -> str:
@@ -156,13 +161,26 @@ def _has_vllm_legacy_cache_structure(cache_dir: Path) -> bool:
     return False
 
 
+def iter_artifact_shape_dirs(backbone_dir: Path):
+    """Iterate through artifact_shape directories in backbone.
+
+    Args:
+        backbone_dir: Path to the backbone directory
+
+    Yields:
+        Path objects for each artifact_shape directory
+    """
+    for item in backbone_dir.iterdir():
+        if item.is_dir() and item.name.startswith(ARTIFACT_SHAPE_PREFIX):
+            yield item
+
+
 def _has_artifact_shape_with_triton(backbone_dir: Path) -> bool:
     """Check if backbone directory has artifact_shape subdirectories with triton."""
-    for item in backbone_dir.iterdir():
-        if item.is_dir() and item.name.startswith("artifact_shape_"):
-            triton_dir = item / "triton"
-            if triton_dir.exists():
-                return True
+    for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+        triton_dir = artifact_dir / "triton"
+        if triton_dir.exists():
+            return True
     return False
 
 
@@ -297,10 +315,7 @@ def _process_all_artifact_shapes(
 ) -> List[Path]:
     """Process all artifact_shape directories in backbone."""
     kernel_dirs = []
-    for artifact_dir in backbone_dir.iterdir():
-        if not (artifact_dir.is_dir() and
-                artifact_dir.name.startswith("artifact_shape_")):
-            continue
+    for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
 
         triton_dir = artifact_dir / "triton"
         if triton_dir.exists():
@@ -332,7 +347,7 @@ def find_vllm_kernel_dirs(
     cache_dir: Path,
     vllm_hash: str,
     triton_cache_key: str,
-    artifact_shape: Optional[str] = None
+    artifact_shape: Optional[str] = None,
 ) -> List[Path]:
     """Find kernel directories for new vLLM structure."""
     vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash

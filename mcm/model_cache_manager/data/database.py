@@ -608,22 +608,28 @@ class VllmDatabase:
 
             results = []
 
+            # Cache for parsed best_config data to avoid repeated parsing
+            best_config_cache = {}
+
             for kernel_orm in results_orm:
                 kernel_dict = kernel_orm.to_dict()
                 # Check if this kernel is the best one by comparing
                 # triton_cache_key with triton_cache_hash in best_config
                 is_best = False
                 if kernel_orm.best_config:
-                    try:
-                        best_config_data = json.loads(kernel_orm.best_config)
-                        # A kernel is best if its triton_cache_key matches
-                        # the triton_cache_hash in best_config
-                        triton_cache_hash = best_config_data.get(
-                            BEST_CONFIG_TRITON_HASH_KEY
-                        )
-                        is_best = kernel_orm.triton_cache_key == triton_cache_hash
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+                    # Use cached parsed result if available
+                    if kernel_orm.best_config not in best_config_cache:
+                        try:
+                            best_config_data = json.loads(kernel_orm.best_config)
+                            triton_cache_hash = best_config_data.get(
+                                BEST_CONFIG_TRITON_HASH_KEY
+                            )
+                            best_config_cache[kernel_orm.best_config] = triton_cache_hash
+                        except (json.JSONDecodeError, TypeError):
+                            best_config_cache[kernel_orm.best_config] = None
+
+                    triton_cache_hash = best_config_cache[kernel_orm.best_config]
+                    is_best = kernel_orm.triton_cache_key == triton_cache_hash
 
                 # If only_best is specified, skip non-best kernels
                 if criteria.only_best and not is_best:

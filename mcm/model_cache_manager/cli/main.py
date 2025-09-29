@@ -136,7 +136,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
         # Add BEST indicator for vLLM mode
         if mode == MODE_VLLM:
             is_best = row_dict.get("is_best", False)
-            row_data.append("✓" if is_best else "")
+            row_data.append("Y" if is_best else "")
 
         # Add remaining columns
         row_data.extend(

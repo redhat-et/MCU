@@ -11,6 +11,7 @@ import logging
 import threading
 from typing import Iterable, Optional
 from ..utils.paths import get_cache_dir
+from ..utils.utils import iter_artifact_shape_dirs
 from ..models.kernel import Kernel
 from ..plugins.discovery import discover_plugins
 from .kernel_validator import deserialize_kernel
@@ -275,6 +276,63 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             if hash_dir.is_dir():
                 yield hash_dir.name, hash_dir
 
+    def _find_best_config(self, artifact_dir: Path) -> Optional[str]:
+        """
+        Find and read the best_config file in artifact directory.
+
+        Args:
+            artifact_dir: Path to the artifact directory
+
+        Returns:
+            Content of best_config file or None if not found
+        """
+        # Exclude known directories that don't contain these files
+        exclude_dirs = {"aotautograd", "fxgraph", "triton"}
+
+        # First check artifact_dir root
+        for config_path in artifact_dir.glob("*.best_config"):
+            try:
+                return config_path.read_text()
+            except (OSError, IOError, PermissionError, UnicodeDecodeError) as e:
+                log.debug("Could not read best config %s: %s", config_path, e)
+
+        # Check immediate subdirectories (excluding known dirs)
+        for subdir in artifact_dir.iterdir():
+            if not subdir.is_dir() or subdir.name in exclude_dirs:
+                continue
+            for config_path in subdir.glob("*.best_config"):
+                try:
+                    return config_path.read_text()
+                except (OSError, IOError, PermissionError, UnicodeDecodeError) as e:
+                    log.debug("Could not read best config %s: %s", config_path, e)
+
+        return None
+
+    def _process_artifact_dir(
+        self, artifact_dir: Path, plugins: dict
+    ) -> Iterable[tuple[str, str, Kernel]]:
+        """
+        Process a single artifact directory for kernels.
+
+        Args:
+            artifact_dir: Path to the artifact directory
+            plugins: Dictionary of plugins for kernel processing
+
+        Yields:
+            Tuples of (artifact_shape, best_config, kernel)
+        """
+        best_config = self._find_best_config(artifact_dir)
+        triton_dir = artifact_dir / "triton"
+
+        if not triton_dir.exists():
+            return
+
+        for sub_dir in triton_dir.iterdir():
+            if not sub_dir.is_dir():
+                continue
+            for kernel in iter_triton_kernels(sub_dir, plugins):
+                yield artifact_dir.name, best_config, kernel
+
     def _find_artifact_kernels(
         self, rank_dir: Path, _rank_name: str
     ) -> Iterable[tuple[str, str, Kernel]]:
@@ -293,27 +351,8 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             return
 
         plugins = _get_plugins()
-        for artifact_dir in backbone_dir.iterdir():
-            if not (artifact_dir.is_dir() and artifact_dir.name.startswith("artifact_shape_")):
-                continue
-
-            best_config = None
-            for config_path in artifact_dir.rglob("*.best_config"):
-                try:
-                    best_config = config_path.read_text()
-                    break
-                except (OSError, IOError, PermissionError, UnicodeDecodeError) as e:
-                    log.debug("Could not read best config %s: %s", config_path, e)
-
-            triton_dir = artifact_dir / "triton"
-            if not triton_dir.exists():
-                continue
-
-            for sub_dir in triton_dir.iterdir():
-                if not sub_dir.is_dir():
-                    continue
-                for kernel in iter_triton_kernels(sub_dir, plugins):
-                    yield artifact_dir.name, best_config, kernel
+        for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+            yield from self._process_artifact_dir(artifact_dir, plugins)
 
     def kernels(self) -> Iterable[tuple[str, str, str, str, str | None, Kernel]]:
         """
