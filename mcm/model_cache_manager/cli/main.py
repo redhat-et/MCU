@@ -229,6 +229,7 @@ def _execute_prune_command(
                     younger_than_timestamp=younger_ts,
                     cache_hit_higher=options.cache_hit_higher,
                     cache_hit_lower=options.cache_hit_lower,
+                    only_best=options.only_best,
                 )
                 stats = svc.prune(criteria, delete_ir_only=not full, auto_confirm=yes)
 
@@ -330,7 +331,7 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
-        only_best=only_best,
+        only_best=True if only_best else None,  # None means show all, True means only best
     )
     _execute_search_command(options)
 
@@ -355,6 +356,11 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
     cache_dir: Optional[Path] = get_common_search_options()["cache_dir"],
     mode: Optional[str] = get_common_search_options()["mode"],
+    non_best: bool = typer.Option(
+        False,
+        "--non-best",
+        help="For vLLM mode: prune only non-best kernels (keep best configurations).",
+    ),
 ):
     """
     Delete intermediate‑representation files (default) or whole kernel
@@ -370,6 +376,7 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
+        only_best=False if non_best else None,  # False means select non-best kernels for pruning
     )
     _execute_prune_command(options, full, deduplicate, yes)
 
