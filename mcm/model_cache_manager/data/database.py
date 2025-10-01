@@ -631,8 +631,13 @@ class VllmDatabase:
                     triton_cache_hash = best_config_cache[kernel_orm.best_config]
                     is_best = kernel_orm.triton_cache_key == triton_cache_hash
 
-                # If only_best is specified, skip non-best kernels
-                if criteria.only_best and not is_best:
+                # Filter based on only_best criteria:
+                # - None: show all kernels (no filtering)
+                # - True: show only best kernels
+                # - False: show only non-best kernels
+                if criteria.only_best is True and not is_best:
+                    continue
+                if criteria.only_best is False and is_best:
                     continue
 
                 kernel_dict[KERNEL_DICT_IS_BEST_KEY] = is_best

@@ -36,6 +36,26 @@ DEFAULT_ROCM_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1"
 LOG_LEVELS = {0: "ERROR", 1: "WARNING", 2: "INFO", 3: "DEBUG"}
 
 
+def bool_to_optional_best(value: bool, for_pruning: bool = False) -> Optional[bool]:
+    """
+    Convert boolean flag to optional boolean for consistent only_best handling.
+
+    Args:
+        value: The boolean flag value from CLI
+        for_pruning: If True, inverts the logic for pruning (non_best becomes only_best=False)
+
+    Returns:
+        None: Show/process all kernels (no filtering)
+        True: Show/process only best kernels
+        False: Show/process only non-best kernels (used in pruning)
+    """
+    if for_pruning:
+        # For pruning: --non-best flag means we want to select non-best kernels (only_best=False)
+        return False if value else None
+    # For search: --only-best flag means we want only best kernels (only_best=True)
+    return True if value else None
+
+
 @app.callback()
 def base(
     verbose: int = typer.Option(
@@ -229,6 +249,7 @@ def _execute_prune_command(
                     younger_than_timestamp=younger_ts,
                     cache_hit_higher=options.cache_hit_higher,
                     cache_hit_lower=options.cache_hit_lower,
+                    only_best=options.only_best,
                 )
                 stats = svc.prune(criteria, delete_ir_only=not full, auto_confirm=yes)
 
@@ -330,7 +351,7 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
-        only_best=only_best,
+        only_best=bool_to_optional_best(only_best, for_pruning=False),
     )
     _execute_search_command(options)
 
@@ -355,6 +376,11 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
     cache_dir: Optional[Path] = get_common_search_options()["cache_dir"],
     mode: Optional[str] = get_common_search_options()["mode"],
+    non_best: bool = typer.Option(
+        False,
+        "--non-best",
+        help="For vLLM mode: prune only non-best kernels (keep best configurations).",
+    ),
 ):
     """
     Delete intermediate‑representation files (default) or whole kernel
@@ -370,6 +396,7 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
+        only_best=bool_to_optional_best(non_best, for_pruning=True),
     )
     _execute_prune_command(options, full, deduplicate, yes)
 
