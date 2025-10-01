@@ -52,9 +52,8 @@ def bool_to_optional_best(value: bool, for_pruning: bool = False) -> Optional[bo
     if for_pruning:
         # For pruning: --non-best flag means we want to select non-best kernels (only_best=False)
         return False if value else None
-    else:
-        # For search: --only-best flag means we want only best kernels (only_best=True)
-        return True if value else None
+    # For search: --only-best flag means we want only best kernels (only_best=True)
+    return True if value else None
 
 
 @app.callback()
