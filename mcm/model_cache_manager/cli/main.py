@@ -36,6 +36,27 @@ DEFAULT_ROCM_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1"
 LOG_LEVELS = {0: "ERROR", 1: "WARNING", 2: "INFO", 3: "DEBUG"}
 
 
+def bool_to_optional_best(value: bool, for_pruning: bool = False) -> Optional[bool]:
+    """
+    Convert boolean flag to optional boolean for consistent only_best handling.
+
+    Args:
+        value: The boolean flag value from CLI
+        for_pruning: If True, inverts the logic for pruning (non_best becomes only_best=False)
+
+    Returns:
+        None: Show/process all kernels (no filtering)
+        True: Show/process only best kernels
+        False: Show/process only non-best kernels (used in pruning)
+    """
+    if for_pruning:
+        # For pruning: --non-best flag means we want to select non-best kernels (only_best=False)
+        return False if value else None
+    else:
+        # For search: --only-best flag means we want only best kernels (only_best=True)
+        return True if value else None
+
+
 @app.callback()
 def base(
     verbose: int = typer.Option(
@@ -331,7 +352,7 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
-        only_best=True if only_best else None,  # None means show all, True means only best
+        only_best=bool_to_optional_best(only_best, for_pruning=False),
     )
     _execute_search_command(options)
 
@@ -376,7 +397,7 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
-        only_best=False if non_best else None,  # False means select non-best kernels for pruning
+        only_best=bool_to_optional_best(non_best, for_pruning=True),
     )
     _execute_prune_command(options, full, deduplicate, yes)
 
