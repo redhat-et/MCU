@@ -186,10 +186,14 @@ class VllmLegacyDatabase:
         )
 
         stmt = sqlite_insert(VllmLegacyKernelOrm).values(kernel_values)
+        # Preserve runtime statistics during updates
+        # These fields should not be overwritten during re-indexing
+        preserved_fields = {"runtime_hits", "last_access_time"}
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in VllmLegacyKernelOrm.__table__.columns
             if col.name not in ("cache_dir", "vllm_hash", "triton_cache_key", "rank_x_y")
+            and col.name not in preserved_fields
         }
         session.execute(
             stmt.on_conflict_do_update(

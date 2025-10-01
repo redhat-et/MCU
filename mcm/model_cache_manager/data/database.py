@@ -154,10 +154,13 @@ class Database:
         )
 
         stmt = sqlite_insert(KernelOrm).values(kernel_values)
+        # Preserve runtime statistics during updates
+        # These fields should not be overwritten during re-indexing
+        preserved_fields = {"runtime_hits", "last_access_time"}
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in KernelOrm.__table__.columns
-            if col.name not in ("hash", "cache_dir")
+            if col.name not in ("hash", "cache_dir") and col.name not in preserved_fields
         }
         session.execute(
             stmt.on_conflict_do_update(
@@ -476,10 +479,13 @@ class VllmDatabase:
             "rank_x_y",
             "artifact_shape",  # Always included in primary key for VllmKernelOrm
         ]
+        # Preserve runtime statistics during updates
+        # These fields should not be overwritten during re-indexing
+        preserved_fields = {"runtime_hits", "last_access_time"}
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in VllmKernelOrm.__table__.columns
-            if col.name not in primary_key_fields
+            if col.name not in primary_key_fields and col.name not in preserved_fields
         }
         session.execute(
             stmt.on_conflict_do_update(
