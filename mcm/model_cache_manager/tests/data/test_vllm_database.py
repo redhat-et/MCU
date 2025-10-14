@@ -9,9 +9,9 @@ import time
 
 from model_cache_manager.data.database import VllmDatabase
 from model_cache_manager.data.db_models import VllmKernelOrm, BaseKernelMixin
-from model_cache_manager.models.kernel import Kernel, KernelFile
+from model_cache_manager.models.kernel import Kernel, KernelFile, VllmKernelMetadata
 from model_cache_manager.models.criteria import SearchCriteria
-from model_cache_manager.tests.data.test_utils import (
+from model_cache_manager.tests.test_utils import (
     setup_kernel_orm_mock,
     setup_sqlite_insert_mock,
     setup_query_mock,
@@ -117,8 +117,14 @@ class TestVllmKernelOrm(unittest.TestCase):
             mock_stmt.on_conflict_do_update.return_value = mock_stmt
 
             rank_x_y = "rank_0_0"
+            artifact_shape = "artifact_shape_0"
+            vllm_meta = VllmKernelMetadata(
+                vllm_hash=vllm_hash,
+                rank_x_y=rank_x_y,
+                artifact_shape=artifact_shape
+            )
             VllmKernelOrm.upsert_from_dto(
-                self.mock_session, self.mock_kernel, cache_dir, vllm_hash, rank_x_y
+                self.mock_session, self.mock_kernel, cache_dir, vllm_meta
             )
 
             # Verify sqlite_insert was called
@@ -181,33 +187,45 @@ class TestVllmDatabase(unittest.TestCase):
             mock_create_engine_session
         )
 
-        with patch("model_cache_manager.data.database.Base") as mock_base:
+        with patch("model_cache_manager.data.database_utils.ensure_schema") as mock_ensure_schema:
             db = VllmDatabase()
 
             mock_create_engine_session.assert_called_once_with("vllm")
             self.assertEqual(db.engine, mock_engine)
             self.assertEqual(db.SessionLocal, mock_session_local)
-            mock_base.metadata.create_all.assert_called_once_with(bind=mock_engine)
+            mock_ensure_schema.assert_called_once_with(mock_engine)
 
     @patch("model_cache_manager.data.database.create_engine_and_session")
     def test_insert_kernel_success(self, mock_create_engine_session):
         """Test successful kernel insertion."""
         _, _, mock_session = setup_engine_and_session_mock(mock_create_engine_session)
 
-        with patch("model_cache_manager.data.database.Base"), patch(
+        with patch("model_cache_manager.data.database_utils.ensure_schema"), patch(
             "model_cache_manager.data.database.VllmKernelOrm"
         ) as mock_kernel_orm:
 
             db = VllmDatabase()
             cache_dir = "/test/cache"
             vllm_hash = "test_hash"
-
             rank_x_y = "rank_0_0"
-            db.insert_kernel(self.mock_kernel, cache_dir, vllm_hash, rank_x_y)
+            artifact_shape = "test_shape"
 
-            mock_kernel_orm.upsert_from_dto.assert_called_once_with(
-                mock_session, self.mock_kernel, cache_dir, vllm_hash, rank_x_y
+            vllm_meta = VllmKernelMetadata(
+                vllm_hash=vllm_hash,
+                rank_x_y=rank_x_y,
+                artifact_shape=artifact_shape
             )
+            db.insert_kernel(self.mock_kernel, cache_dir, vllm_meta)
+
+            # Verify that upsert_from_dto was called with the correct arguments
+            mock_kernel_orm.upsert_from_dto.assert_called_once()
+            args = mock_kernel_orm.upsert_from_dto.call_args[0]
+            self.assertEqual(args[0], mock_session)
+            self.assertEqual(args[1], self.mock_kernel)
+            self.assertEqual(args[2], cache_dir)
+            self.assertEqual(args[3].vllm_hash, vllm_hash)
+            self.assertEqual(args[3].rank_x_y, rank_x_y)
+            self.assertEqual(args[3].artifact_shape, artifact_shape)
             mock_session.commit.assert_called_once()
             mock_session.close.assert_called_once()
 
@@ -225,7 +243,7 @@ class TestVllmDatabase(unittest.TestCase):
             triton_cache_key = MagicMock()
             rank_x_y = MagicMock()
 
-        with patch("model_cache_manager.data.database.Base"), patch(
+        with patch("model_cache_manager.data.database_utils.ensure_schema"), patch(
             "model_cache_manager.data.database.VllmKernelOrm"
         ) as mock_kernel_orm, patch(
             "model_cache_manager.data.database.VllmKernelFileOrm", MockVllmKernelFileOrm
@@ -302,7 +320,7 @@ class TestVllmDatabase(unittest.TestCase):
         mock_query.all.return_value = [mock_kernel_orm]
         mock_session.query.return_value = mock_query
 
-        with patch("model_cache_manager.data.database.Base"), patch(
+        with patch("model_cache_manager.data.database_utils.ensure_schema"), patch(
             "model_cache_manager.data.database.VllmKernelOrm"
         ):
 
@@ -331,7 +349,7 @@ class TestVllmDatabase(unittest.TestCase):
         mock_query.all.return_value = []
         mock_session.query.return_value = mock_query
 
-        with patch("model_cache_manager.data.database.Base"), patch(
+        with patch("model_cache_manager.data.database_utils.ensure_schema"), patch(
             "model_cache_manager.data.database.VllmKernelOrm"
         ) as mock_vllm_kernel_orm, patch("model_cache_manager.data.database.and_"):
 
@@ -359,7 +377,7 @@ class TestVllmDatabase(unittest.TestCase):
         """Test database close method."""
         mock_engine, _, _ = setup_engine_and_session_mock(mock_create_engine_session)
 
-        with patch("model_cache_manager.data.database.Base"):
+        with patch("model_cache_manager.data.database_utils.ensure_schema"):
             db = VllmDatabase()
             db.close()
 

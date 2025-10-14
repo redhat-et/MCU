@@ -36,6 +36,26 @@ DEFAULT_ROCM_IMAGE = "quay.io/rh-ee-asangior/vllm-0.9.1-tcm-warm-rocm:0.0.1"
 LOG_LEVELS = {0: "ERROR", 1: "WARNING", 2: "INFO", 3: "DEBUG"}
 
 
+def bool_to_optional_best(value: bool, for_pruning: bool = False) -> Optional[bool]:
+    """
+    Convert boolean flag to optional boolean for consistent only_best handling.
+
+    Args:
+        value: The boolean flag value from CLI
+        for_pruning: If True, inverts the logic for pruning (non_best becomes only_best=False)
+
+    Returns:
+        None: Show/process all kernels (no filtering)
+        True: Show/process only best kernels
+        False: Show/process only non-best kernels (used in pruning)
+    """
+    if for_pruning:
+        # For pruning: --non-best flag means we want to select non-best kernels (only_best=False)
+        return False if value else None
+    # For search: --only-best flag means we want only best kernels (only_best=True)
+    return True if value else None
+
+
 @app.callback()
 def base(
     verbose: int = typer.Option(
@@ -102,6 +122,8 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
     )
     table.add_column("Hash", style="dim", width=15, overflow="fold")
     table.add_column("Name", style="cyan", min_width=20, overflow="fold")
+    if mode == MODE_VLLM:
+        table.add_column("Best", style="bold yellow", width=4)
     table.add_column("Hits", style="green", min_width=5, overflow="fold")
     table.add_column("Last Access", style="magenta", width=18)
     table.add_column("Backend", style="green", width=5)
@@ -124,20 +146,33 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
             MODE_TRITON: lambda r: r.get("hash", "N/A")[:12] + "...",
             MODE_VLLM: lambda r: r.get("vllm_hash", "N/A"),
         }
-        hash_mode = hash_display_strategies.get(mode, lambda r: r.get("hash", "N/A"))(row_dict)
-
-        table.add_row(
-            hash_mode,
-            row_dict.get("name", "N/A"),
-            num_hits_str,
-            last_time_str,
-            row_dict.get("backend", "N/A"),
-            row_dict.get("arch", "N/A"),
-            row_dict.get("triton_version", "N/A"),
-            str(row_dict.get("num_warps", "N/A")),
-            total_size_str,
-            str(row_dict.get("cache_dir", "N/A")),
+        hash_mode = hash_display_strategies.get(mode, lambda r: r.get("hash", "N/A"))(
+            row_dict
         )
+
+        # Build row data based on mode
+        row_data = [hash_mode, row_dict.get("name", "N/A")]
+
+        # Add BEST indicator for vLLM mode
+        if mode == MODE_VLLM:
+            is_best = row_dict.get("is_best", False)
+            row_data.append("Y" if is_best else "")
+
+        # Add remaining columns
+        row_data.extend(
+            [
+                num_hits_str,
+                last_time_str,
+                row_dict.get("backend", "N/A"),
+                row_dict.get("arch", "N/A"),
+                row_dict.get("triton_version", "N/A"),
+                str(row_dict.get("num_warps", "N/A")),
+                total_size_str,
+                str(row_dict.get("cache_dir", "N/A")),
+            ]
+        )
+
+        table.add_row(*row_data)
 
     rich.print(table)
 
@@ -214,6 +249,7 @@ def _execute_prune_command(
                     younger_than_timestamp=younger_ts,
                     cache_hit_higher=options.cache_hit_higher,
                     cache_hit_lower=options.cache_hit_lower,
+                    only_best=options.only_best,
                 )
                 stats = svc.prune(criteria, delete_ir_only=not full, auto_confirm=yes)
 
@@ -260,6 +296,7 @@ def _execute_search_command(options: CommonSearchOptions) -> None:
             younger_than_timestamp=younger_ts,
             cache_hit_lower=options.cache_hit_lower,
             cache_hit_higher=options.cache_hit_higher,
+            only_best=options.only_best,
         )
 
         with service_ctx(SearchService, criteria=criteria, mode=mode) as svc:
@@ -295,6 +332,11 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     cache_hit_higher: Optional[int] = get_common_search_options()["cache_hit_higher"],
     cache_dir: Optional[Path] = get_common_search_options()["cache_dir"],
     mode: Optional[str] = get_common_search_options()["mode"],
+    only_best: bool = typer.Option(
+        False,
+        "--only-best",
+        help="For vLLM mode: show only kernels with best configuration.",
+    ),
 ):
     """
     Search for indexed kernels based on various SearchCriteria.
@@ -309,6 +351,7 @@ def search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
+        only_best=bool_to_optional_best(only_best, for_pruning=False),
     )
     _execute_search_command(options)
 
@@ -333,6 +376,11 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt."),
     cache_dir: Optional[Path] = get_common_search_options()["cache_dir"],
     mode: Optional[str] = get_common_search_options()["mode"],
+    non_best: bool = typer.Option(
+        False,
+        "--non-best",
+        help="For vLLM mode: prune only non-best kernels (keep best configurations).",
+    ),
 ):
     """
     Delete intermediate‑representation files (default) or whole kernel
@@ -348,6 +396,7 @@ def prune(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cache_hit_higher=cache_hit_higher,
         cache_dir=cache_dir,
         mode=mode,
+        only_best=bool_to_optional_best(non_best, for_pruning=True),
     )
     _execute_prune_command(options, full, deduplicate, yes)
 

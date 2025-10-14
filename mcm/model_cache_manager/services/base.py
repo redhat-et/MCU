@@ -4,9 +4,10 @@ Base service class for shared initialization logic.
 
 from pathlib import Path
 from typing import Any
-from ..strategies import TritonStrategy, VllmStrategy, CacheModeStrategy
+from ..strategies import CacheModeStrategy
 from ..utils.paths import get_cache_dir
-from ..utils.mcm_constants import MODE_TRITON, MODE_VLLM
+from ..utils.mcm_constants import MODE_TRITON
+from ..utils.strategy_factory import create_strategy
 
 
 class BaseService:  # pylint: disable=too-few-public-methods
@@ -29,11 +30,8 @@ class BaseService:  # pylint: disable=too-few-public-methods
         self.mode = mode
         self.cache_dir = cache_dir or get_cache_dir(mode=mode)
 
-        # Initialize strategy based on mode
-        if mode == MODE_VLLM:
-            self.strategy = VllmStrategy()
-        else:
-            self.strategy = TritonStrategy()
+        # Initialize strategy using factory
+        self.strategy = create_strategy(mode)
 
         # Create repository and database using strategy
         self.repo = self.strategy.create_repository(self.cache_dir)

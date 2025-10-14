@@ -67,6 +67,7 @@ class CommonSearchOptions(NamedTuple):
     cache_hit_higher: Optional[int] = None
     cache_dir: Optional[Path] = None
     mode: Optional[str] = None
+    only_best: Optional[bool] = None
 
 
 class WarmOptions(NamedTuple):
