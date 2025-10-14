@@ -36,7 +36,7 @@ class TestCacheDetection(unittest.TestCase):
         self.assertEqual(result, "triton")
 
     def test_detect_cache_mode_vllm_structure(self):
-        """Test detection with vLLM cache structure returns vllm."""
+        """Test detection with vLLM cache structure returns vllm-legacy."""
         # Create vLLM structure: cache_dir/torch_compile_cache/hash/rank0_0/triton_cache
         cache_dir = self.temp_dir / "vllm_cache"
         torch_compile_dir = cache_dir / "torch_compile_cache"
@@ -47,7 +47,7 @@ class TestCacheDetection(unittest.TestCase):
         triton_cache.mkdir(parents=True)
 
         result = detect_cache_mode(cache_dir)
-        self.assertEqual(result, "vllm")
+        self.assertEqual(result, "vllm-legacy")
 
     def test_detect_cache_mode_vllm_structure_multiple_hashes(self):
         """Test detection with vLLM structure having multiple hash directories."""
@@ -68,7 +68,7 @@ class TestCacheDetection(unittest.TestCase):
         triton_cache2.mkdir(parents=True)
 
         result = detect_cache_mode(cache_dir)
-        self.assertEqual(result, "vllm")
+        self.assertEqual(result, "vllm-legacy")
 
     def test_detect_cache_mode_vllm_structure_without_triton_cache(self):
         """Test detection with vLLM structure but no triton_cache subdirectory."""
@@ -127,7 +127,7 @@ class TestCacheDetection(unittest.TestCase):
         json_file.write_text('{"name": "triton_kernel"}')
 
         result = detect_cache_mode(cache_dir)
-        self.assertEqual(result, "vllm")
+        self.assertEqual(result, "vllm-legacy")
 
     def test_detect_cache_mode_torch_compile_cache_empty(self):
         """Test detection with torch_compile_cache directory but no contents."""
@@ -165,7 +165,7 @@ class TestCacheDetection(unittest.TestCase):
             triton_cache.mkdir(parents=True)
 
         result = detect_cache_mode(cache_dir)
-        self.assertEqual(result, "vllm")
+        self.assertEqual(result, "vllm-legacy")
 
     def test_detect_cache_mode_case_sensitivity(self):
         """Test detection is case sensitive for directory names."""

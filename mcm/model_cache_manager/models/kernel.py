@@ -31,6 +31,24 @@ class KernelFile:
 
 
 @dataclass(slots=True)
+class VllmKernelMetadata:
+    """
+    Represents vLLM-specific metadata for kernel cache organization.
+
+    Attributes:
+        vllm_hash: Hash identifier for the vLLM cache group
+        rank_x_y: Rank identifier (e.g., 'rank_0_0')
+        artifact_shape: Artifact shape directory name
+        best_config: Optional JSON string for best config
+    """
+
+    vllm_hash: str
+    rank_x_y: str
+    artifact_shape: str
+    best_config: Optional[str] = None
+
+
+@dataclass(slots=True)
 class Kernel:
     """
     Represents a Triton kernel with its metadata and associated files.
