@@ -80,7 +80,7 @@ class WarmOptions(NamedTuple):
     tarball: bool = False
     rocm: bool = False
 
-
+# pylint: disable=invalid-name
 CommonSearchParams = {
     "name": Optional[str],
     "backend": Optional[str],
