@@ -3,7 +3,7 @@ module github.com/redhat-et/MCU/mcv
 go 1.24.0
 
 require (
-	github.com/NVIDIA/go-nvml v0.12.4-1
+	github.com/NVIDIA/go-nvml v0.13.0-1
 	github.com/containers/buildah v1.41.4
 	github.com/containers/common v0.64.2
 	github.com/containers/image/v5 v5.36.2
