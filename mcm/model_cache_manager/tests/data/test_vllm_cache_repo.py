@@ -38,7 +38,7 @@ class TestVllmCacheRepository(unittest.TestCase):
 
     def test_init_with_default_directory(self):
         """Test initializing VllmCacheRepository with default directory."""
-        with patch('pathlib.Path.home') as mock_home:
+        with patch("pathlib.Path.home") as mock_home:
             mock_home.return_value = self.temp_dir
             default_vllm_cache = self.temp_dir / ".cache" / "vllm"
             default_vllm_cache.mkdir(parents=True, exist_ok=True)
@@ -49,7 +49,10 @@ class TestVllmCacheRepository(unittest.TestCase):
     def test_find_torch_compile_cache_dirs_empty(self):
         """Test finding torch compile cache directories when none exist."""
         repo = VllmCacheRepository(self.cache_dir)
-        dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        dirs = list(repo._find_torch_compile_cache_dirs())
+        # pylint: enable=protected-access
         self.assertEqual(len(dirs), 0)
 
     def test_find_torch_compile_cache_dirs_with_dirs(self):
@@ -64,64 +67,85 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir2.mkdir()
 
         repo = VllmCacheRepository(self.cache_dir)
-        dirs = list(repo._find_torch_compile_cache_dirs())  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        dirs = list(repo._find_torch_compile_cache_dirs())
+        # pylint: enable=protected-access
 
         self.assertEqual(len(dirs), 2)
         hash_names = [hash_name for hash_name, _ in dirs]
         self.assertIn("hash123abc", hash_names)
         self.assertIn("hash456def", hash_names)
 
-    def test_find_rank_dirs_empty(self):
-        """Test finding rank directories when none exist."""
-        hash_dir = self.cache_dir / "test_hash"
-        hash_dir.mkdir()
+    def test_find_artifact_kernels_empty(self):
+        """Test finding artifact kernels when none exist."""
+        rank_dir = self.cache_dir / "test_rank"
+        rank_dir.mkdir()
 
         repo = VllmCacheRepository(self.cache_dir)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
-        self.assertEqual(len(rank_dirs), 0)
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        artifact_kernels = list(repo._find_artifact_kernels(rank_dir, "rank_0_0"))
+        # pylint: enable=protected-access
+        self.assertEqual(len(artifact_kernels), 0)
 
-    def test_find_rank_dirs_with_rank_dirs(self):
-        """Test finding rank directories when they exist."""
-        hash_dir = self.cache_dir / "test_hash"
-        hash_dir.mkdir()
+    def test_find_artifact_kernels_with_structure(self):
+        """Test finding artifact kernels when they exist."""
+        rank_dir = self.cache_dir / "rank_0_0"
+        rank_dir.mkdir()
 
-        # Create rank directories with triton_cache subdirs
-        rank1 = hash_dir / "rank_0_0"
-        rank2 = hash_dir / "rank_1_0"
-        rank1.mkdir()
-        rank2.mkdir()
+        # Create new vLLM structure with backbone and artifact_shape dirs
+        backbone_dir = rank_dir / "backbone"
+        backbone_dir.mkdir()
 
-        triton_cache1 = rank1 / "triton_cache"
-        triton_cache2 = rank2 / "triton_cache"
-        triton_cache1.mkdir()
-        triton_cache2.mkdir()
+        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir.mkdir()
 
-        repo = VllmCacheRepository(self.cache_dir)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
+        # Create best config file
+        best_config_file = artifact_dir / "test.best_config"
+        best_config_file.write_text('{"config": "test"}')
 
-        self.assertEqual(len(rank_dirs), 2)
-        rank_names = [rank_name for rank_name, _ in rank_dirs]
-        rank_paths = [rank_path for _, rank_path in rank_dirs]
-        self.assertIn("rank_0_0", rank_names)
-        self.assertIn("rank_1_0", rank_names)
-        self.assertIn(triton_cache1, rank_paths)
-        self.assertIn(triton_cache2, rank_paths)
+        # Create triton directory structure
+        triton_dir = artifact_dir / "triton"
+        triton_dir.mkdir()
 
-    def test_find_rank_dirs_without_triton_cache(self):
-        """Test finding rank directories when they don't have triton_cache subdirs."""
-        hash_dir = self.cache_dir / "test_hash"
-        hash_dir.mkdir()
-
-        # Create rank directories without triton_cache subdirs
-        rank1 = hash_dir / "rank_0_0"
-        rank1.mkdir()
+        kernel_dir = triton_dir / "test_kernel_hash"
+        kernel_dir.mkdir()
 
         repo = VllmCacheRepository(self.cache_dir)
-        rank_dirs = list(repo._find_rank_dirs(hash_dir))  # pylint: disable=protected-access
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        with patch(
+            "model_cache_manager.data.cache_repo.iter_triton_kernels"
+        ) as mock_iter:
+            mock_kernel = MagicMock(spec=Kernel)
+            mock_kernel.hash = "test_kernel"
+            mock_iter.return_value = [mock_kernel]
 
-        self.assertEqual(len(rank_dirs), 0)
+            artifact_kernels = list(repo._find_artifact_kernels(rank_dir, "rank_0_0"))
+        # pylint: enable=protected-access
 
-    @patch('model_cache_manager.data.cache_repo.CacheRepository')
+        self.assertEqual(len(artifact_kernels), 1)
+        artifact_shape, best_config, kernel = artifact_kernels[0]
+        self.assertEqual(artifact_shape, "artifact_shape_0")
+        self.assertEqual(best_config, '{"config": "test"}')
+        self.assertEqual(kernel.hash, "test_kernel")
+
+    def test_find_artifact_kernels_without_backbone(self):
+        """Test finding artifact kernels when backbone dir doesn't exist."""
+        rank_dir = self.cache_dir / "rank_0_0"
+        rank_dir.mkdir()
+        # No backbone directory created
+
+        repo = VllmCacheRepository(self.cache_dir)
+        # Testing protected method is ok in unit tests
+        # pylint: disable=protected-access
+        artifact_kernels = list(repo._find_artifact_kernels(rank_dir, "rank_0_0"))
+        # pylint: enable=protected-access
+
+        self.assertEqual(len(artifact_kernels), 0)
+
+    @patch("model_cache_manager.data.cache_repo.CacheRepository")
     def test_kernels_empty_structure(self, mock_cache_repo_class):
         """Test kernels method with empty vLLM structure."""
         mock_cache_repo = MagicMock()
@@ -133,10 +157,11 @@ class TestVllmCacheRepository(unittest.TestCase):
 
         self.assertEqual(len(kernels), 0)
 
-    @patch('model_cache_manager.data.cache_repo.iter_triton_kernels')
+    # pylint: disable=too-many-locals
+    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
     def test_kernels_with_structure_and_kernels(self, mock_iter_triton_kernels):
         """Test kernels method with vLLM structure containing kernels."""
-        # Create vLLM directory structure
+        # Create new vLLM directory structure
         torch_compile_dir = self.cache_dir / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
@@ -146,8 +171,18 @@ class TestVllmCacheRepository(unittest.TestCase):
         rank_dir = hash_dir / "rank_0_0"
         rank_dir.mkdir()
 
-        triton_cache = rank_dir / "triton_cache"
-        triton_cache.mkdir()
+        # Create new structure: backbone/artifact_shape_0/triton/kernel_dir
+        backbone_dir = rank_dir / "backbone"
+        backbone_dir.mkdir()
+
+        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir.mkdir()
+
+        triton_dir = artifact_dir / "triton"
+        triton_dir.mkdir()
+
+        kernel_dir = triton_dir / "test_kernel_hash"
+        kernel_dir.mkdir()
 
         # Mock the iter_triton_kernels function to return fake kernels
         mock_kernel1 = MagicMock(spec=Kernel)
@@ -163,25 +198,30 @@ class TestVllmCacheRepository(unittest.TestCase):
         repo = VllmCacheRepository(self.cache_dir)
         kernels = list(repo.kernels())
 
-        # Should have 2 kernels, each with vllm_hash, cache_dir, and rank_x_y
+        # Should have 2 kernels, each with vllm_hash, cache_dir, rank_x_y, artifact_shape,
+        #  best_config, and kernel
         self.assertEqual(len(kernels), 2)
 
-        vllm_hash, cache_dir, rank_x_y, kernel = kernels[0]
+        vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel = kernels[0]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(cache_dir, str(self.cache_dir))
         self.assertEqual(rank_x_y, "rank_0_0")
+        self.assertEqual(artifact_shape, "artifact_shape_0")
+        self.assertIsNone(best_config)  # No best_config file created
         self.assertEqual(kernel, mock_kernel1)
 
-        vllm_hash, cache_dir, rank_x_y, kernel = kernels[1]
+        vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel = kernels[1]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(cache_dir, str(self.cache_dir))
         self.assertEqual(rank_x_y, "rank_0_0")
+        self.assertEqual(artifact_shape, "artifact_shape_0")
+        self.assertIsNone(best_config)  # No best_config file created
         self.assertEqual(kernel, mock_kernel2)
 
-    @patch('model_cache_manager.data.cache_repo.iter_triton_kernels')
+    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
     def test_kernels_multiple_hash_dirs(self, mock_iter_triton_kernels):
         """Test kernels method with multiple hash directories."""
-        # Create vLLM directory structure with multiple hash dirs
+        # Create new vLLM directory structure with multiple hash dirs
         torch_compile_dir = self.cache_dir / "torch_compile_cache"
         torch_compile_dir.mkdir()
 
@@ -190,12 +230,22 @@ class TestVllmCacheRepository(unittest.TestCase):
         hash_dir1.mkdir()
         hash_dir2.mkdir()
 
-        # Create rank dirs for each hash
+        # Create new structure for each hash
         for hash_dir in [hash_dir1, hash_dir2]:
             rank_dir = hash_dir / "rank_0_0"
             rank_dir.mkdir()
-            triton_cache = rank_dir / "triton_cache"
-            triton_cache.mkdir()
+
+            backbone_dir = rank_dir / "backbone"
+            backbone_dir.mkdir()
+
+            artifact_dir = backbone_dir / "artifact_shape_0"
+            artifact_dir.mkdir()
+
+            triton_dir = artifact_dir / "triton"
+            triton_dir.mkdir()
+
+            kernel_dir = triton_dir / "test_kernel_hash"
+            kernel_dir.mkdir()
 
         # Mock kernels for each cache directory call
         def side_effect(triton_cache_path, plugins):  # pylint: disable=unused-argument
@@ -217,7 +267,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         # Should have kernels from both hash directories
         self.assertEqual(len(kernels), 2)
 
-        vllm_hashes = [vllm_hash for vllm_hash, _, _, _ in kernels]
+        vllm_hashes = [vllm_hash for vllm_hash, _, _, _, _, _ in kernels]
         self.assertIn("hash123abc", vllm_hashes)
         self.assertIn("hash456def", vllm_hashes)
 

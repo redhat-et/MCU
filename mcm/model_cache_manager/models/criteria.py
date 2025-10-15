@@ -19,3 +19,4 @@ class SearchCriteria:
     younger_than_timestamp: Optional[float] = None
     cache_hit_lower: Optional[int] = None
     cache_hit_higher: Optional[int] = None
+    only_best: Optional[bool] = None  # For vLLM mode: filter only kernels with best_config

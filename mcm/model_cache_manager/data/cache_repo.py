@@ -11,6 +11,7 @@ import logging
 import threading
 from typing import Iterable, Optional
 from ..utils.paths import get_cache_dir
+from ..utils.utils import iter_artifact_shape_dirs
 from ..models.kernel import Kernel
 from ..plugins.discovery import discover_plugins
 from .kernel_validator import deserialize_kernel
@@ -18,6 +19,7 @@ from .kernel_validator import deserialize_kernel
 log = logging.getLogger(__name__)
 
 # Thread-safe lazy-loaded plugins to avoid import-time discovery failures
+# pylint: disable=invalid-name
 _PLUGINS_CACHE = None
 _PLUGINS_LOCK = threading.Lock()
 
@@ -166,17 +168,17 @@ class CacheRepository:
         yield from iter_triton_kernels(self.root, _get_plugins())
 
 
-class VllmCacheRepository:  # pylint: disable=too-few-public-methods
+class VllmLegacyCacheRepository:  # pylint: disable=too-few-public-methods
     """
-    Repository for accessing and managing vLLM kernel cache files.
+    Repository for accessing and managing legacy vLLM kernel cache files.
 
-    This class provides methods to iterate through kernels in the vLLM cache directory
+    This class provides methods to iterate through kernels in the legacy vLLM cache directory
     structure and extract their metadata and associated files.
     """
 
     def __init__(self, root: Path | None = None):
         """
-        Initialize the vLLM cache repository.
+        Initialize the legacy vLLM cache repository.
 
         Args:
             root: Path to the vLLM cache directory. If None, uses ~/.cache/vllm.
@@ -186,7 +188,9 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         """
         self.root = root or (Path.home() / ".cache" / "vllm")
         if not self.root.exists():
-            raise FileNotFoundError(f"vLLM cache directory not found: {self.root}")
+            raise FileNotFoundError(
+                f"Legacy vLLM cache directory not found: {self.root}"
+            )
 
     def _find_torch_compile_cache_dirs(self) -> Iterable[tuple[str, Path]]:
         """
@@ -206,7 +210,7 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
 
     def _find_rank_dirs(self, hash_dir: Path) -> Iterable[tuple[str, Path]]:
         """
-        Find rank directories within a vLLM hash directory.
+        Find rank directories within a legacy vLLM hash directory.
 
         Args:
             hash_dir: Path to the vLLM hash directory
@@ -222,7 +226,7 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
 
     def kernels(self) -> Iterable[tuple[str, str, str, Kernel]]:
         """
-        Iterate through all kernels in the vLLM cache directory.
+        Iterate through all kernels in the legacy vLLM cache directory.
 
         Yields:
             Tuples of (vllm_hash, cache_root, rank_x_y, kernel)
@@ -233,3 +237,140 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             for rank_x_y, triton_cache_dir in self._find_rank_dirs(hash_dir):
                 for kernel in iter_triton_kernels(triton_cache_dir, plugins):
                     yield vllm_hash, str(self.root), rank_x_y, kernel
+
+
+class VllmCacheRepository:  # pylint: disable=too-few-public-methods
+    """
+    Repository for accessing and managing new vLLM kernel cache files.
+
+    This class provides methods to iterate through kernels in the new vLLM cache directory
+    structure with artifact_shape directories and best config support.
+    """
+
+    def __init__(self, root: Path | None = None):
+        """
+        Initialize the new vLLM cache repository.
+
+        Args:
+            root: Path to the vLLM cache directory. If None, uses ~/.cache/vllm.
+
+        Raises:
+            FileNotFoundError: If the cache directory doesn't exist.
+        """
+        self.root = root or (Path.home() / ".cache" / "vllm")
+        if not self.root.exists():
+            raise FileNotFoundError(f"New vLLM cache directory not found: {self.root}")
+
+    def _find_torch_compile_cache_dirs(self) -> Iterable[tuple[str, Path]]:
+        """
+        Find torch compile cache directories in the vLLM cache root.
+
+        Yields:
+            Tuples of (vllm_hash, path_to_hash_directory)
+        """
+        torch_compile_cache = self.root / "torch_compile_cache"
+        if not torch_compile_cache.exists():
+            log.warning("No torch_compile_cache directory found in %s", self.root)
+            return
+
+        for hash_dir in torch_compile_cache.iterdir():
+            if hash_dir.is_dir():
+                yield hash_dir.name, hash_dir
+
+    def _find_best_config(self, artifact_dir: Path) -> Optional[str]:
+        """
+        Find and read the best_config file in artifact directory.
+
+        Args:
+            artifact_dir: Path to the artifact directory
+
+        Returns:
+            Content of best_config file or None if not found
+        """
+        # Exclude known directories that don't contain these files
+        exclude_dirs = {"aotautograd", "fxgraph", "triton"}
+
+        # First check artifact_dir root
+        for config_path in artifact_dir.glob("*.best_config"):
+            try:
+                return config_path.read_text()
+            except (OSError, IOError, PermissionError, UnicodeDecodeError) as e:
+                log.debug("Could not read best config %s: %s", config_path, e)
+
+        # Check immediate subdirectories (excluding known dirs)
+        for subdir in artifact_dir.iterdir():
+            if not subdir.is_dir() or subdir.name in exclude_dirs:
+                continue
+            for config_path in subdir.glob("*.best_config"):
+                try:
+                    return config_path.read_text()
+                except (OSError, IOError, PermissionError, UnicodeDecodeError) as e:
+                    log.debug("Could not read best config %s: %s", config_path, e)
+
+        return None
+
+    def _process_artifact_dir(
+        self, artifact_dir: Path, plugins: dict
+    ) -> Iterable[tuple[str, str, Kernel]]:
+        """
+        Process a single artifact directory for kernels.
+
+        Args:
+            artifact_dir: Path to the artifact directory
+            plugins: Dictionary of plugins for kernel processing
+
+        Yields:
+            Tuples of (artifact_shape, best_config, kernel)
+        """
+        best_config = self._find_best_config(artifact_dir)
+        triton_dir = artifact_dir / "triton"
+
+        if not triton_dir.exists():
+            return
+
+        for sub_dir in triton_dir.iterdir():
+            if not sub_dir.is_dir():
+                continue
+            for kernel in iter_triton_kernels(sub_dir, plugins):
+                yield artifact_dir.name, best_config, kernel
+
+    def _find_artifact_kernels(
+        self, rank_dir: Path, _rank_name: str
+    ) -> Iterable[tuple[str, str, Kernel]]:
+        """
+        Find kernels within artifact_shape directories for a rank.
+
+        Args:
+            rank_dir: Path to the rank directory
+            _rank_name: Name of the rank directory (unused but required for interface)
+
+        Yields:
+            Tuples of (artifact_shape, best_config, kernel)
+        """
+        backbone_dir = rank_dir / "backbone"
+        if not backbone_dir.exists():
+            return
+
+        plugins = _get_plugins()
+        for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+            yield from self._process_artifact_dir(artifact_dir, plugins)
+
+    def kernels(self) -> Iterable[tuple[str, str, str, str, str | None, Kernel]]:
+        """
+        Iterate through all kernels in the new vLLM cache directory.
+
+        Yields:
+            Tuples of (vllm_hash, cache_root, rank_x_y, artifact_shape, best_config, kernel)
+            where each kernel contains metadata parsed from cache files.
+        """
+        for vllm_hash, hash_dir in self._find_torch_compile_cache_dirs():
+            for rank_dir in hash_dir.iterdir():
+                if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
+                    for (
+                        artifact_shape,
+                        best_config,
+                        kernel,
+                    ) in self._find_artifact_kernels(rank_dir, rank_dir.name):
+                        yield vllm_hash, str(
+                            self.root
+                        ), rank_dir.name, artifact_shape, best_config, kernel

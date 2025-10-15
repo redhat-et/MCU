@@ -25,7 +25,8 @@ from sqlalchemy.orm import (
     Session as SqlaSession,
 )
 
-from ..models.kernel import Kernel
+from ..models.kernel import Kernel, VllmKernelMetadata
+from ..utils.strategy_constants import VLLM_EXTENDED_PRIMARY_FIELDS
 
 
 log = logging.getLogger(__name__)
@@ -81,8 +82,26 @@ class BaseKernelMixin:  # pylint: disable=too-few-public-methods
     )
 
     @classmethod
-    def _get_common_kernel_values(cls, k_data: Kernel) -> Dict[str, Any]:
-        """Get common kernel field values from a Kernel DTO."""
+    def get_common_kernel_values(cls, k_data: Kernel) -> Dict[str, Any]:
+        """
+        Extracts and returns a dictionary of common kernel field values from
+        a Kernel data transfer object (DTO).
+
+        This method is used to map the attributes of a Kernel instance to a
+        dictionary suitable for database insertion
+        or update operations. The returned dictionary contains key-value
+        pairs corresponding to the fields defined in the ORM model.
+
+        Args:
+            k_data (Kernel): The Kernel DTO instance containing kernel metadata and configuration.
+
+        Returns:
+            Dict[str, Any]: A dictionary mapping field names to their corresponding
+            values extracted from the
+            Kernel DTO. This includes fields such as backend, arch,
+            name, warp_size, num_warps, and others.
+            The 'total_size' field is computed as the sum of the sizes of all files in k_data.files.
+        """
         return {
             "backend": k_data.backend,
             "arch": str(k_data.arch),
@@ -152,7 +171,7 @@ class KernelOrm(Base, BaseKernelMixin):
         """
         Creates or updates a kernel record from a Kernel DTO, including files.
         """
-        kernel_values = cls._get_common_kernel_values(k_data)
+        kernel_values = cls.get_common_kernel_values(k_data)
         kernel_values.update(
             {
                 "hash": k_data.hash,
@@ -201,21 +220,21 @@ class KernelOrm(Base, BaseKernelMixin):
         )
 
 
-class VllmKernelOrm(Base, BaseKernelMixin):
+class VllmLegacyKernelOrm(Base, BaseKernelMixin):
     """
-    SQLAlchemy ORM model for a vLLM Triton kernel.
+    SQLAlchemy ORM model for a legacy vLLM Triton kernel.
     Uses a composite primary key of (cache_dir, vllm_hash, triton_cache_key, rank_x_y).
     """
 
-    __tablename__ = "vllm_kernels"
+    __tablename__ = "vllm_legacy_kernels"
 
     cache_dir: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     vllm_hash: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     triton_cache_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     rank_x_y: Mapped[str] = mapped_column(String, primary_key=True, index=True)
 
-    files: Mapped[List["VllmKernelFileOrm"]] = relationship(
-        "VllmKernelFileOrm",
+    files: Mapped[List["VllmLegacyKernelFileOrm"]] = relationship(
+        "VllmLegacyKernelFileOrm",
         back_populates="kernel",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -231,6 +250,33 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             d["metadata"] = d.pop("kernel_metadata_json")
         return d
 
+    @staticmethod
+    def get_vllm_kernel_values(
+        k_data: Kernel, cache_dir: str, vllm_hash: str, rank_x_y: str
+    ) -> Dict[str, Any]:
+        """
+        Get legacy vLLM-specific kernel values.
+
+        Args:
+            k_data: Kernel data
+            cache_dir: Cache directory path
+            vllm_hash: vLLM hash
+            rank_x_y: Rank identifier
+
+        Returns:
+            Dictionary with legacy vLLM kernel values
+        """
+        kernel_values = VllmLegacyKernelOrm.get_common_kernel_values(k_data)
+        kernel_values.update(
+            {
+                "cache_dir": cache_dir,
+                "vllm_hash": vllm_hash,
+                "triton_cache_key": k_data.hash,
+                "rank_x_y": rank_x_y,
+            }
+        )
+        return kernel_values
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @classmethod
     def upsert_from_dto(
@@ -242,16 +288,10 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         rank_x_y: str,
     ) -> None:
         """
-        Creates or updates a vLLM kernel record from a Kernel DTO, including files.
+        Creates or updates a legacy vLLM kernel record from a Kernel DTO, including files.
         """
-        kernel_values = cls._get_common_kernel_values(k_data)
-        kernel_values.update(
-            {
-                "cache_dir": cache_dir,
-                "vllm_hash": vllm_hash,
-                "triton_cache_key": k_data.hash,
-                "rank_x_y": rank_x_y,
-            }
+        kernel_values = cls.get_vllm_kernel_values(
+            k_data, cache_dir, vllm_hash, rank_x_y
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)
@@ -272,7 +312,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         )
         session.execute(stmt)
         log.debug(
-            "Upserted vLLM kernel cache_dir %s vllm_hash %s "
+            "Upserted legacy vLLM kernel cache_dir %s vllm_hash %s "
             "triton_cache_key %s with rank_x_y %s",
             cache_dir,
             vllm_hash,
@@ -280,11 +320,11 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             rank_x_y,
         )
 
-        session.query(VllmKernelFileOrm).filter(
-            VllmKernelFileOrm.cache_dir == cache_dir,
-            VllmKernelFileOrm.vllm_hash == vllm_hash,
-            VllmKernelFileOrm.triton_cache_key == k_data.hash,
-            VllmKernelFileOrm.rank_x_y == rank_x_y,
+        session.query(VllmLegacyKernelFileOrm).filter(
+            VllmLegacyKernelFileOrm.cache_dir == cache_dir,
+            VllmLegacyKernelFileOrm.vllm_hash == vllm_hash,
+            VllmLegacyKernelFileOrm.triton_cache_key == k_data.hash,
+            VllmLegacyKernelFileOrm.rank_x_y == rank_x_y,
         ).delete(synchronize_session="fetch")
         log.debug(
             "Deleted existing files for cache_dir %s vllm_hash %s "
@@ -296,7 +336,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         )
 
         for f_dto in k_data.files:
-            kernel_file_orm = VllmKernelFileOrm(
+            kernel_file_orm = VllmLegacyKernelFileOrm(
                 cache_dir=cache_dir,
                 vllm_hash=vllm_hash,
                 triton_cache_key=k_data.hash,
@@ -314,6 +354,158 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             vllm_hash,
             k_data.hash,
             rank_x_y,
+        )
+
+
+class VllmKernelOrm(Base, BaseKernelMixin):
+    """
+    SQLAlchemy ORM model for a new vLLM Triton kernel.
+    Uses a composite primary key of (cache_dir, vllm_hash, triton_cache_key,
+    rank_x_y, artifact_shape).
+    """
+
+    __tablename__ = "vllm_kernels"
+
+    cache_dir: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    vllm_hash: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    triton_cache_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    rank_x_y: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    artifact_shape: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    best_config: Mapped[Optional[str]] = mapped_column(
+        String
+    )  # JSON string for best config
+
+    files: Mapped[List["VllmKernelFileOrm"]] = relationship(
+        "VllmKernelFileOrm",
+        back_populates="kernel",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts the ORM object to a dictionary.
+        Maps 'kernel_metadata_json' back to 'metadata' for compatibility.
+        """
+        d = {c.key: getattr(self, c.key) for c in self.__table__.columns}
+        if "kernel_metadata_json" in d:
+            d["metadata"] = d.pop("kernel_metadata_json")
+        return d
+
+    @staticmethod
+    def get_vllm_kernel_values(
+        k_data: Kernel,
+        cache_dir: str,
+        vllm_meta: VllmKernelMetadata,
+    ) -> Dict[str, Any]:
+        """
+        Get new vLLM-specific kernel values.
+
+        Args:
+            k_data: Kernel data
+            cache_dir: Cache directory path
+            vllm_meta: vLLM-specific metadata
+
+        Returns:
+            Dictionary with new vLLM kernel values
+        """
+        kernel_values = VllmKernelOrm.get_common_kernel_values(k_data)
+        kernel_values.update(
+            {
+                "cache_dir": cache_dir,
+                "vllm_hash": vllm_meta.vllm_hash,
+                "triton_cache_key": k_data.hash,
+                "rank_x_y": vllm_meta.rank_x_y,
+                "artifact_shape": vllm_meta.artifact_shape,
+                "best_config": vllm_meta.best_config,
+            }
+        )
+        return kernel_values
+
+    @classmethod
+    def upsert_from_dto(
+        cls,
+        session: SqlaSession,
+        k_data: Kernel,
+        cache_dir: str,
+        vllm_meta: VllmKernelMetadata,
+    ) -> None:
+        """
+        Creates or updates a new vLLM kernel record from a Kernel DTO, including files.
+        """
+        kernel_values = cls.get_vllm_kernel_values(
+            k_data, cache_dir, vllm_meta
+        )
+
+        stmt = sqlite_insert(cls).values(kernel_values)
+        update_dict = {
+            col.name: getattr(stmt.excluded, col.name)
+            for col in cls.__table__.columns
+            if col.name
+            not in (
+                "cache_dir",
+                "rank_x_y",
+                "vllm_hash",
+                "triton_cache_key",
+                "artifact_shape",
+            )
+        }
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                "cache_dir",
+                "rank_x_y",
+                "vllm_hash",
+                "triton_cache_key",
+                "artifact_shape",
+            ],
+            set_=update_dict,
+        )
+        session.execute(stmt)
+        log.debug(
+            "Upserted new vLLM kernel cache_dir %s vllm_hash %s "
+            "triton_cache_key %s with rank_x_y %s",
+            cache_dir,
+            vllm_meta.vllm_hash,
+            k_data.hash,
+            vllm_meta.rank_x_y,
+        )
+
+        session.query(VllmKernelFileOrm).filter(
+            VllmKernelFileOrm.cache_dir == cache_dir,
+            VllmKernelFileOrm.vllm_hash == vllm_meta.vllm_hash,
+            VllmKernelFileOrm.triton_cache_key == k_data.hash,
+            VllmKernelFileOrm.rank_x_y == vllm_meta.rank_x_y,
+            VllmKernelFileOrm.artifact_shape == vllm_meta.artifact_shape,
+        ).delete(synchronize_session="fetch")
+        log.debug(
+            "Deleted existing files for cache_dir %s vllm_hash %s "
+            "triton_cache_key %s and rank_x_y %s",
+            cache_dir,
+            vllm_meta.vllm_hash,
+            k_data.hash,
+            vllm_meta.rank_x_y,
+        )
+
+        for f_dto in k_data.files:
+            kernel_file_orm = VllmKernelFileOrm(
+                cache_dir=cache_dir,
+                vllm_hash=vllm_meta.vllm_hash,
+                triton_cache_key=k_data.hash,
+                rank_x_y=vllm_meta.rank_x_y,
+                artifact_shape=vllm_meta.artifact_shape,
+                type=f_dto.file_type,
+                rel_path=f_dto.path.name,
+                size=f_dto.size,
+            )
+            session.add(kernel_file_orm)
+        log.debug(
+            "Added %d files for cache_dir %s vllm_hash %s "
+            "triton_cache_key %s and rank_x_y %s",
+            len(k_data.files),
+            cache_dir,
+            vllm_meta.vllm_hash,
+            k_data.hash,
+            vllm_meta.rank_x_y,
         )
 
 
@@ -343,10 +535,10 @@ class KernelFileOrm(Base):  # pylint: disable=too-few-public-methods
     kernel: Mapped["KernelOrm"] = relationship("KernelOrm", back_populates="files")
 
 
-class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
-    """SQLAlchemy ORM model for a file associated with a vLLM Triton kernel."""
+class VllmLegacyKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
+    """SQLAlchemy ORM model for a file associated with a legacy vLLM Triton kernel."""
 
-    __tablename__ = "vllm_files"
+    __tablename__ = "vllm_legacy_files"
 
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
@@ -360,10 +552,47 @@ class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
         ForeignKeyConstraint(
             ["cache_dir", "vllm_hash", "triton_cache_key", "rank_x_y"],
             [
+                "vllm_legacy_kernels.cache_dir",
+                "vllm_legacy_kernels.vllm_hash",
+                "vllm_legacy_kernels.triton_cache_key",
+                "vllm_legacy_kernels.rank_x_y",
+            ],
+            ondelete="CASCADE",
+        ),
+    )
+
+    type: Mapped[Optional[str]] = mapped_column(String)
+    rel_path: Mapped[Optional[str]] = mapped_column(String)
+    size: Mapped[Optional[int]] = mapped_column(Integer)
+
+    kernel: Mapped["VllmLegacyKernelOrm"] = relationship(
+        "VllmLegacyKernelOrm", back_populates="files"
+    )
+
+
+class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
+    """SQLAlchemy ORM model for a file associated with a new vLLM Triton kernel."""
+
+    __tablename__ = "vllm_files"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, autoincrement=True
+    )
+    cache_dir: Mapped[str] = mapped_column(String)
+    vllm_hash: Mapped[str] = mapped_column(String)
+    triton_cache_key: Mapped[str] = mapped_column(String)
+    rank_x_y: Mapped[str] = mapped_column(String)
+    artifact_shape: Mapped[str] = mapped_column(String)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            VLLM_EXTENDED_PRIMARY_FIELDS,
+            [
                 "vllm_kernels.cache_dir",
                 "vllm_kernels.vllm_hash",
                 "vllm_kernels.triton_cache_key",
                 "vllm_kernels.rank_x_y",
+                "vllm_kernels.artifact_shape",
             ],
             ondelete="CASCADE",
         ),

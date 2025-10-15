@@ -67,6 +67,7 @@ class CommonSearchOptions(NamedTuple):
     cache_hit_higher: Optional[int] = None
     cache_dir: Optional[Path] = None
     mode: Optional[str] = None
+    only_best: Optional[bool] = None
 
 
 class WarmOptions(NamedTuple):
@@ -79,7 +80,7 @@ class WarmOptions(NamedTuple):
     tarball: bool = False
     rocm: bool = False
 
-
+# pylint: disable=invalid-name
 CommonSearchParams = {
     "name": Optional[str],
     "backend": Optional[str],
