@@ -29,6 +29,10 @@ mcv-install: ## Install mcv.
 	$(MAKE) -C mcv install
 .PHONY: mcv-install
 
+mcv-test: ## Run mcv unit tests.
+	$(MAKE) -C mcv test
+.PHONY: mcv-test
+
 mcv-image: ## Build mcv image.
 	$(CONTAINER_TOOL) build --progress=plain -t quay.io/gkm/mcv -f mcv/images/amd64.dockerfile .
 .PHONY: mcv-image
