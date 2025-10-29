@@ -19,6 +19,7 @@ from .kernel_validator import deserialize_kernel
 log = logging.getLogger(__name__)
 
 # Thread-safe lazy-loaded plugins to avoid import-time discovery failures
+# pylint: disable=invalid-name
 _PLUGINS_CACHE = None
 _PLUGINS_LOCK = threading.Lock()
 
