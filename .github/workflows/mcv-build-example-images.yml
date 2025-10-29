@@ -6,6 +6,11 @@ on: # yamllint disable-line rule:truthy
     paths:
       - mcv/**
       - .github/workflows/mcv-build-example-images.yml
+  push:
+    branches: [main]
+    paths:
+      - mcv/**
+      - .github/workflows/mcv-build-example-images.yml
   workflow_dispatch:
 
 concurrency:
@@ -41,18 +46,16 @@ jobs:
         with:
           set-host: true
 
-      - name: Decide publish (skip push/sign for forked PRs)
-        id: publish
-        shell: bash
+      - name: Set push flag
+        id: set-push
         run: |
-          if [[ "${{ github.event_name }}" != "pull_request" || "${{ github.event.pull_request.head.repo.full_name }}" == "${{ github.repository }}" ]]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+          if [ ${{ github.event_name }} == 'push' ] && [ ${{ github.repository_owner }} == 'redhat-et' ]; then
+            echo "push_flag=true" >> "$GITHUB_OUTPUT"
           else
-            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "push_flag=false" >> "$GITHUB_OUTPUT"
           fi
-
       - name: Login to quay.io (Docker)
-        if: ${{ steps.publish.outputs.publish == 'true' }}
+        if: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -103,7 +106,7 @@ jobs:
           done
 
       - name: Push & sign images
-        if: ${{ steps.publish.outputs.publish == 'true' }}
+        if: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
         env:
           REGISTRY: ${{ env.REGISTRY }}
           ORG: ${{ env.ORG }}
