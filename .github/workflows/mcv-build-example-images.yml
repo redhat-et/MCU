@@ -119,7 +119,8 @@ jobs:
           for tag in "${images[@]}"; do
             img="${repo}:${tag}"
             echo "==> Pushing ${img}"
-            podman push "${img}"
-            echo "==> Signing ${img}"
-            cosign sign "${img}"
+            digest=$(podman push "${img}" --format=json | jq -r '.manifests[0].digest // .digest')
+            img_digest="${repo}@${digest}"
+            echo "==> Signing ${img_digest}"
+            cosign sign "${img_digest}"
           done
