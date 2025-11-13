@@ -122,5 +122,5 @@ jobs:
             digest=$(podman push "${img}" --digestfile /dev/stdout | tail -n1)
             img_digest="${repo}@${digest}"
             echo "==> Signing ${img_digest}"
-            cosign sign "${img_digest}"
+            cosign sign -y "${img_digest}"
           done
