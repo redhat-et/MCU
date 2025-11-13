@@ -317,7 +317,7 @@ All environment variables use the `MCM_` prefix and are case-insensitive.
 #### Available Environment Variables
 
 | Variable | Default Value | Description |
-|----------|---------------|-------------|
+| -------- | ------------- | ----------- |
 | `MCM_MODEL_CACHE_DIR` | `~/.triton/cache` | default Triton kernel cache dir |
 | `MCM_MODEL_CACHE_DIR_VLLM` | `~/.cache/vllm` | default vLLM cache dir |
 | `MCM_DATA_DIR` | Platform-specific | MCM's database and metadata |
