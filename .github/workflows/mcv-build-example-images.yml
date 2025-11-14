@@ -36,6 +36,8 @@ jobs:
   build:
     name: Build example cache images with MCV container
     runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.push-images.outputs.tags }}
 
     steps:
       # Set a `push_flag`. This is only true if the github action is a push and the repository
@@ -50,9 +52,6 @@ jobs:
           fi
       - name: Checkout repo
         uses: actions/checkout@v5
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v4.0.0
 
       - name: Login to quay.io/gkm
         uses: redhat-actions/podman-login@v1
@@ -115,9 +114,7 @@ jobs:
             set -euo pipefail
             repo="${REGISTRY}/${ORG}/${REPO}"
             images=(vector-add-cache-rocm vector-add-cache-cuda vllm-example)
-            digests=()
-            tmpfile="/tmp/image-digests.txt"
-            : > "${tmpfile}"
+            tags_output=""
 
             for tag in "${images[@]}"; do
               img="${repo}:${tag}"
@@ -128,40 +125,47 @@ jobs:
               rm -f "${digest_file}"
 
               echo "Pushed ${img}@${digest}"
-              echo "${img}@${digest}" >> "${tmpfile}"
+              if [ -z "${tags_output}" ]; then
+                tags_output="${tag}"
+              else
+                tags_output="${tags_output},${tag}"
+              fi
             done
 
-            echo "==> Final digest list:"
-            cat "${tmpfile}"
+            echo "tags=${tags_output}" >> "$GITHUB_OUTPUT"
+            echo "==> Pushed images with tags: ${tags_output}"
 
-      # Needed for Cosign
-      - name: Login to quay.io (Docker)
+  sign:
+    name: Sign example cache images
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.repository_owner == 'redhat-et'
+
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.0.0
+
+      - name: Login to quay.io
         uses: docker/login-action@v3
-        if: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
+          username: ${{ secrets.GH_USERNAME }}
+          password: ${{ secrets.GH_TOKEN }}
+
       - name: Sign the images with GitHub OIDC Token
-        if: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
         env:
-          COSIGN_YES: "true"
-          COSIGN_EXPERIMENTAL: "true"
+          REGISTRY: ${{ env.REGISTRY }}
+          ORG: ${{ env.ORG }}
+          REPO: ${{ env.REPO }}
+          TAGS: ${{ needs.build.outputs.tags }}
         shell: bash
         run: |
           set -euo pipefail
-          while IFS= read -r image_digest; do
-            echo "==> Signing ${image_digest}"
-            cosign sign --yes "${image_digest}"
-          done < /tmp/image-digests.txt
+          repo="${REGISTRY}/${ORG}/${REPO}"
+          IFS=',' read -ra tag_array <<< "$TAGS"
 
-      - name: Verify signatures
-        if: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
-        run: |
-          while IFS= read -r image_digest; do
-            echo "==> Verifying ${image_digest}"
-            cosign verify \
-              --certificate-identity-regexp "https://github.com/redhat-et/mcv/.*" \
-              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-              "${image_digest%:*}" || true
-          done < /tmp/image-digests.txt
+          for tag in "${tag_array[@]}"; do
+            img="${repo}:${tag}"
+            echo "==> Signing ${img}"
+            cosign sign --yes "${img}"
+          done
