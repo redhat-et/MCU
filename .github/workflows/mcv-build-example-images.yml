@@ -134,7 +134,11 @@ jobs:
 
             echo "==> Final digest list:"
             cat "${tmpfile}"
-
+      - name: Sync podman auth for cosign
+        if: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
+        run: |
+          mkdir -p ~/.docker
+          cp ~/.config/containers/auth.json ~/.docker/config.json
       - name: Sign the images with GitHub OIDC Token
         if: ${{ fromJSON(steps.set-push.outputs.push_flag) }}
         env:
