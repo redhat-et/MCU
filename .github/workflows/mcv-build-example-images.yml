@@ -38,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tags: ${{ steps.push-images.outputs.tags }}
+      digests: ${{ steps.push-images.outputs.digests }}
 
     steps:
       # Set a `push_flag`. This is only true if the github action is a push and the repository
@@ -115,6 +116,7 @@ jobs:
             repo="${REGISTRY}/${ORG}/${REPO}"
             images=(vector-add-cache-rocm vector-add-cache-cuda vllm-example)
             tags_output=""
+            digests_output=""
 
             for tag in "${images[@]}"; do
               img="${repo}:${tag}"
@@ -125,15 +127,26 @@ jobs:
               rm -f "${digest_file}"
 
               echo "Pushed ${img}@${digest}"
+
+              # Build comma-separated tags
               if [ -z "${tags_output}" ]; then
                 tags_output="${tag}"
               else
                 tags_output="${tags_output},${tag}"
               fi
+
+              # Build comma-separated image@digest references
+              if [ -z "${digests_output}" ]; then
+                digests_output="${img}@${digest}"
+              else
+                digests_output="${digests_output},${img}@${digest}"
+              fi
             done
 
             echo "tags=${tags_output}" >> "$GITHUB_OUTPUT"
+            echo "digests=${digests_output}" >> "$GITHUB_OUTPUT"
             echo "==> Pushed images with tags: ${tags_output}"
+            echo "==> Image digests: ${digests_output}"
 
   sign:
     name: Sign example cache images
@@ -154,18 +167,13 @@ jobs:
 
       - name: Sign the images with GitHub OIDC Token
         env:
-          REGISTRY: ${{ env.REGISTRY }}
-          ORG: ${{ env.ORG }}
-          REPO: ${{ env.REPO }}
-          TAGS: ${{ needs.build.outputs.tags }}
+          DIGESTS: ${{ needs.build.outputs.digests }}
         shell: bash
         run: |
           set -euo pipefail
-          repo="${REGISTRY}/${ORG}/${REPO}"
-          IFS=',' read -ra tag_array <<< "$TAGS"
+          IFS=',' read -ra digest_array <<< "$DIGESTS"
 
-          for tag in "${tag_array[@]}"; do
-            img="${repo}:${tag}"
-            echo "==> Signing ${img}"
-            cosign sign --yes "${img}"
+          for image_digest in "${digest_array[@]}"; do
+            echo "==> Signing ${image_digest}"
+            cosign sign --yes "${image_digest}"
           done
