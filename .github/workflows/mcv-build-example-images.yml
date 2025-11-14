@@ -168,12 +168,9 @@ jobs:
       - name: Sign the images with GitHub OIDC Token
         env:
           DIGESTS: ${{ needs.build.outputs.digests }}
-        shell: bash
         run: |
-          set -euo pipefail
-          IFS=',' read -ra digest_array <<< "$DIGESTS"
-
-          for image_digest in "${digest_array[@]}"; do
-            echo "==> Signing ${image_digest}"
-            cosign sign --yes "${image_digest}"
+          images=""
+          for digest in ${DIGESTS//,/ }; do
+            images+="${digest} "
           done
+          cosign sign --yes ${images}
