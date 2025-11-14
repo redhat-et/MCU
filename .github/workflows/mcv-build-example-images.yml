@@ -152,6 +152,10 @@ jobs:
     name: Sign example cache images
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # needed for signing the images with GitHub OIDC Token
     if: github.event_name == 'push' && github.repository_owner == 'redhat-et'
 
     steps:
