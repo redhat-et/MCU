@@ -159,8 +159,15 @@ jobs:
     if: github.event_name == 'push' && github.repository_owner == 'redhat-et'
 
     steps:
-      - name: Install cosign
+      - name: Install go
+        uses: actions/setup-go@v6.0.0
+        with:
+          go-version: "1.24"
+          check-latest: true
+      - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
+      - name: Check install!
+        run: cosign version
 
       - name: Login to quay.io
         uses: docker/login-action@v3
@@ -177,4 +184,4 @@ jobs:
           for digest in ${DIGESTS//,/ }; do
             images+="${digest} "
           done
-          cosign sign --yes ${images}
+          cosign sign --yes -d ${images}
