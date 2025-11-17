@@ -178,10 +178,14 @@ jobs:
 
       - name: Sign the images with GitHub OIDC Token
         env:
-          DIGESTS: ${{ needs.build.outputs.digests }}
+          TAGS: ${{ needs.build.outputs.tags }}
+          REGISTRY: ${{ env.REGISTRY }}
+          ORG: ${{ env.ORG }}
+          REPO: ${{ env.REPO }}
         run: |
+          repo="${REGISTRY}/${ORG}/${REPO}"
           images=""
-          for digest in ${DIGESTS//,/ }; do
-            images+="${digest} "
+          for tag in ${TAGS//,/ }; do
+            images+="${repo}:${tag} "
           done
           cosign sign --yes -d --registry-referrers-mode=legacy ${images}
