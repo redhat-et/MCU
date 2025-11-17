@@ -184,4 +184,4 @@ jobs:
           for digest in ${DIGESTS//,/ }; do
             images+="${digest} "
           done
-          cosign sign --yes -d ${images}
+          cosign sign --yes -d --registry-referrers-mode=legacy ${images}
