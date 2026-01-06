@@ -107,7 +107,8 @@ mcm list [OPTIONS]
 - `--older-than TEXT` – Show kernels older than duration (e.g., 7d, 2w)
 - `--younger-than TEXT` – Show kernels younger than duration
 - `--cache-hit-lower INT` – Show kernels with cache hits lower than specified number
-- `--cache-hit-higher INT` – Show kernels with cache hits higher than specified number
+- `--cache-hit-higher INT` – Show kernels with cache hits higher than
+  specified number
 - `--cache-dir PATH` – Specify cache directory to search
 - `--mode MODE` – Cache mode (triton or vllm)
 
