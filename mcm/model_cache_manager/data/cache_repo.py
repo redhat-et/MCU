@@ -11,7 +11,7 @@ import logging
 import threading
 from typing import Iterable, Optional
 from ..utils.paths import get_cache_dir
-from ..utils.utils import iter_artifact_shape_dirs
+from ..utils.utils import iter_artifact_compile_range_dirs
 from ..models.kernel import Kernel
 from ..plugins.discovery import discover_plugins
 from .kernel_validator import deserialize_kernel
@@ -244,7 +244,7 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
     Repository for accessing and managing new vLLM kernel cache files.
 
     This class provides methods to iterate through kernels in the new vLLM cache directory
-    structure with artifact_shape directories and best config support.
+    structure with artifact_compile_range directories and best config support.
     """
 
     def __init__(self, root: Path | None = None):
@@ -320,7 +320,7 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             plugins: Dictionary of plugins for kernel processing
 
         Yields:
-            Tuples of (artifact_shape, best_config, kernel)
+            Tuples of (artifact_compile_range, best_config, kernel)
         """
         best_config = self._find_best_config(artifact_dir)
         triton_dir = artifact_dir / "triton"
@@ -338,21 +338,21 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         self, rank_dir: Path, _rank_name: str
     ) -> Iterable[tuple[str, str, Kernel]]:
         """
-        Find kernels within artifact_shape directories for a rank.
+        Find kernels within artifact_compile_range directories for a rank.
 
         Args:
             rank_dir: Path to the rank directory
             _rank_name: Name of the rank directory (unused but required for interface)
 
         Yields:
-            Tuples of (artifact_shape, best_config, kernel)
+            Tuples of (artifact_compile_range, best_config, kernel)
         """
         backbone_dir = rank_dir / "backbone"
         if not backbone_dir.exists():
             return
 
         plugins = _get_plugins()
-        for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+        for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
             yield from self._process_artifact_dir(artifact_dir, plugins)
 
     def kernels(self) -> Iterable[tuple[str, str, str, str, str | None, Kernel]]:
@@ -360,17 +360,17 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         Iterate through all kernels in the new vLLM cache directory.
 
         Yields:
-            Tuples of (vllm_hash, cache_root, rank_x_y, artifact_shape, best_config, kernel)
+            Tuples of (vllm_hash, cache_root, rank_x_y, artifact_compile_range, best_config, kernel)
             where each kernel contains metadata parsed from cache files.
         """
         for vllm_hash, hash_dir in self._find_torch_compile_cache_dirs():
             for rank_dir in hash_dir.iterdir():
                 if rank_dir.is_dir() and rank_dir.name.startswith("rank"):
                     for (
-                        artifact_shape,
+                        artifact_compile_range,
                         best_config,
                         kernel,
                     ) in self._find_artifact_kernels(rank_dir, rank_dir.name):
                         yield vllm_hash, str(
                             self.root
-                        ), rank_dir.name, artifact_shape, best_config, kernel
+                        ), rank_dir.name, artifact_compile_range, best_config, kernel

@@ -30,7 +30,7 @@ class VllmStrategy(CacheModeStrategy):
             file_orm_model=VllmKernelFileOrm,
             hash_field=VLLM_HASH_FIELD,
             primary_key_fields=VLLM_EXTENDED_PRIMARY_FIELDS,
-            additional_duplicate_fields=["vllm_hash", "artifact_shape"],
+            additional_duplicate_fields=["vllm_hash", "artifact_compile_range"],
         )
 
     def create_database(self):
@@ -49,9 +49,9 @@ class VllmStrategy(CacheModeStrategy):
             triton_cache_key=row["triton_cache_key"],
             rank_x_y=row["rank_x_y"],
         )
-        # Add artifact_shape as an attribute if present
-        if "artifact_shape" in row:
-            identifier.artifact_shape = row["artifact_shape"]
+        # Add artifact_compile_range as an attribute if present
+        if "artifact_compile_range" in row:
+            identifier.artifact_compile_range = row["artifact_compile_range"]
         return identifier
 
     def reindex_kernels(self, repo, db, batch_size: int = 1000) -> int:
@@ -67,8 +67,8 @@ class VllmStrategy(CacheModeStrategy):
         """
         # Create generator that yields kernel data tuples
         kernels_iterator = (
-            (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
-            for vllm_hash, cache_dir, rank_x_y, artifact_shape,
+            (kernel, cache_dir, vllm_hash, rank_x_y, artifact_compile_range, best_config)
+            for vllm_hash, cache_dir, rank_x_y, artifact_compile_range,
             best_config, kernel in repo.kernels()
         )
         return process_kernels_in_batches(kernels_iterator, db, batch_size)
@@ -79,13 +79,13 @@ class VllmStrategy(CacheModeStrategy):
         cache_dir = args[0] if len(args) > 0 else kwargs.get("cache_dir")
         vllm_hash = args[1] if len(args) > 1 else kwargs.get("vllm_hash")
         rank_x_y = args[2] if len(args) > 2 else kwargs.get("rank_x_y")
-        artifact_shape = args[3] if len(args) > 3 else kwargs.get("artifact_shape")
+        artifact_compile_range = args[3] if len(args) > 3 else kwargs.get("artifact_compile_range")
         best_config = args[4] if len(args) > 4 else kwargs.get("best_config")
 
         vllm_meta = VllmKernelMetadata(
             vllm_hash=vllm_hash,
             rank_x_y=rank_x_y,
-            artifact_shape=artifact_shape,
+            artifact_compile_range=artifact_compile_range,
             best_config=best_config,
         )
         db.insert_kernel(k_data, cache_dir, vllm_meta)

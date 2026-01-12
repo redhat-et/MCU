@@ -94,11 +94,11 @@ class TestVllmCacheRepository(unittest.TestCase):
         rank_dir = self.cache_dir / "rank_0_0"
         rank_dir.mkdir()
 
-        # Create new vLLM structure with backbone and artifact_shape dirs
+        # Create new vLLM structure with backbone and artifact_compile_range dirs
         backbone_dir = rank_dir / "backbone"
         backbone_dir.mkdir()
 
-        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_0"
         artifact_dir.mkdir()
 
         # Create best config file
@@ -126,8 +126,8 @@ class TestVllmCacheRepository(unittest.TestCase):
         # pylint: enable=protected-access
 
         self.assertEqual(len(artifact_kernels), 1)
-        artifact_shape, best_config, kernel = artifact_kernels[0]
-        self.assertEqual(artifact_shape, "artifact_shape_0")
+        artifact_compile_range, best_config, kernel = artifact_kernels[0]
+        self.assertEqual(artifact_compile_range, "artifact_compile_range_0")
         self.assertEqual(best_config, '{"config": "test"}')
         self.assertEqual(kernel.hash, "test_kernel")
 
@@ -171,11 +171,11 @@ class TestVllmCacheRepository(unittest.TestCase):
         rank_dir = hash_dir / "rank_0_0"
         rank_dir.mkdir()
 
-        # Create new structure: backbone/artifact_shape_0/triton/kernel_dir
+        # Create new structure: backbone/artifact_compile_range_0/triton/kernel_dir
         backbone_dir = rank_dir / "backbone"
         backbone_dir.mkdir()
 
-        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_0"
         artifact_dir.mkdir()
 
         triton_dir = artifact_dir / "triton"
@@ -198,23 +198,23 @@ class TestVllmCacheRepository(unittest.TestCase):
         repo = VllmCacheRepository(self.cache_dir)
         kernels = list(repo.kernels())
 
-        # Should have 2 kernels, each with vllm_hash, cache_dir, rank_x_y, artifact_shape,
+        # Should have 2 kernels, each with vllm_hash, cache_dir, rank_x_y, artifact_compile_range,
         #  best_config, and kernel
         self.assertEqual(len(kernels), 2)
 
-        vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel = kernels[0]
+        vllm_hash, cache_dir, rank_x_y, artifact_compile_range, best_config, kernel = kernels[0]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(cache_dir, str(self.cache_dir))
         self.assertEqual(rank_x_y, "rank_0_0")
-        self.assertEqual(artifact_shape, "artifact_shape_0")
+        self.assertEqual(artifact_compile_range, "artifact_compile_range_0")
         self.assertIsNone(best_config)  # No best_config file created
         self.assertEqual(kernel, mock_kernel1)
 
-        vllm_hash, cache_dir, rank_x_y, artifact_shape, best_config, kernel = kernels[1]
+        vllm_hash, cache_dir, rank_x_y, artifact_compile_range, best_config, kernel = kernels[1]
         self.assertEqual(vllm_hash, "hash123abc")
         self.assertEqual(cache_dir, str(self.cache_dir))
         self.assertEqual(rank_x_y, "rank_0_0")
-        self.assertEqual(artifact_shape, "artifact_shape_0")
+        self.assertEqual(artifact_compile_range, "artifact_compile_range_0")
         self.assertIsNone(best_config)  # No best_config file created
         self.assertEqual(kernel, mock_kernel2)
 
@@ -238,7 +238,7 @@ class TestVllmCacheRepository(unittest.TestCase):
             backbone_dir = rank_dir / "backbone"
             backbone_dir.mkdir()
 
-            artifact_dir = backbone_dir / "artifact_shape_0"
+            artifact_dir = backbone_dir / "artifact_compile_range_0"
             artifact_dir.mkdir()
 
             triton_dir = artifact_dir / "triton"

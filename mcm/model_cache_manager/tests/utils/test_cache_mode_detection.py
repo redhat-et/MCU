@@ -66,14 +66,14 @@ class TestCacheModeDetection(unittest.TestCase):
         self.assertEqual(mode, MODE_VLLM_LEGACY)
 
     def test_detect_vllm_new_cache_structure(self):
-        """Test detection of new vLLM cache structure with artifact_shape."""
+        """Test detection of new vLLM cache structure with artifact_compile_range."""
         # Create vLLM structure: torch_compile_cache/<hash>/rank_x_y/...
         vllm_dir = self.temp_dir / "vllm_new"
         torch_compile = vllm_dir / "torch_compile_cache"
         hash_dir = torch_compile / "some_vllm_hash"
         rank_dir = hash_dir / "rank_0_0"
         backbone_dir = rank_dir / "backbone"
-        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_0"
         triton_dir = artifact_dir / "triton"
         triton_dir.mkdir(parents=True)
 
@@ -102,7 +102,7 @@ class TestCacheModeDetection(unittest.TestCase):
 
         # Add new structure
         backbone_dir = rank_dir / "backbone"
-        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_0"
         triton_dir = artifact_dir / "triton"
         triton_dir.mkdir(parents=True)
 
@@ -118,7 +118,7 @@ class TestCacheModeDetection(unittest.TestCase):
         hash_dir = torch_compile / "4405297553"
         rank_dir = hash_dir / "rank_0_0"
         backbone_dir = rank_dir / "backbone"
-        artifact_dir = backbone_dir / "artifact_shape_None_subgraph_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_None_subgraph_0"
         triton_dir = artifact_dir / "triton"
         triton_dir.mkdir(parents=True)
 

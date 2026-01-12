@@ -38,13 +38,13 @@ class VllmKernelMetadata:
     Attributes:
         vllm_hash: Hash identifier for the vLLM cache group
         rank_x_y: Rank identifier (e.g., 'rank_0_0')
-        artifact_shape: Artifact shape directory name
+        artifact_compile_range: Artifact shape directory name
         best_config: Optional JSON string for best config
     """
 
     vllm_hash: str
     rank_x_y: str
-    artifact_shape: str
+    artifact_compile_range: str
     best_config: Optional[str] = None
 
 

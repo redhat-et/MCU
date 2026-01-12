@@ -16,7 +16,7 @@ from model_cache_manager.utils.mcm_constants import (
     MODE_TRITON,
     MODE_VLLM,
     MODE_VLLM_LEGACY,
-    ARTIFACT_SHAPE_PREFIX,
+    ARTIFACT_COMPILE_RANGE_PREFIX,
 )
 
 
@@ -161,23 +161,23 @@ def _has_vllm_legacy_cache_structure(cache_dir: Path) -> bool:
     return False
 
 
-def iter_artifact_shape_dirs(backbone_dir: Path):
-    """Iterate through artifact_shape directories in backbone.
+def iter_artifact_compile_range_dirs(backbone_dir: Path):
+    """Iterate through artifact_compile_range directories in backbone.
 
     Args:
         backbone_dir: Path to the backbone directory
 
     Yields:
-        Path objects for each artifact_shape directory
+        Path objects for each artifact_compile_range directory
     """
     for item in backbone_dir.iterdir():
-        if item.is_dir() and item.name.startswith(ARTIFACT_SHAPE_PREFIX):
+        if item.is_dir() and item.name.startswith(ARTIFACT_COMPILE_RANGE_PREFIX):
             yield item
 
 
-def _has_artifact_shape_with_triton(backbone_dir: Path) -> bool:
-    """Check if backbone directory has artifact_shape subdirectories with triton."""
-    for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+def _has_artifact_compile_range_with_triton(backbone_dir: Path) -> bool:
+    """Check if backbone directory has artifact_compile_range subdirectories with triton."""
+    for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
         triton_dir = artifact_dir / "triton"
         if triton_dir.exists():
             return True
@@ -191,7 +191,7 @@ def _has_valid_rank_structure(hash_dir: Path) -> bool:
             continue
 
         backbone = rank_dir / "backbone"
-        if backbone.exists() and _has_artifact_shape_with_triton(backbone):
+        if backbone.exists() and _has_artifact_compile_range_with_triton(backbone):
             return True
     return False
 
@@ -223,7 +223,7 @@ def detect_cache_mode(cache_dir: Path) -> str:
     if not cache_dir.exists():
         return MODE_TRITON
 
-    # Check for new vLLM cache structure (with backbone/artifact_shape_* directories)
+    # Check for new vLLM cache structure (with backbone/artifact_compile_range_* directories)
     if _has_vllm_cache_structure(cache_dir):
         return MODE_VLLM
 
@@ -253,7 +253,7 @@ class KernelIdentifier:
     hash_key: str  # "hash" for triton, "triton_cache_key" for vllm
     vllm_hash: Optional[str] = None  # Only used for vLLM mode
     rank_x_y: Optional[str] = None  # Only used for vLLM mode
-    artifact_shape: Optional[str] = None  # Only used for new vLLM mode
+    artifact_compile_range: Optional[str] = None  # Only used for new vLLM mode
 
     def __str__(self) -> str:
         if self.mode in (MODE_VLLM, MODE_VLLM_LEGACY):
@@ -295,11 +295,11 @@ def _find_kernel_dirs_in_triton(triton_dir: Path, triton_cache_key: str) -> List
     return kernel_dirs
 
 
-def _process_specific_artifact_shape(
-    backbone_dir: Path, artifact_shape: str, triton_cache_key: str
+def _process_specific_artifact_compile_range(
+    backbone_dir: Path, artifact_compile_range: str, triton_cache_key: str
 ) -> List[Path]:
-    """Process a specific artifact_shape directory."""
-    artifact_dir = backbone_dir / artifact_shape
+    """Process a specific artifact_compile_range directory."""
+    artifact_dir = backbone_dir / artifact_compile_range
     if not artifact_dir.exists():
         return []
 
@@ -310,12 +310,12 @@ def _process_specific_artifact_shape(
     return _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)
 
 
-def _process_all_artifact_shapes(
+def _process_all_artifact_compile_ranges(
     backbone_dir: Path, triton_cache_key: str
 ) -> List[Path]:
-    """Process all artifact_shape directories in backbone."""
+    """Process all artifact_compile_range directories in backbone."""
     kernel_dirs = []
-    for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+    for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
 
         triton_dir = artifact_dir / "triton"
         if triton_dir.exists():
@@ -326,7 +326,7 @@ def _process_all_artifact_shapes(
 
 
 def _process_rank_directory(
-    rank_dir: Path, triton_cache_key: str, artifact_shape: Optional[str]
+    rank_dir: Path, triton_cache_key: str, artifact_compile_range: Optional[str]
 ) -> List[Path]:
     """Process a single rank directory."""
     if not (rank_dir.is_dir() and rank_dir.name.startswith("rank")):
@@ -336,18 +336,18 @@ def _process_rank_directory(
     if not backbone_dir.exists():
         return []
 
-    if artifact_shape:
-        return _process_specific_artifact_shape(
-            backbone_dir, artifact_shape, triton_cache_key
+    if artifact_compile_range:
+        return _process_specific_artifact_compile_range(
+            backbone_dir, artifact_compile_range, triton_cache_key
         )
-    return _process_all_artifact_shapes(backbone_dir, triton_cache_key)
+    return _process_all_artifact_compile_ranges(backbone_dir, triton_cache_key)
 
 
 def find_vllm_kernel_dirs(
     cache_dir: Path,
     vllm_hash: str,
     triton_cache_key: str,
-    artifact_shape: Optional[str] = None,
+    artifact_compile_range: Optional[str] = None,
 ) -> List[Path]:
     """Find kernel directories for new vLLM structure."""
     vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
@@ -357,7 +357,7 @@ def find_vllm_kernel_dirs(
     kernel_dirs = []
     for rank_dir in vllm_root_dir.iterdir():
         kernel_dirs.extend(
-            _process_rank_directory(rank_dir, triton_cache_key, artifact_shape)
+            _process_rank_directory(rank_dir, triton_cache_key, artifact_compile_range)
         )
     return kernel_dirs
 
@@ -375,8 +375,8 @@ def get_kernel_directories(
     if mode == MODE_VLLM:
         if identifier.vllm_hash is None:
             raise ValueError("vllm_hash cannot be None for VLLM mode")
-        # For new vLLM, we might need to pass artifact_shape if available
-        # For now, search all artifact_shape directories
+        # For new vLLM, we might need to pass artifact_compile_range if available
+        # For now, search all artifact_compile_range directories
         return find_vllm_kernel_dirs(
             cache_dir, identifier.vllm_hash, identifier.hash_key
         )
