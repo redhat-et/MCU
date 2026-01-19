@@ -477,7 +477,8 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
                 artifact_dir, self.vllm_hash, self.rank_name
             )
             with ctx_mgr as _processing_dir:
-                _temp_path = _processing_dir
+                # Enter the context to ensure cleanup failure does not raise
+                pass
 
         # Should complete without raising
 

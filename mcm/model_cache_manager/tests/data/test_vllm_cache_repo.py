@@ -453,7 +453,10 @@ class TestVllmCacheRepositoryBinaryArtifacts(unittest.TestCase):
         self.assertEqual(len(kernels), 2)
 
         # Verify both artifacts were processed
-        artifact_names = [name for _, _, _, name, _, _, _ in kernels]
+        artifact_names = [
+            artifact_compile_range
+            for _, _, _, artifact_compile_range, _, _, _ in kernels
+        ]
         self.assertIn("artifact_compile_range_0", artifact_names)
         self.assertIn("artifact_compile_range_1", artifact_names)
 

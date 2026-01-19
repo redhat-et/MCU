@@ -135,7 +135,7 @@ def extract_artifact_bytes_via_hook(input_file: Path) -> bytes:
         captured["artifact_bytes"] = artifact_bytes
         return orig(artifact_bytes, *args, **kwargs)
 
-    # Monkeypatch
+    # Monkeypatch - NOTE: Not thread-safe. Concurrent extraction may have race conditions.
     torch.compiler.load_cache_artifacts = hooked_load_cache_artifacts  # type: ignore[assignment]
     try:
         # This will parse the binary file and (normally) load cache artifacts.

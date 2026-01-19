@@ -38,7 +38,7 @@ class VllmKernelMetadata:
     Attributes:
         vllm_hash: Hash identifier for the vLLM cache group
         rank_x_y: Rank identifier (e.g., 'rank_0_0')
-        artifact_compile_range: Artifact shape directory name
+        artifact_compile_range: Artifact compile range directory name
         best_config: Optional JSON string for best config
         triton_subpath: Relative path from artifact_dir to triton's parent directory.
             None or "" means triton is directly under artifact_dir.

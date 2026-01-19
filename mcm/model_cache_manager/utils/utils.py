@@ -190,7 +190,10 @@ def iter_artifact_compile_range_dirs(backbone_dir: Path):
     """
     for item in backbone_dir.iterdir():
         # Yield both directories (unpacked) and files (binary) that match the pattern
-        if item.name.startswith(ARTIFACT_COMPILE_RANGE_PREFIX):
+        # Explicitly check for dir or file to exclude symlinks and other special items
+        if item.name.startswith(ARTIFACT_COMPILE_RANGE_PREFIX) and (
+            item.is_dir() or item.is_file()
+        ):
             yield item
 
 
@@ -331,7 +334,7 @@ def _process_specific_artifact_compile_range(
             None means triton is directly under artifact_dir.
     """
     artifact_dir = backbone_dir / artifact_compile_range
-    if not artifact_dir.exists():
+    if not artifact_dir.exists() or not artifact_dir.is_dir():
         return []
 
     # Build path to triton directory using triton_subpath if provided

@@ -360,17 +360,17 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         """
         # 1. Check direct path first (unpacked artifacts)
         direct_triton = processing_dir / "triton"
-        if direct_triton.exists():
+        if direct_triton.exists() and direct_triton.is_dir():
             log.debug("Found triton dir at direct path: %s", direct_triton)
             return direct_triton, None
 
         # 2. Check TORCHINDUCTOR_CACHE_DIR if set
+        # Note: If env var is absolute path, pathlib returns the absolute path directly,
+        # effectively checking the system's torchinductor cache location as a fallback
         inductor_cache_dir = os.getenv("TORCHINDUCTOR_CACHE_DIR")
         if inductor_cache_dir:
-            # The env var value could be absolute or relative, but in extracted
-            # artifacts it will be a subdirectory name under processing_dir
             inductor_triton = processing_dir / inductor_cache_dir / "triton"
-            if inductor_triton.exists():
+            if inductor_triton.exists() and inductor_triton.is_dir():
                 log.debug(
                     "Found triton dir under TORCHINDUCTOR_CACHE_DIR: %s",
                     inductor_triton,
@@ -381,7 +381,7 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         user = os.getenv("USER", "unknown")
         default_subpath = f"torchinductor_{user}"
         default_inductor_triton = processing_dir / default_subpath / "triton"
-        if default_inductor_triton.exists():
+        if default_inductor_triton.exists() and default_inductor_triton.is_dir():
             log.debug(
                 "Found triton dir at default inductor cache location: %s",
                 default_inductor_triton,
@@ -480,8 +480,11 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             return
         except Exception as e:  # pylint: disable=broad-exception-caught
             log.error(
-                "Unexpected error processing artifact %s: %s. Skipping.",
+                "Unexpected error processing artifact %s (vllm_hash=%s, rank=%s): "
+                "%s. Skipping.",
                 artifact_dir.name,
+                vllm_hash,
+                rank_name,
                 e,
                 exc_info=True,
             )
@@ -538,21 +541,21 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         """
         log.info("Starting vLLM cache scan in: %s", self.root)
         torch_compile_dirs = list(self._find_torch_compile_cache_dirs())
-        log.info("Found %d torch_compile_cache directories", len(torch_compile_dirs))
+        log.debug("Found %d torch_compile_cache directories", len(torch_compile_dirs))
 
         for vllm_hash, hash_dir in torch_compile_dirs:
-            log.info("Processing vllm_hash=%s at %s", vllm_hash, hash_dir)
+            log.debug("Processing vllm_hash=%s at %s", vllm_hash, hash_dir)
             rank_dirs = [
                 d
                 for d in hash_dir.iterdir()
                 if d.is_dir() and d.name.startswith("rank")
             ]
-            log.info(
+            log.debug(
                 "Found %d rank directories for vllm_hash=%s", len(rank_dirs), vllm_hash
             )
 
             for rank_dir in rank_dirs:
-                log.info("Processing rank directory: %s", rank_dir.name)
+                log.debug("Processing rank directory: %s", rank_dir.name)
                 # Pass vllm_hash to support binary artifact extraction
                 kernel_count = 0
                 for (
@@ -571,4 +574,4 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
                         triton_subpath,
                         kernel,
                     )
-                log.info("Yielded %d kernels from rank %s", kernel_count, rank_dir.name)
+                log.debug("Yielded %d kernels from rank %s", kernel_count, rank_dir.name)
