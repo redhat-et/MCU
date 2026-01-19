@@ -141,7 +141,16 @@ def extract_artifact_bytes_via_hook(input_file: Path) -> bytes:
         # This will parse the binary file and (normally) load cache artifacts.
         # We let it proceed because load() may depend on artifacts being loaded.
         # pylint: disable=protected-access
-        _ = torch._inductor.CompiledArtifact.load(path=str(input_file), format="binary")
+        try:
+            _ = torch._inductor.CompiledArtifact.load(
+                path=str(input_file), format="binary"
+            )
+        except (AttributeError, TypeError) as e:
+            raise BinaryArtifactExtractionError(
+                "Current PyTorch installation does not support "
+                "torch._inductor.CompiledArtifact.load(path=..., format='binary'). "
+                "Please upgrade or install a compatible PyTorch version."
+            ) from e
     finally:
         torch.compiler.load_cache_artifacts = orig  # type: ignore[assignment]
 
