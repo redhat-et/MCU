@@ -1,3 +1,4 @@
+# pylint: disable=duplicate-code
 """
 Strategy implementation for new vLLM cache mode.
 """
@@ -49,9 +50,11 @@ class VllmStrategy(CacheModeStrategy):
             triton_cache_key=row["triton_cache_key"],
             rank_x_y=row["rank_x_y"],
         )
-        # Add artifact_compile_range as an attribute if present
+        # Add artifact_compile_range and triton_subpath as attributes if present
         if "artifact_compile_range" in row:
             identifier.artifact_compile_range = row["artifact_compile_range"]
+        if "triton_subpath" in row:
+            identifier.triton_subpath = row["triton_subpath"]
         return identifier
 
     def reindex_kernels(self, repo, db, batch_size: int = 1000) -> int:
@@ -67,9 +70,17 @@ class VllmStrategy(CacheModeStrategy):
         """
         # Create generator that yields kernel data tuples
         kernels_iterator = (
-            (kernel, cache_dir, vllm_hash, rank_x_y, artifact_compile_range, best_config)
+            (
+                kernel,
+                cache_dir,
+                vllm_hash,
+                rank_x_y,
+                artifact_compile_range,
+                best_config,
+                triton_subpath,
+            )
             for vllm_hash, cache_dir, rank_x_y, artifact_compile_range,
-            best_config, kernel in repo.kernels()
+            best_config, triton_subpath, kernel in repo.kernels()
         )
         return process_kernels_in_batches(kernels_iterator, db, batch_size)
 
@@ -81,11 +92,13 @@ class VllmStrategy(CacheModeStrategy):
         rank_x_y = args[2] if len(args) > 2 else kwargs.get("rank_x_y")
         artifact_compile_range = args[3] if len(args) > 3 else kwargs.get("artifact_compile_range")
         best_config = args[4] if len(args) > 4 else kwargs.get("best_config")
+        triton_subpath = args[5] if len(args) > 5 else kwargs.get("triton_subpath")
 
         vllm_meta = VllmKernelMetadata(
             vllm_hash=vllm_hash,
             rank_x_y=rank_x_y,
             artifact_compile_range=artifact_compile_range,
             best_config=best_config,
+            triton_subpath=triton_subpath,
         )
         db.insert_kernel(k_data, cache_dir, vllm_meta)

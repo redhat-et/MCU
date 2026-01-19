@@ -78,6 +78,7 @@ class TestIndexServiceVllmMode(unittest.TestCase):
                 "rank_0_0",
                 "artifact_compile_range_0",
                 '{"config": "test"}',
+                None,  # triton_subpath
                 mock_kernel1,
             ),
             (
@@ -85,7 +86,8 @@ class TestIndexServiceVllmMode(unittest.TestCase):
                 "/cache/root",
                 "rank_1_0",
                 "artifact_compile_range_1",
-                None,
+                None,  # best_config
+                None,  # triton_subpath
                 mock_kernel2,
             ),
         ]
@@ -105,8 +107,8 @@ class TestIndexServiceVllmMode(unittest.TestCase):
 
         call_args = mock_db_instance.bulk_insert_kernels.call_args[0][0]
         self.assertEqual(len(call_args), 2)
-        self.assertEqual(len(call_args[0]), 6)
-        self.assertEqual(len(call_args[1]), 6)
+        self.assertEqual(len(call_args[0]), 7)
+        self.assertEqual(len(call_args[1]), 7)
 
     @patch("model_cache_manager.strategies.triton_strategy.CacheRepository")
     @patch("model_cache_manager.strategies.triton_strategy.Database")

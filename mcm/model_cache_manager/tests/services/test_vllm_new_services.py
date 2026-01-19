@@ -58,6 +58,7 @@ class TestIndexServiceVllmNewMode(unittest.TestCase):
                 "rank_0_0",
                 "artifact_compile_range_0",
                 '{"config": "test"}',
+                None,  # triton_subpath
                 mock_kernel,
             ),
             (
@@ -65,7 +66,8 @@ class TestIndexServiceVllmNewMode(unittest.TestCase):
                 str(self.cache_dir),
                 "rank_0_1",
                 "artifact_compile_range_1",
-                None,
+                None,  # best_config
+                None,  # triton_subpath
                 mock_kernel,
             ),
         ]
@@ -84,13 +86,14 @@ class TestIndexServiceVllmNewMode(unittest.TestCase):
         self.assertEqual(len(call_args), 2)
 
         first_kernel_data = call_args[0]
-        self.assertEqual(len(first_kernel_data), 6)
+        self.assertEqual(len(first_kernel_data), 7)
         self.assertEqual(first_kernel_data[0], mock_kernel)
         self.assertEqual(first_kernel_data[1], str(self.cache_dir))
         self.assertEqual(first_kernel_data[2], "vllm_hash_1")
         self.assertEqual(first_kernel_data[3], "rank_0_0")
         self.assertEqual(first_kernel_data[4], "artifact_compile_range_0")
         self.assertEqual(first_kernel_data[5], '{"config": "test"}')
+        self.assertIsNone(first_kernel_data[6])  # triton_subpath
 
 
 class TestSearchServiceVllmNewMode(unittest.TestCase):

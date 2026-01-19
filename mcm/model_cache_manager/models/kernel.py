@@ -40,12 +40,16 @@ class VllmKernelMetadata:
         rank_x_y: Rank identifier (e.g., 'rank_0_0')
         artifact_compile_range: Artifact shape directory name
         best_config: Optional JSON string for best config
+        triton_subpath: Relative path from artifact_dir to triton's parent directory.
+            None or "" means triton is directly under artifact_dir.
+            e.g., "torchinductor_user" means triton is at artifact_dir/torchinductor_user/triton
     """
 
     vllm_hash: str
     rank_x_y: str
     artifact_compile_range: str
     best_config: Optional[str] = None
+    triton_subpath: Optional[str] = None
 
 
 @dataclass(slots=True)

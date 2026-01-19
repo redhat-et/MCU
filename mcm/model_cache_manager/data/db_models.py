@@ -374,6 +374,9 @@ class VllmKernelOrm(Base, BaseKernelMixin):
     best_config: Mapped[Optional[str]] = mapped_column(
         String
     )  # JSON string for best config
+    triton_subpath: Mapped[Optional[str]] = mapped_column(
+        String
+    )  # Relative path from artifact_dir to triton's parent (e.g., "torchinductor_user")
 
     files: Mapped[List["VllmKernelFileOrm"]] = relationship(
         "VllmKernelFileOrm",
@@ -418,6 +421,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 "rank_x_y": vllm_meta.rank_x_y,
                 "artifact_compile_range": vllm_meta.artifact_compile_range,
                 "best_config": vllm_meta.best_config,
+                "triton_subpath": vllm_meta.triton_subpath,
             }
         )
         return kernel_values

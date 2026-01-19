@@ -33,8 +33,8 @@ from .database_utils import create_file_orm_dict
 # Batch item format constants for vLLM kernels
 # (kernel, cache_dir, vllm_hash, rank_x_y)
 VLLM_LEGACY_BATCH_ITEM_LENGTH = 4
-# (kernel, cache_dir, vllm_hash, rank_x_y, artifact_compile_range, best_config)
-VLLM_NEW_BATCH_ITEM_LENGTH = 6
+# (kernel, cache_dir, vllm_hash, rank_x_y, artifact_compile_range, best_config, triton_subpath)
+VLLM_NEW_BATCH_ITEM_LENGTH = 7
 
 # Kernel ID tuple length constants for database operations
 # (cache_dir, vllm_hash, triton_hash, rank_x_y)
@@ -403,7 +403,7 @@ class VllmDatabase:
                 artifact_compile_range = None
             elif len(item) == VLLM_NEW_BATCH_ITEM_LENGTH:
                 # New format: (kernel, cache_dir, vllm_hash, rank_x_y,
-                # artifact_compile_range, best_config)
+                # artifact_compile_range, best_config, triton_subpath)
                 (
                     k_data,
                     cache_dir,
@@ -411,6 +411,7 @@ class VllmDatabase:
                     rank_x_y,
                     artifact_compile_range,
                     _best_config,
+                    _triton_subpath,
                 ) = item
             else:
                 raise ValueError(
@@ -446,6 +447,7 @@ class VllmDatabase:
 
         return kernel_ids_to_clear, file_values_list
 
+    # pylint: disable=too-many-locals
     def _upsert_vllm_kernel(
         self,
         session: SqlaSession,
@@ -456,13 +458,15 @@ class VllmDatabase:
         Args:
             session: Database session
             kernel_info: Tuple of (k_data, cache_dir, vllm_hash, rank_x_y) or
-                    (k_data, cache_dir, vllm_hash, rank_x_y, artifact_compile_range, best_config)
+                    (k_data, cache_dir, vllm_hash, rank_x_y, artifact_compile_range,
+                     best_config, triton_subpath)
         """
         # Handle both legacy and new vLLM formats
         if len(kernel_info) == VLLM_LEGACY_BATCH_ITEM_LENGTH:
             k_data, cache_dir, vllm_hash, rank_x_y = kernel_info
             artifact_compile_range = ""
             best_config = None
+            triton_subpath = None
         elif len(kernel_info) == VLLM_NEW_BATCH_ITEM_LENGTH:
             (
                 k_data,
@@ -471,6 +475,7 @@ class VllmDatabase:
                 rank_x_y,
                 artifact_compile_range,
                 best_config,
+                triton_subpath,
             ) = kernel_info
         else:
             raise ValueError(
@@ -485,6 +490,7 @@ class VllmDatabase:
             rank_x_y=rank_x_y,
             artifact_compile_range=artifact_compile_range or "",
             best_config=best_config,
+            triton_subpath=triton_subpath,
         )
         kernel_values = VllmKernelOrm.get_vllm_kernel_values(
             k_data, cache_dir, vllm_meta
