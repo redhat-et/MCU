@@ -28,6 +28,7 @@ def check_pytorch_support() -> tuple[bool, str]:
         Tuple of (supported, error_message). If supported is True, error_message is empty.
     """
     try:
+        # pylint: disable=import-outside-toplevel
         import torch
 
         if not hasattr(torch, "compiler") or not hasattr(
@@ -38,6 +39,7 @@ def check_pytorch_support() -> tuple[bool, str]:
                 "PyTorch does not expose torch.compiler.load_cache_artifacts().",
             )
 
+        # pylint: disable=protected-access
         if not hasattr(torch, "_inductor") or not hasattr(
             torch._inductor, "CompiledArtifact"
         ):
@@ -122,6 +124,7 @@ def extract_artifact_bytes_via_hook(input_file: Path) -> bytes:
     if not supported:
         raise BinaryArtifactExtractionError(msg)
 
+    # pylint: disable=import-outside-toplevel
     import torch
 
     captured: dict[str, bytes] = {}
@@ -137,6 +140,7 @@ def extract_artifact_bytes_via_hook(input_file: Path) -> bytes:
     try:
         # This will parse the binary file and (normally) load cache artifacts.
         # We let it proceed because load() may depend on artifacts being loaded.
+        # pylint: disable=protected-access
         _ = torch._inductor.CompiledArtifact.load(path=str(input_file), format="binary")
     finally:
         torch.compiler.load_cache_artifacts = orig  # type: ignore[assignment]
@@ -163,6 +167,7 @@ def unpack_binary_artifact_to_dir(artifact_bytes: bytes, output_dir: Path) -> No
         BinaryArtifactExtractionError: If unpacking fails
     """
     try:
+        # pylint: disable=import-outside-toplevel
         import torch
         from torch._inductor.runtime.cache_dir_utils import temporary_cache_dir
     except ImportError as e:
@@ -255,6 +260,7 @@ class TemporaryExtractedArtifact:
 
         # Create temp directory
         try:
+            # pylint: disable=import-outside-toplevel
             from ..utils.utils import get_temp_extraction_dir
 
             temp_base = get_temp_extraction_dir()
@@ -282,6 +288,7 @@ class TemporaryExtractedArtifact:
             if self._temp_dir and self._temp_dir.exists():
                 try:
                     shutil.rmtree(self._temp_dir, ignore_errors=True)
+                # pylint: disable=broad-exception-caught
                 except Exception as cleanup_err:
                     log.warning(
                         "Failed to clean up temp dir %s after extraction failure: %s",
@@ -301,6 +308,7 @@ class TemporaryExtractedArtifact:
             try:
                 log.debug("Cleaning up temp extraction dir: %s", self._temp_dir)
                 shutil.rmtree(self._temp_dir, ignore_errors=True)
+            # pylint: disable=broad-exception-caught
             except Exception as e:
                 # Don't raise - cleanup failure shouldn't break indexing
                 log.warning(

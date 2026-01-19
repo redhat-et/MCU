@@ -278,53 +278,27 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             if hash_dir.is_dir():
                 yield hash_dir.name, hash_dir
 
-    def _find_best_config(self, artifact_dir: Path) -> Optional[str]:
+    def _find_best_config(self, processing_dir: Path) -> Optional[str]:
         """
-        Find and read the best_config file in artifact directory.
+        Find and read the best_config file in processing directory.
 
-        For unpacked artifacts, best_config is directly under artifact_dir or subdirs.
-        For extracted binary artifacts, best_config may be under:
-        1. artifact_dir (direct or subdirs)
-        2. artifact_dir/$TORCHINDUCTOR_CACHE_DIR/... (if env var set)
-        3. artifact_dir/torchinductor_$USER/... (default inductor cache location)
+        Searches processing_dir and its immediate subdirectories for *.best_config files.
 
         Args:
-            artifact_dir: Path to the artifact directory (or binary file)
+            processing_dir: Path to the processing directory
 
         Returns:
             Content of best_config file or None if not found
         """
         # Defensive check: if a file path is passed instead of directory, skip
-        if artifact_dir.is_file():
+        if processing_dir.is_file():
             log.debug(
                 "Expected directory but got file, cannot search for best_config: %s",
-                artifact_dir,
+                processing_dir,
             )
             return None
 
-        # Try to find best_config in the given directory
-        result = self._search_best_config_in_dir(artifact_dir)
-        if result:
-            return result
-
-        # Check TORCHINDUCTOR_CACHE_DIR if set
-        inductor_cache_dir = os.getenv("TORCHINDUCTOR_CACHE_DIR")
-        if inductor_cache_dir:
-            inductor_path = artifact_dir / inductor_cache_dir
-            if inductor_path.exists():
-                result = self._search_best_config_in_dir(inductor_path)
-                if result:
-                    return result
-
-        # Check default torchinductor_$USER location
-        user = os.getenv("USER", "unknown")
-        default_inductor_path = artifact_dir / f"torchinductor_{user}"
-        if default_inductor_path.exists():
-            result = self._search_best_config_in_dir(default_inductor_path)
-            if result:
-                return result
-
-        return None
+        return self._search_best_config_in_dir(processing_dir)
 
     def _search_best_config_in_dir(self, search_dir: Path) -> Optional[str]:
         """
@@ -365,10 +339,12 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         Find the triton directory within a processing directory.
 
         For unpacked artifacts, triton/ is directly under processing_dir.
-        For extracted binary artifacts, triton/ may be under:
+        For extracted binary artifacts, the archive contents may include subdirectories
+        that mirror the original cache structure. We search:
         1. processing_dir/triton (direct path)
-        2. processing_dir/$TORCHINDUCTOR_CACHE_DIR/triton (if env var set)
-        3. processing_dir/torchinductor_$USER/triton (default inductor cache location)
+        2. processing_dir/<TORCHINDUCTOR_CACHE_DIR_value>/triton - if env var is set,
+           treat its value as a subdirectory name within the extracted contents
+        3. processing_dir/torchinductor_$USER/triton - default inductor cache subdir name
 
         Note: If not found in these locations, returns (None, None). Caller should handle
         with an appropriate error message to the user.

@@ -3,10 +3,11 @@ Unit tests for the binary_artifact_extractor module.
 
 Tests binary vLLM artifact detection, extraction, and cleanup functionality.
 """
+# pylint: disable=protected-access
 
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, mock_open
+from unittest.mock import MagicMock, patch
 import tempfile
 import shutil
 
@@ -27,7 +28,7 @@ class TestCheckPyTorchSupport(unittest.TestCase):
     def test_pytorch_not_installed(self):
         """Test detection when PyTorch is not installed."""
         # Remove torch from modules if it exists
-        import sys
+        import sys  # pylint: disable=import-outside-toplevel
         torch_module = sys.modules.get("torch")
         if "torch" in sys.modules:
             del sys.modules["torch"]
@@ -237,7 +238,8 @@ class TestExtractArtifactBytesViaHook(unittest.TestCase):
 
     def test_pytorch_not_supported(self):
         """Test extraction fails when PyTorch doesn't support it."""
-        with patch("model_cache_manager.data.binary_artifact_extractor.check_pytorch_support") as mock_check:
+        patch_target = "model_cache_manager.data.binary_artifact_extractor.check_pytorch_support"
+        with patch(patch_target) as mock_check:
             mock_check.return_value = (False, "PyTorch not installed")
 
             with self.assertRaises(BinaryArtifactExtractionError) as ctx:
@@ -258,8 +260,13 @@ class TestExtractArtifactBytesViaHook(unittest.TestCase):
         mock_torch.compiler.load_cache_artifacts = MagicMock()
         mock_torch._inductor.CompiledArtifact.load = MagicMock(return_value=None)
 
+        def mock_import(name, *args, **kwargs):
+            if name == "torch":
+                return mock_torch
+            return __builtins__.__import__(name, *args, **kwargs)
+
         with patch.dict("sys.modules", {"torch": mock_torch}):
-            with patch("builtins.__import__", side_effect=lambda name, *args, **kwargs: mock_torch if name == "torch" else __builtins__.__import__(name, *args, **kwargs)):
+            with patch("builtins.__import__", side_effect=mock_import):
                 # This should raise because the mock doesn't capture bytes
                 with self.assertRaises(BinaryArtifactExtractionError) as ctx:
                     extract_artifact_bytes_via_hook(Path("/fake/artifact"))
@@ -276,9 +283,14 @@ class TestExtractArtifactBytesViaHook(unittest.TestCase):
         mock_torch.compiler.load_cache_artifacts = MagicMock()
         mock_torch._inductor.CompiledArtifact.load = MagicMock(return_value=None)
 
+        def mock_import(name, *args, **kwargs):
+            if name == "torch":
+                return mock_torch
+            return __builtins__.__import__(name, *args, **kwargs)
+
         with patch.dict("sys.modules", {"torch": mock_torch}):
             # Mock the import statement inside the function
-            with patch("builtins.__import__", side_effect=lambda name, *args, **kwargs: mock_torch if name == "torch" else __builtins__.__import__(name, *args, **kwargs)):
+            with patch("builtins.__import__", side_effect=mock_import):
                 with self.assertRaises(BinaryArtifactExtractionError) as ctx:
                     extract_artifact_bytes_via_hook(Path("/fake/artifact"))
 
@@ -348,7 +360,8 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
         triton_dir = artifact_dir / "triton"
         triton_dir.mkdir()
 
-        with TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name) as processing_dir:
+        ctx_mgr = TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name)
+        with ctx_mgr as processing_dir:
             self.assertEqual(processing_dir, artifact_dir)
             self.assertTrue(processing_dir.exists())
 
@@ -359,11 +372,15 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
         binary_file = artifact_dir / "artifact_compile_range_0"
         binary_file.touch()
 
-        with patch("model_cache_manager.data.binary_artifact_extractor.check_pytorch_support") as mock_check:
+        patch_target = "model_cache_manager.data.binary_artifact_extractor.check_pytorch_support"
+        with patch(patch_target) as mock_check:
             mock_check.return_value = (False, "PyTorch not installed")
 
             # Should fall back to returning original path with warning
-            with TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name) as processing_dir:
+            ctx_mgr = TemporaryExtractedArtifact(
+                artifact_dir, self.vllm_hash, self.rank_name
+            )
+            with ctx_mgr as processing_dir:
                 self.assertEqual(processing_dir, artifact_dir)
 
     def test_binary_artifact_no_file_found(self):
@@ -372,18 +389,24 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
         artifact_dir.mkdir()
         # No binary file, no triton dir - is_binary_artifact will return False
 
-        with patch("model_cache_manager.data.binary_artifact_extractor.check_pytorch_support") as mock_check:
+        patch_target = "model_cache_manager.data.binary_artifact_extractor.check_pytorch_support"
+        with patch(patch_target) as mock_check:
             mock_check.return_value = (True, "")
 
             # When there's no binary file and no triton dir, is_binary_artifact returns False
             # So this should return the original path without attempting extraction
-            with TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name) as processing_dir:
+            ctx_mgr = TemporaryExtractedArtifact(
+                artifact_dir, self.vllm_hash, self.rank_name
+            )
+            with ctx_mgr as processing_dir:
                 self.assertEqual(processing_dir, artifact_dir)
 
     @patch("model_cache_manager.data.binary_artifact_extractor.check_pytorch_support")
     @patch("model_cache_manager.data.binary_artifact_extractor.extract_artifact_bytes_via_hook")
     @patch("model_cache_manager.data.binary_artifact_extractor.unpack_binary_artifact_to_dir")
-    def test_binary_artifact_successful_extraction(self, mock_unpack, mock_extract, mock_check):
+    def test_binary_artifact_successful_extraction(
+        self, mock_unpack, mock_extract, mock_check
+    ):
         """Test successful binary artifact extraction."""
         mock_check.return_value = (True, "")
         mock_extract.return_value = b"fake_artifact_bytes"
@@ -394,7 +417,8 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
         binary_file = artifact_dir / "artifact_compile_range_0"
         binary_file.touch()
 
-        with TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name) as processing_dir:
+        ctx_mgr = TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name)
+        with ctx_mgr as processing_dir:
             # Should return a temp directory
             self.assertNotEqual(processing_dir, artifact_dir)
             self.assertTrue(processing_dir.exists())
@@ -420,14 +444,18 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
         binary_file.touch()
 
         with self.assertRaises(BinaryArtifactExtractionError):
-            with TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name) as processing_dir:
+            ctx_mgr = TemporaryExtractedArtifact(
+                artifact_dir, self.vllm_hash, self.rank_name
+            )
+            with ctx_mgr as _processing_dir:
                 pass
 
         # Verify no temp dirs left behind
         temp_base = self.temp_dir.parent
         leftover_dirs = [d for d in temp_base.iterdir() if "vllm_" in d.name]
         # Only our test temp_dir should exist
-        self.assertEqual(len([d for d in leftover_dirs if str(d) != str(self.temp_dir)]), 0)
+        other_dirs = [d for d in leftover_dirs if str(d) != str(self.temp_dir)]
+        self.assertEqual(len(other_dirs), 0)
 
     @patch("model_cache_manager.data.binary_artifact_extractor.check_pytorch_support")
     @patch("model_cache_manager.data.binary_artifact_extractor.extract_artifact_bytes_via_hook")
@@ -445,8 +473,11 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
 
         with patch("shutil.rmtree", side_effect=OSError("Cleanup failed")):
             # Should not raise despite cleanup failure
-            with TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name) as processing_dir:
-                temp_path = processing_dir
+            ctx_mgr = TemporaryExtractedArtifact(
+                artifact_dir, self.vllm_hash, self.rank_name
+            )
+            with ctx_mgr as _processing_dir:
+                _temp_path = _processing_dir
 
         # Should complete without raising
 
@@ -458,7 +489,10 @@ class TestTemporaryExtractedArtifact(unittest.TestCase):
         triton_dir.mkdir()
 
         with self.assertRaises(ValueError):
-            with TemporaryExtractedArtifact(artifact_dir, self.vllm_hash, self.rank_name) as processing_dir:
+            ctx_mgr = TemporaryExtractedArtifact(
+                artifact_dir, self.vllm_hash, self.rank_name
+            )
+            with ctx_mgr as _processing_dir:
                 raise ValueError("Test exception")
 
 
