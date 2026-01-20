@@ -11,7 +11,7 @@ VLLM_COMMON_PRIMARY_FIELDS = [
 ]
 
 # Extended primary key fields for new vLLM strategy
-VLLM_EXTENDED_PRIMARY_FIELDS = VLLM_COMMON_PRIMARY_FIELDS + ["artifact_shape"]
+VLLM_EXTENDED_PRIMARY_FIELDS = VLLM_COMMON_PRIMARY_FIELDS + ["artifact_compile_range"]
 
 # Hash field name for vLLM strategies
 VLLM_HASH_FIELD = "triton_cache_key"

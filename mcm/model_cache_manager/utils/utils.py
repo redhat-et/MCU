@@ -16,7 +16,7 @@ from model_cache_manager.utils.mcm_constants import (
     MODE_TRITON,
     MODE_VLLM,
     MODE_VLLM_LEGACY,
-    ARTIFACT_SHAPE_PREFIX,
+    ARTIFACT_COMPILE_RANGE_PREFIX,
 )
 
 
@@ -37,6 +37,21 @@ def format_size(size_bytes: int | float) -> str:
     if size_bytes < 1024 * 1024 * 1024:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
     return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+
+def get_temp_extraction_dir() -> Path:
+    """
+    Get the base directory for temporary artifact extraction.
+
+    Returns:
+        Path to /tmp/mcm_{username}/ directory (created if it doesn't exist)
+    """
+    import getpass  # pylint: disable=import-outside-toplevel
+
+    username = getpass.getuser()
+    temp_base = Path("/tmp") / f"mcm_{username}"
+    temp_base.mkdir(parents=True, exist_ok=True)
+    return temp_base
 
 
 def parse_duration(duration_str: Optional[str]) -> Optional[timedelta]:
@@ -161,23 +176,30 @@ def _has_vllm_legacy_cache_structure(cache_dir: Path) -> bool:
     return False
 
 
-def iter_artifact_shape_dirs(backbone_dir: Path):
-    """Iterate through artifact_shape directories in backbone.
+def iter_artifact_compile_range_dirs(backbone_dir: Path):
+    """Iterate through artifact_compile_range directories and binary files in backbone.
+
+    This function yields both unpacked artifacts (directories) and binary artifacts (files)
+    that match the artifact_compile_range naming pattern.
 
     Args:
         backbone_dir: Path to the backbone directory
 
     Yields:
-        Path objects for each artifact_shape directory
+        Path objects for each artifact_compile_range directory or binary file
     """
     for item in backbone_dir.iterdir():
-        if item.is_dir() and item.name.startswith(ARTIFACT_SHAPE_PREFIX):
+        # Yield both directories (unpacked) and files (binary) that match the pattern
+        # Explicitly check for dir or file to exclude symlinks and other special items
+        if item.name.startswith(ARTIFACT_COMPILE_RANGE_PREFIX) and (
+            item.is_dir() or item.is_file()
+        ):
             yield item
 
 
-def _has_artifact_shape_with_triton(backbone_dir: Path) -> bool:
-    """Check if backbone directory has artifact_shape subdirectories with triton."""
-    for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+def _has_artifact_compile_range_with_triton(backbone_dir: Path) -> bool:
+    """Check if backbone directory has artifact_compile_range subdirectories with triton."""
+    for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
         triton_dir = artifact_dir / "triton"
         if triton_dir.exists():
             return True
@@ -191,7 +213,7 @@ def _has_valid_rank_structure(hash_dir: Path) -> bool:
             continue
 
         backbone = rank_dir / "backbone"
-        if backbone.exists() and _has_artifact_shape_with_triton(backbone):
+        if backbone.exists() and _has_artifact_compile_range_with_triton(backbone):
             return True
     return False
 
@@ -223,7 +245,7 @@ def detect_cache_mode(cache_dir: Path) -> str:
     if not cache_dir.exists():
         return MODE_TRITON
 
-    # Check for new vLLM cache structure (with backbone/artifact_shape_* directories)
+    # Check for new vLLM cache structure (with backbone/artifact_compile_range_* directories)
     if _has_vllm_cache_structure(cache_dir):
         return MODE_VLLM
 
@@ -253,7 +275,8 @@ class KernelIdentifier:
     hash_key: str  # "hash" for triton, "triton_cache_key" for vllm
     vllm_hash: Optional[str] = None  # Only used for vLLM mode
     rank_x_y: Optional[str] = None  # Only used for vLLM mode
-    artifact_shape: Optional[str] = None  # Only used for new vLLM mode
+    artifact_compile_range: Optional[str] = None  # Only used for new vLLM mode
+    triton_subpath: Optional[str] = None  # Relative path from artifact_dir to triton's parent
 
     def __str__(self) -> str:
         if self.mode in (MODE_VLLM, MODE_VLLM_LEGACY):
@@ -295,29 +318,58 @@ def _find_kernel_dirs_in_triton(triton_dir: Path, triton_cache_key: str) -> List
     return kernel_dirs
 
 
-def _process_specific_artifact_shape(
-    backbone_dir: Path, artifact_shape: str, triton_cache_key: str
+def _process_specific_artifact_compile_range(
+    backbone_dir: Path,
+    artifact_compile_range: str,
+    triton_cache_key: str,
+    triton_subpath: Optional[str] = None,
 ) -> List[Path]:
-    """Process a specific artifact_shape directory."""
-    artifact_dir = backbone_dir / artifact_shape
-    if not artifact_dir.exists():
+    """Process a specific artifact_compile_range directory.
+
+    Args:
+        backbone_dir: Path to the backbone directory
+        artifact_compile_range: Name of the artifact_compile_range directory
+        triton_cache_key: Triton cache key to search for
+        triton_subpath: Relative path from artifact_dir to triton's parent.
+            None means triton is directly under artifact_dir.
+    """
+    artifact_dir = backbone_dir / artifact_compile_range
+    if not artifact_dir.exists() or not artifact_dir.is_dir():
         return []
 
-    triton_dir = artifact_dir / "triton"
+    # Build path to triton directory using triton_subpath if provided
+    if triton_subpath:
+        triton_dir = artifact_dir / triton_subpath / "triton"
+    else:
+        triton_dir = artifact_dir / "triton"
+
     if not triton_dir.exists():
         return []
 
     return _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)
 
 
-def _process_all_artifact_shapes(
-    backbone_dir: Path, triton_cache_key: str
+def _process_all_artifact_compile_ranges(
+    backbone_dir: Path,
+    triton_cache_key: str,
+    triton_subpath: Optional[str] = None,
 ) -> List[Path]:
-    """Process all artifact_shape directories in backbone."""
-    kernel_dirs = []
-    for artifact_dir in iter_artifact_shape_dirs(backbone_dir):
+    """Process all artifact_compile_range directories in backbone.
 
-        triton_dir = artifact_dir / "triton"
+    Args:
+        backbone_dir: Path to the backbone directory
+        triton_cache_key: Triton cache key to search for
+        triton_subpath: Relative path from artifact_dir to triton's parent.
+            None means triton is directly under artifact_dir.
+    """
+    kernel_dirs = []
+    for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
+        # Build path to triton directory using triton_subpath if provided
+        if triton_subpath:
+            triton_dir = artifact_dir / triton_subpath / "triton"
+        else:
+            triton_dir = artifact_dir / "triton"
+
         if triton_dir.exists():
             kernel_dirs.extend(
                 _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)
@@ -326,9 +378,20 @@ def _process_all_artifact_shapes(
 
 
 def _process_rank_directory(
-    rank_dir: Path, triton_cache_key: str, artifact_shape: Optional[str]
+    rank_dir: Path,
+    triton_cache_key: str,
+    artifact_compile_range: Optional[str],
+    triton_subpath: Optional[str] = None,
 ) -> List[Path]:
-    """Process a single rank directory."""
+    """Process a single rank directory.
+
+    Args:
+        rank_dir: Path to the rank directory
+        triton_cache_key: Triton cache key to search for
+        artifact_compile_range: Name of specific artifact_compile_range, or None for all
+        triton_subpath: Relative path from artifact_dir to triton's parent.
+            None means triton is directly under artifact_dir.
+    """
     if not (rank_dir.is_dir() and rank_dir.name.startswith("rank")):
         return []
 
@@ -336,20 +399,32 @@ def _process_rank_directory(
     if not backbone_dir.exists():
         return []
 
-    if artifact_shape:
-        return _process_specific_artifact_shape(
-            backbone_dir, artifact_shape, triton_cache_key
+    if artifact_compile_range:
+        return _process_specific_artifact_compile_range(
+            backbone_dir, artifact_compile_range, triton_cache_key, triton_subpath
         )
-    return _process_all_artifact_shapes(backbone_dir, triton_cache_key)
+    return _process_all_artifact_compile_ranges(
+        backbone_dir, triton_cache_key, triton_subpath
+    )
 
 
 def find_vllm_kernel_dirs(
     cache_dir: Path,
     vllm_hash: str,
     triton_cache_key: str,
-    artifact_shape: Optional[str] = None,
+    artifact_compile_range: Optional[str] = None,
+    triton_subpath: Optional[str] = None,
 ) -> List[Path]:
-    """Find kernel directories for new vLLM structure."""
+    """Find kernel directories for new vLLM structure.
+
+    Args:
+        cache_dir: Root cache directory
+        vllm_hash: vLLM hash identifier
+        triton_cache_key: Triton cache key to search for
+        artifact_compile_range: Name of specific artifact_compile_range, or None for all
+        triton_subpath: Relative path from artifact_dir to triton's parent.
+            None means triton is directly under artifact_dir.
+    """
     vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
     if not vllm_root_dir.exists():
         return []
@@ -357,7 +432,9 @@ def find_vllm_kernel_dirs(
     kernel_dirs = []
     for rank_dir in vllm_root_dir.iterdir():
         kernel_dirs.extend(
-            _process_rank_directory(rank_dir, triton_cache_key, artifact_shape)
+            _process_rank_directory(
+                rank_dir, triton_cache_key, artifact_compile_range, triton_subpath
+            )
         )
     return kernel_dirs
 
@@ -375,10 +452,13 @@ def get_kernel_directories(
     if mode == MODE_VLLM:
         if identifier.vllm_hash is None:
             raise ValueError("vllm_hash cannot be None for VLLM mode")
-        # For new vLLM, we might need to pass artifact_shape if available
-        # For now, search all artifact_shape directories
+        # Use artifact_compile_range and triton_subpath if available for precise lookup
         return find_vllm_kernel_dirs(
-            cache_dir, identifier.vllm_hash, identifier.hash_key
+            cache_dir,
+            identifier.vllm_hash,
+            identifier.hash_key,
+            identifier.artifact_compile_range,
+            identifier.triton_subpath,
         )
     return [cache_dir / identifier.hash_key]
 

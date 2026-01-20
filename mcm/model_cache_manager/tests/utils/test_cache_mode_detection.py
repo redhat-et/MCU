@@ -66,14 +66,14 @@ class TestCacheModeDetection(unittest.TestCase):
         self.assertEqual(mode, MODE_VLLM_LEGACY)
 
     def test_detect_vllm_new_cache_structure(self):
-        """Test detection of new vLLM cache structure with artifact_shape."""
+        """Test detection of new vLLM cache structure with artifact_compile_range."""
         # Create vLLM structure: torch_compile_cache/<hash>/rank_x_y/...
         vllm_dir = self.temp_dir / "vllm_new"
         torch_compile = vllm_dir / "torch_compile_cache"
         hash_dir = torch_compile / "some_vllm_hash"
         rank_dir = hash_dir / "rank_0_0"
         backbone_dir = rank_dir / "backbone"
-        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_0"
         triton_dir = artifact_dir / "triton"
         triton_dir.mkdir(parents=True)
 
@@ -102,7 +102,7 @@ class TestCacheModeDetection(unittest.TestCase):
 
         # Add new structure
         backbone_dir = rank_dir / "backbone"
-        artifact_dir = backbone_dir / "artifact_shape_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_0"
         triton_dir = artifact_dir / "triton"
         triton_dir.mkdir(parents=True)
 
@@ -118,7 +118,7 @@ class TestCacheModeDetection(unittest.TestCase):
         hash_dir = torch_compile / "4405297553"
         rank_dir = hash_dir / "rank_0_0"
         backbone_dir = rank_dir / "backbone"
-        artifact_dir = backbone_dir / "artifact_shape_None_subgraph_0"
+        artifact_dir = backbone_dir / "artifact_compile_range_None_subgraph_0"
         triton_dir = artifact_dir / "triton"
         triton_dir.mkdir(parents=True)
 
@@ -159,6 +159,110 @@ class TestCacheModeDetection(unittest.TestCase):
 
         mode = detect_cache_mode(incomplete_dir)
         self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_vllm_structure_multiple_hashes(self):
+        """Test detection with vLLM structure having multiple hash directories."""
+        cache_dir = self.temp_dir / "vllm_multi_hash"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
+
+        # Create multiple hash directories
+        for hash_name in ["hash1", "hash2"]:
+            hash_dir = torch_compile_dir / hash_name
+            rank_dir = hash_dir / "rank_0_0"
+            triton_cache = rank_dir / "triton_cache"
+            triton_cache.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_VLLM_LEGACY)
+
+    def test_detect_triton_structure_with_json_files(self):
+        """Test detection with triton cache structure containing JSON files."""
+        cache_dir = self.temp_dir / "triton_cache"
+        kernel_dir = cache_dir / "triton_kernel_abc123"
+        kernel_dir.mkdir(parents=True)
+
+        # Create a JSON file that looks like triton metadata
+        json_file = kernel_dir / "kernel_metadata.json"
+        json_file.write_text('{"name": "test_kernel"}')
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_empty_torch_compile_cache(self):
+        """Test detection with torch_compile_cache directory but no contents."""
+        cache_dir = self.temp_dir / "vllm_empty"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
+        torch_compile_dir.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_rank_dirs_not_starting_with_rank(self):
+        """Test detection with directories that don't start with 'rank'."""
+        cache_dir = self.temp_dir / "vllm_bad_rank"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
+        hash_dir = torch_compile_dir / "abc123def456"
+        not_rank_dir = hash_dir / "not_rank_dir"
+        triton_cache = not_rank_dir / "triton_cache"
+        triton_cache.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_case_sensitivity(self):
+        """Test detection is case sensitive for directory names."""
+        cache_dir = self.temp_dir / "vllm_case"
+        torch_compile_dir = cache_dir / "Torch_compile_cache"  # Wrong case
+        hash_dir = torch_compile_dir / "abc123def456"
+        rank_dir = hash_dir / "Rank_0_0"  # Wrong case
+        triton_cache = rank_dir / "triton_cache"
+        triton_cache.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_files_not_directories(self):
+        """Test detection when torch_compile_cache is a file, not directory."""
+        cache_dir = self.temp_dir / "vllm_file"
+        cache_dir.mkdir()
+
+        # Create torch_compile_cache as a file instead of directory
+        torch_compile_file = cache_dir / "torch_compile_cache"
+        torch_compile_file.write_text("not a directory")
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_vllm_structure_no_rank_dirs(self):
+        """Test detection with torch_compile_cache but no rank directories."""
+        cache_dir = self.temp_dir / "vllm_no_rank"
+        torch_compile_dir = cache_dir / "torch_compile_cache"
+        hash_dir = torch_compile_dir / "abc123def456"
+        # Create hash directory but no rank dirs
+        hash_dir.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_mixed_legacy_and_triton_vllm_takes_precedence(self):
+        """Test detection when both vllm-legacy and triton structures exist."""
+        cache_dir = self.temp_dir / "mixed_cache"
+
+        # Create vLLM legacy structure
+        torch_compile_dir = cache_dir / "torch_compile_cache"
+        hash_dir = torch_compile_dir / "abc123def456"
+        rank_dir = hash_dir / "rank_0_0"
+        triton_cache = rank_dir / "triton_cache"
+        triton_cache.mkdir(parents=True)
+
+        # Also create triton-like structure at root level
+        triton_kernel_dir = cache_dir / "triton_kernel_def789"
+        triton_kernel_dir.mkdir(parents=True)
+        json_file = triton_kernel_dir / "metadata.json"
+        json_file.write_text('{"name": "triton_kernel"}')
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_VLLM_LEGACY)
 
 
 if __name__ == "__main__":

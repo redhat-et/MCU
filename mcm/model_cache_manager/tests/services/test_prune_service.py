@@ -390,17 +390,17 @@ class TestPruningService(unittest.TestCase):
         return_value=1024,
     )
     @patch("model_cache_manager.services.prune.Confirm.ask")
-    def test_prune_vllm_with_artifact_shape(
+    def test_prune_vllm_with_artifact_compile_range(
         self, _mock_rich_confirm_ask: MagicMock, mock_delete_kernel: MagicMock
     ):
-        """Test pruning vLLM kernels with artifact_shape in primary key."""
-        # Create mock kernel data for new vLLM mode with artifact_shape
+        """Test pruning vLLM kernels with artifact_compile_range in primary key."""
+        # Create mock kernel data for new vLLM mode with artifact_compile_range
         kernel_with_shape = {
             "hash": "hash1",
             "triton_cache_key": "tck1",
             "vllm_hash": "vllm1",
             "rank_x_y": "0_0",
-            "artifact_shape": "1024x768",  # New vLLM structure includes this
+            "artifact_compile_range": "1024x768",  # New vLLM structure includes this
             "name": "kernel_one",
             "backend": "cuda",
             "arch": "ampere",
@@ -423,25 +423,25 @@ class TestPruningService(unittest.TestCase):
         ), patch.object(
             self.pruning_service.strategy, 'extract_identifiers_from_row'
         ) as mock_extract:
-            # Create a KernelIdentifier with artifact_shape
+            # Create a KernelIdentifier with artifact_compile_range
             identifier = create_kernel_identifier(
                 mode='vllm',
                 vllm_hash='vllm1',
                 triton_cache_key='tck1',
                 rank_x_y='0_0',
             )
-            identifier.artifact_shape = '1024x768'
+            identifier.artifact_compile_range = '1024x768'
             mock_extract.return_value = identifier
 
             stats = self.pruning_service.prune(
                 criteria, delete_ir_only=False, auto_confirm=True
             )
 
-            # Verify the identifier passed to delete includes artifact_shape
+            # Verify the identifier passed to delete includes artifact_compile_range
             self.assertEqual(mock_delete_kernel.call_count, 1)
             call_args = mock_delete_kernel.call_args[0]
             passed_identifier = call_args[0]
-            self.assertEqual(passed_identifier.artifact_shape, '1024x768')
+            self.assertEqual(passed_identifier.artifact_compile_range, '1024x768')
             self.assertEqual(passed_identifier.vllm_hash, 'vllm1')
             self.assertEqual(passed_identifier.hash_key, 'tck1')
             self.assertEqual(passed_identifier.rank_x_y, '0_0')

@@ -117,11 +117,11 @@ class TestVllmKernelOrm(unittest.TestCase):
             mock_stmt.on_conflict_do_update.return_value = mock_stmt
 
             rank_x_y = "rank_0_0"
-            artifact_shape = "artifact_shape_0"
+            artifact_compile_range = "artifact_compile_range_0"
             vllm_meta = VllmKernelMetadata(
                 vllm_hash=vllm_hash,
                 rank_x_y=rank_x_y,
-                artifact_shape=artifact_shape
+                artifact_compile_range=artifact_compile_range
             )
             VllmKernelOrm.upsert_from_dto(
                 self.mock_session, self.mock_kernel, cache_dir, vllm_meta
@@ -208,12 +208,12 @@ class TestVllmDatabase(unittest.TestCase):
             cache_dir = "/test/cache"
             vllm_hash = "test_hash"
             rank_x_y = "rank_0_0"
-            artifact_shape = "test_shape"
+            artifact_compile_range = "test_shape"
 
             vllm_meta = VllmKernelMetadata(
                 vllm_hash=vllm_hash,
                 rank_x_y=rank_x_y,
-                artifact_shape=artifact_shape
+                artifact_compile_range=artifact_compile_range
             )
             db.insert_kernel(self.mock_kernel, cache_dir, vllm_meta)
 
@@ -225,7 +225,7 @@ class TestVllmDatabase(unittest.TestCase):
             self.assertEqual(args[2], cache_dir)
             self.assertEqual(args[3].vllm_hash, vllm_hash)
             self.assertEqual(args[3].rank_x_y, rank_x_y)
-            self.assertEqual(args[3].artifact_shape, artifact_shape)
+            self.assertEqual(args[3].artifact_compile_range, artifact_compile_range)
             mock_session.commit.assert_called_once()
             mock_session.close.assert_called_once()
 
