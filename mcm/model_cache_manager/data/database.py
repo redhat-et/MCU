@@ -33,18 +33,18 @@ from .database_utils import create_file_orm_dict
 # Batch item format constants for vLLM kernels
 # (kernel, cache_dir, vllm_hash, rank_x_y)
 VLLM_LEGACY_BATCH_ITEM_LENGTH = 4
-# (kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
-VLLM_NEW_BATCH_ITEM_LENGTH = 6
+# (kernel, cache_dir, vllm_hash, rank_x_y, artifact_compile_range, best_config, triton_subpath)
+VLLM_NEW_BATCH_ITEM_LENGTH = 7
 
 # Kernel ID tuple length constants for database operations
 # (cache_dir, vllm_hash, triton_hash, rank_x_y)
 VLLM_LEGACY_KERNEL_ID_LENGTH = 4
-# (cache_dir, vllm_hash, triton_hash, rank_x_y, artifact_shape)
+# (cache_dir, vllm_hash, triton_hash, rank_x_y, artifact_compile_range)
 VLLM_NEW_KERNEL_ID_LENGTH = 5
 
 # Best config field names
-BEST_CONFIG_TRITON_HASH_KEY = 'triton_cache_hash'
-KERNEL_DICT_IS_BEST_KEY = 'is_best'
+BEST_CONFIG_TRITON_HASH_KEY = "triton_cache_hash"
+KERNEL_DICT_IS_BEST_KEY = "is_best"
 
 log = logging.getLogger(__name__)
 
@@ -160,7 +160,8 @@ class Database:
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in KernelOrm.__table__.columns
-            if col.name not in ("hash", "cache_dir") and col.name not in preserved_fields
+            if col.name not in ("hash", "cache_dir")
+            and col.name not in preserved_fields
         }
         session.execute(
             stmt.on_conflict_do_update(
@@ -359,7 +360,7 @@ class VllmDatabase:
         Args:
             k_data: A `Kernel` DTO containing the metadata.
             cache_dir: Root path of the vLLM cache
-            vllm_meta: vLLM-specific metadata (hash, rank, artifact_shape, etc.)
+            vllm_meta: vLLM-specific metadata (hash, rank, artifact_compile_range, etc.)
         """
         session = self.get_session()
 
@@ -371,7 +372,7 @@ class VllmDatabase:
                 vllm_meta,
             )
 
-        extra_args = {"artifact_shape": vllm_meta.artifact_shape}
+        extra_args = {"artifact_compile_range": vllm_meta.artifact_compile_range}
         if vllm_meta.best_config:
             extra_args["best_config"] = vllm_meta.best_config
 
@@ -381,17 +382,15 @@ class VllmDatabase:
             vllm_hash=vllm_meta.vllm_hash,
             rank_x_y=vllm_meta.rank_x_y,
             extra_args=extra_args,
-            error_prefix="New vLLM "
+            error_prefix="New vLLM ",
         )
         database_utils.handle_kernel_insert(session, operation, context)
 
-    def _prepare_vllm_batch_data(
-        self, batch: List[Tuple]
-    ) -> Tuple[List, List]:
+    def _prepare_vllm_batch_data(self, batch: List[Tuple]) -> Tuple[List, List]:
         """Prepare vLLM kernel IDs and file values for batch processing.
 
         Handles both old format (4 values) and new format
-        (6 values with artifact_shape and best_config).
+        (6 values with artifact_compile_range and best_config).
         """
         kernel_ids_to_clear = []
         file_values_list = []
@@ -401,12 +400,19 @@ class VllmDatabase:
             if len(item) == VLLM_LEGACY_BATCH_ITEM_LENGTH:
                 # Legacy format: (kernel, cache_dir, vllm_hash, rank_x_y)
                 k_data, cache_dir, vllm_hash, rank_x_y = item
-                artifact_shape = None
+                artifact_compile_range = None
             elif len(item) == VLLM_NEW_BATCH_ITEM_LENGTH:
                 # New format: (kernel, cache_dir, vllm_hash, rank_x_y,
-                # artifact_shape, best_config)
-                (k_data, cache_dir, vllm_hash, rank_x_y,
-                 artifact_shape, _best_config) = item
+                # artifact_compile_range, best_config, triton_subpath)
+                (
+                    k_data,
+                    cache_dir,
+                    vllm_hash,
+                    rank_x_y,
+                    artifact_compile_range,
+                    _best_config,
+                    _triton_subpath,
+                ) = item
             else:
                 raise ValueError(
                     f"Expected {VLLM_LEGACY_BATCH_ITEM_LENGTH} or "
@@ -414,25 +420,34 @@ class VllmDatabase:
                     f"got {len(item)}"
                 )
 
-            # For new structure, we need to include artifact_shape in the key
-            if artifact_shape is not None:
+            # For new structure, we need to include artifact_compile_range in the key
+            if artifact_compile_range is not None:
                 kernel_ids_to_clear.append(
-                    (cache_dir, vllm_hash, k_data.hash, rank_x_y, artifact_shape)
+                    (
+                        cache_dir,
+                        vllm_hash,
+                        k_data.hash,
+                        rank_x_y,
+                        artifact_compile_range,
+                    )
                 )
             else:
-                kernel_ids_to_clear.append((cache_dir, vllm_hash, k_data.hash, rank_x_y))
+                kernel_ids_to_clear.append(
+                    (cache_dir, vllm_hash, k_data.hash, rank_x_y)
+                )
 
             # Collect file values for bulk insert
             for f_dto in k_data.files:
                 file_val = create_file_orm_dict(
                     cache_dir, vllm_hash, k_data.hash, rank_x_y, f_dto
                 )
-                if artifact_shape is not None:
-                    file_val["artifact_shape"] = artifact_shape
+                if artifact_compile_range is not None:
+                    file_val["artifact_compile_range"] = artifact_compile_range
                 file_values_list.append(file_val)
 
         return kernel_ids_to_clear, file_values_list
 
+    # pylint: disable=too-many-locals
     def _upsert_vllm_kernel(
         self,
         session: SqlaSession,
@@ -443,15 +458,25 @@ class VllmDatabase:
         Args:
             session: Database session
             kernel_info: Tuple of (k_data, cache_dir, vllm_hash, rank_x_y) or
-                        (k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config)
+                    (k_data, cache_dir, vllm_hash, rank_x_y, artifact_compile_range,
+                     best_config, triton_subpath)
         """
         # Handle both legacy and new vLLM formats
         if len(kernel_info) == VLLM_LEGACY_BATCH_ITEM_LENGTH:
             k_data, cache_dir, vllm_hash, rank_x_y = kernel_info
-            artifact_shape = ""
+            artifact_compile_range = ""
             best_config = None
+            triton_subpath = None
         elif len(kernel_info) == VLLM_NEW_BATCH_ITEM_LENGTH:
-            k_data, cache_dir, vllm_hash, rank_x_y, artifact_shape, best_config = kernel_info
+            (
+                k_data,
+                cache_dir,
+                vllm_hash,
+                rank_x_y,
+                artifact_compile_range,
+                best_config,
+                triton_subpath,
+            ) = kernel_info
         else:
             raise ValueError(
                 f"Expected {VLLM_LEGACY_BATCH_ITEM_LENGTH} or "
@@ -463,21 +488,22 @@ class VllmDatabase:
         vllm_meta = VllmKernelMetadata(
             vllm_hash=vllm_hash,
             rank_x_y=rank_x_y,
-            artifact_shape=artifact_shape or "",
-            best_config=best_config
+            artifact_compile_range=artifact_compile_range or "",
+            best_config=best_config,
+            triton_subpath=triton_subpath,
         )
         kernel_values = VllmKernelOrm.get_vllm_kernel_values(
             k_data, cache_dir, vllm_meta
         )
 
         stmt = sqlite_insert(VllmKernelOrm).values(kernel_values)
-        # For new vLLM structure, artifact_shape is part of the primary key
+        # For new vLLM structure, artifact_compile_range is part of the primary key
         primary_key_fields = [
             "cache_dir",
             "vllm_hash",
             "triton_cache_key",
             "rank_x_y",
-            "artifact_shape",  # Always included in primary key for VllmKernelOrm
+            "artifact_compile_range",  # Always included in primary key for VllmKernelOrm
         ]
         # Preserve runtime statistics during updates
         # These fields should not be overwritten during re-indexing
@@ -503,7 +529,7 @@ class VllmDatabase:
         Args:
             kernels_data: List of tuples containing either:
                 - (Kernel, cache_dir, vllm_hash, rank_x_y) for legacy format or
-                - (Kernel, cache_dir, vllm_hash, rank_x_y, artifact_shape,
+                - (Kernel, cache_dir, vllm_hash, rank_x_y, artifact_compile_range,
                   best_config) for new format
             batch_size: Number of kernels to insert per transaction
 
@@ -528,23 +554,23 @@ class VllmDatabase:
 
                 # Delete all files for batch kernels in one query
                 if kernel_ids_to_clear:
-                    # Check if we have artifact_shape in the data
-                    has_artifact_shape = (
+                    # Check if we have artifact_compile_range in the data
+                    has_artifact_compile_range = (
                         len(kernel_ids_to_clear[0]) == VLLM_NEW_KERNEL_ID_LENGTH
                     )
-                    if kernel_ids_to_clear and has_artifact_shape:
-                        # New structure with artifact_shape
+                    if kernel_ids_to_clear and has_artifact_compile_range:
+                        # New structure with artifact_compile_range
                         session.query(VllmKernelFileOrm).filter(
                             tuple_(
                                 VllmKernelFileOrm.cache_dir,
                                 VllmKernelFileOrm.vllm_hash,
                                 VllmKernelFileOrm.triton_cache_key,
                                 VllmKernelFileOrm.rank_x_y,
-                                VllmKernelFileOrm.artifact_shape,
+                                VllmKernelFileOrm.artifact_compile_range,
                             ).in_(kernel_ids_to_clear)
                         ).delete(synchronize_session=False)
                     else:
-                        # Legacy structure without artifact_shape
+                        # Legacy structure without artifact_compile_range
                         session.query(VllmKernelFileOrm).filter(
                             tuple_(
                                 VllmKernelFileOrm.cache_dir,
@@ -630,7 +656,9 @@ class VllmDatabase:
                             triton_cache_hash = best_config_data.get(
                                 BEST_CONFIG_TRITON_HASH_KEY
                             )
-                            best_config_cache[kernel_orm.best_config] = triton_cache_hash
+                            best_config_cache[kernel_orm.best_config] = (
+                                triton_cache_hash
+                            )
                         except (json.JSONDecodeError, TypeError):
                             best_config_cache[kernel_orm.best_config] = None
 
