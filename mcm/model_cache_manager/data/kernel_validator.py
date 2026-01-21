@@ -91,7 +91,6 @@ def is_kernel_related(data: Dict[str, Any]) -> bool:
         "num_stages",
         "debug",
         "shared",
-        "cluster_dims",
     ]
 
     for field in kernel_specific_fields:

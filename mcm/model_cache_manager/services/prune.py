@@ -244,16 +244,16 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
         """Get kernel record from database using strategy pattern."""
         config = self.strategy.config
         if self.mode == MODE_VLLM:
-            # Build the primary key tuple based on whether artifact_shape is present
+            # Build the primary key tuple based on whether artifact_compile_range is present
             pk_tuple = [
                 str(self.cache_dir),
                 identifier.vllm_hash,
                 identifier.hash_key,
                 identifier.rank_x_y,
             ]
-            # Add artifact_shape if it exists (for new vLLM structure)
-            if identifier.artifact_shape is not None:
-                pk_tuple.append(identifier.artifact_shape)
+            # Add artifact_compile_range if it exists (for new vLLM structure)
+            if identifier.artifact_compile_range is not None:
+                pk_tuple.append(identifier.artifact_compile_range)
 
             return session.get(config.orm_model, tuple(pk_tuple))
         # For Triton: (hash, cache_dir)
@@ -307,13 +307,16 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
                 config.file_orm_model.rel_path.in_(ir_file_names),
             ]
 
-            # Add artifact_shape filter if it exists (for new vLLM structure)
-            if identifier.artifact_shape is not None:
+            # Add artifact_compile_range filter if it exists (for new vLLM structure)
+            if identifier.artifact_compile_range is not None:
                 filter_conditions.append(
-                    config.file_orm_model.artifact_shape == identifier.artifact_shape
+                    config.file_orm_model.artifact_compile_range
+                    == identifier.artifact_compile_range
                 )
 
-            ir_rows = session.query(config.file_orm_model).filter(*filter_conditions).all()
+            ir_rows = (
+                session.query(config.file_orm_model).filter(*filter_conditions).all()
+            )
         else:
             ir_rows = (
                 session.query(config.file_orm_model)

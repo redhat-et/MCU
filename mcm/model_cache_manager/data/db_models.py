@@ -361,7 +361,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
     """
     SQLAlchemy ORM model for a new vLLM Triton kernel.
     Uses a composite primary key of (cache_dir, vllm_hash, triton_cache_key,
-    rank_x_y, artifact_shape).
+    rank_x_y, artifact_compile_range).
     """
 
     __tablename__ = "vllm_kernels"
@@ -370,10 +370,13 @@ class VllmKernelOrm(Base, BaseKernelMixin):
     vllm_hash: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     triton_cache_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     rank_x_y: Mapped[str] = mapped_column(String, primary_key=True, index=True)
-    artifact_shape: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    artifact_compile_range: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     best_config: Mapped[Optional[str]] = mapped_column(
         String
     )  # JSON string for best config
+    triton_subpath: Mapped[Optional[str]] = mapped_column(
+        String
+    )  # Relative path from artifact_dir to triton's parent (e.g., "torchinductor_user")
 
     files: Mapped[List["VllmKernelFileOrm"]] = relationship(
         "VllmKernelFileOrm",
@@ -416,8 +419,9 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 "vllm_hash": vllm_meta.vllm_hash,
                 "triton_cache_key": k_data.hash,
                 "rank_x_y": vllm_meta.rank_x_y,
-                "artifact_shape": vllm_meta.artifact_shape,
+                "artifact_compile_range": vllm_meta.artifact_compile_range,
                 "best_config": vllm_meta.best_config,
+                "triton_subpath": vllm_meta.triton_subpath,
             }
         )
         return kernel_values
@@ -447,7 +451,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 "rank_x_y",
                 "vllm_hash",
                 "triton_cache_key",
-                "artifact_shape",
+                "artifact_compile_range",
             )
         }
         stmt = stmt.on_conflict_do_update(
@@ -456,7 +460,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 "rank_x_y",
                 "vllm_hash",
                 "triton_cache_key",
-                "artifact_shape",
+                "artifact_compile_range",
             ],
             set_=update_dict,
         )
@@ -475,7 +479,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
             VllmKernelFileOrm.vllm_hash == vllm_meta.vllm_hash,
             VllmKernelFileOrm.triton_cache_key == k_data.hash,
             VllmKernelFileOrm.rank_x_y == vllm_meta.rank_x_y,
-            VllmKernelFileOrm.artifact_shape == vllm_meta.artifact_shape,
+            VllmKernelFileOrm.artifact_compile_range == vllm_meta.artifact_compile_range,
         ).delete(synchronize_session="fetch")
         log.debug(
             "Deleted existing files for cache_dir %s vllm_hash %s "
@@ -492,7 +496,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 vllm_hash=vllm_meta.vllm_hash,
                 triton_cache_key=k_data.hash,
                 rank_x_y=vllm_meta.rank_x_y,
-                artifact_shape=vllm_meta.artifact_shape,
+                artifact_compile_range=vllm_meta.artifact_compile_range,
                 type=f_dto.file_type,
                 rel_path=f_dto.path.name,
                 size=f_dto.size,
@@ -582,7 +586,7 @@ class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
     vllm_hash: Mapped[str] = mapped_column(String)
     triton_cache_key: Mapped[str] = mapped_column(String)
     rank_x_y: Mapped[str] = mapped_column(String)
-    artifact_shape: Mapped[str] = mapped_column(String)
+    artifact_compile_range: Mapped[str] = mapped_column(String)
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -592,7 +596,7 @@ class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
                 "vllm_kernels.vllm_hash",
                 "vllm_kernels.triton_cache_key",
                 "vllm_kernels.rank_x_y",
-                "vllm_kernels.artifact_shape",
+                "vllm_kernels.artifact_compile_range",
             ],
             ondelete="CASCADE",
         ),
