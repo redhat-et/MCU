@@ -46,7 +46,7 @@ jobs:
       - name: Set push flag
         id: set-push
         run: |
-          if [ ${{ github.event_name }} == 'push' ] && [ ${{ github.repository_owner }} == 'redhat-et' ]; then
+          if [[ (${{ github.event_name }} == 'push' || ${{ github.event_name }} == 'workflow_dispatch') && ${{ github.repository_owner }} == 'redhat-et' ]]; then
             echo "push_flag=true" >> "$GITHUB_OUTPUT"
           else
             echo "push_flag=false" >> "$GITHUB_OUTPUT"
@@ -156,7 +156,7 @@ jobs:
       contents: read
       packages: write
       id-token: write # needed for signing the images with GitHub OIDC Token
-    if: github.event_name == 'push' && github.repository_owner == 'redhat-et'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.repository_owner == 'redhat-et'
 
     steps:
       - name: Install Cosign
