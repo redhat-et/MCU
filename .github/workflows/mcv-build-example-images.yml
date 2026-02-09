@@ -81,6 +81,8 @@ jobs:
             "vector-add-cache-rocm|mcv/example/vector-add-cache-rocm"
             "vector-add-cache-cuda|mcv/example/vector-add-cache"
             "vllm-example|mcv/example/vllm-cache"
+            "llama-binary-cache|mcv/example/llama-binary-cache"
+            "qwen-binary-cache|mcv/example/qwen-binary-cache"
           )
 
           for e in "${images[@]}"; do
@@ -114,7 +116,7 @@ jobs:
         run: |
             set -euo pipefail
             repo="${REGISTRY}/${ORG}/${REPO}"
-            images=(vector-add-cache-rocm vector-add-cache-cuda vllm-example)
+            images=(vector-add-cache-rocm vector-add-cache-cuda vllm-example llama-binary-cache qwen-binary-cache)
             tags_output=""
             digests_output=""
 
