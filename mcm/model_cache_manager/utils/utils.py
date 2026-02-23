@@ -198,8 +198,12 @@ def iter_artifact_compile_range_dirs(backbone_dir: Path):
 
 
 def _has_artifact_compile_range_with_triton(backbone_dir: Path) -> bool:
-    """Check if backbone directory has artifact_compile_range subdirectories with triton."""
+    """Check if backbone directory has artifact_compile_range artifacts (unpacked or binary)."""
     for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
+        # Binary artifact (file) — contains packed triton data
+        if artifact_dir.is_file():
+            return True
+        # Unpacked artifact (directory) — check for triton subdirectory
         triton_dir = artifact_dir / "triton"
         if triton_dir.exists():
             return True
