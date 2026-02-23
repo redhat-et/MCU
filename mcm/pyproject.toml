@@ -10,17 +10,20 @@ authors         = [{name = "Alessandro Sangiorgi", email = "asangior@redhat.com"
 requires-python = ">=3.9"
 
 dependencies = [
-  "triton",
   "rich>=13.7",
   "typer[all]",
   "structlog",
   "pydantic>=2",
   "pydantic-settings>=2",
   "sqlalchemy>=2.0.40",
+  "vllm==0.15.1",
 ]
 
 [project.scripts]
 mcm = "model_cache_manager.cli.main:run"
+
+[tool.pylint."messages_control"]
+disable = ["import-error"]
 
 [tool.setuptools]
 package-dir = {"" = "."}
