@@ -16,7 +16,7 @@ from ..plugins.base import KernelBackendPlugin
 log = logging.getLogger(__name__)
 
 
-class KernelTarget(BaseModel):
+class KernelTarget(BaseModel):  # pylint: disable=too-few-public-methods
     """Validation model for the 'target' field of kernel metadata."""
 
     backend: str = ""
@@ -24,7 +24,7 @@ class KernelTarget(BaseModel):
     warp_size: int = 0
 
 
-class KernelMetadata(BaseModel):
+class KernelMetadata(BaseModel):  # pylint: disable=too-few-public-methods
     """
     Pydantic model for validating kernel metadata.
 
