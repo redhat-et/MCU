@@ -88,15 +88,19 @@ Kernel/vLLM model. The details can be found in
 
 ### vLLM Binary Cache Support
 
-MCV supports both legacy (triton cache) and new (binary cache) vLLM formats:
+MCV supports all vLLM cache formats:
 
 1. **vLLM Triton Cache Format** (legacy) - Stores `triton_cache/` and
    `inductor_cache/` inside rank directories
-2. **vLLM Binary Cache Format** (new) - Stores prefix directories
-   (e.g., `backbone/`) inside rank directories
+2. **vLLM Binary Cache Format** (default) - Stores compiled artifacts in prefix
+   directories (e.g., `backbone/`) with embedded Triton kernels
+3. **vLLM AOT Cache Format** (advanced) - Uses `VLLM_USE_MEGA_AOT_ARTIFACT=true`
+   for fully self-contained portable artifacts
 
-For detailed information about vLLM binary cache support, see:
-[vllm-binary-cache.md](./docs/vllm-binary-cache.md)
+Both binary and AOT formats use identical structure and are automatically detected.
+
+For detailed information about vLLM cache formats, torch.compile architecture,
+and best practices, see [vllm-binary-cache.md](./docs/vllm-binary-cache.md)
 
 ### Triton Cache Example
 

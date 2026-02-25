@@ -2,14 +2,16 @@
 
 ## Overview
 
-MCV supports two vLLM cache formats:
+MCV supports three vLLM cache formats:
 
 1. **vLLM Triton Cache Format** (legacy) - Stores `triton_cache/` and
    `inductor_cache/` inside rank directories
-2. **vLLM Binary Cache Format** (new) - Stores prefix directories
-   (e.g., `backbone/`) inside rank directories
+2. **vLLM Binary Cache Format** (default) - Stores compiled artifacts in prefix
+   directories with embedded Triton kernels
+3. **vLLM AOT Cache Format** (advanced) - Uses `VLLM_USE_MEGA_AOT_ARTIFACT=true`
+   for fully self-contained portable artifacts
 
-Both formats share the same top-level structure:
+All formats share the same top-level structure:
 `torch_compile_cache/{hash}/rank_{rank}_{dp_rank}/`
 
 The key differences are **inside the rank directory**:
@@ -18,10 +20,92 @@ The key differences are **inside the rank directory**:
   subdirectories with unpacked artifacts
 - **Binary format**: Contains prefix directories
   (e.g., `backbone/`, `eagle_head/`) with `cache_key_factors.json`
-  and artifacts that can be either binary files or unpacked directories
+  and binary artifacts containing embedded Triton kernels
+- **AOT format**: Identical structure to binary format, but uses PyTorch's
+  `AOTCompiledArtifact` serialization (indicated by
+  `VLLM_USE_MEGA_AOT_ARTIFACT: true` in `cache_key_factors.json`)
 
-This document describes the **vLLM Binary Cache Format** introduced in recent
-versions of vLLM.
+This document describes the **vLLM Binary and AOT Cache Formats** and how
+torch.compile caching works with MCV.
+
+## Torch Compile Architecture
+
+### How vLLM Uses torch.compile
+
+When vLLM is configured with `VLLM_TORCH_COMPILE_LEVEL=1`, it uses PyTorch's
+`torch.compile` with TorchInductor backend to optimize model execution:
+
+```text
+Model Code → torch.compile → TorchInductor → Triton/CUDA Kernels → GPU Execution
+```
+
+**First Run (Compilation)**:
+
+1. vLLM traces the model with Dynamo
+2. TorchInductor compiles the graph
+3. Triton generates optimized GPU kernels → `/tmp/torchinductor_root/`
+4. vLLM saves artifacts using `standalone_compile().save(format="binary")`
+5. **PyTorch bundles the Triton kernels into the artifacts**
+6. Complete cache saved to `~/.cache/vllm/torch_compile_cache/`
+
+**Subsequent Runs (Cache Hit)**:
+
+1. vLLM loads artifacts from `~/.cache/vllm/torch_compile_cache/`
+2. **PyTorch extracts embedded Triton kernels → `/tmp/torchinductor_root/`**
+3. Execution resumes using extracted kernels (~10-20s vs 3-5min compilation)
+
+### Binary vs AOT Formats
+
+Both binary and AOT formats bundle Triton kernels in the artifacts, but differ
+in serialization:
+
+**Binary Format** (default):
+
+- Uses PyTorch `standalone_compile().save(format="binary")`
+- Environment: `VLLM_USE_MEGA_AOT_ARTIFACT=false` (default)
+- Good for same PyTorch version deployments
+- Typical size: ~95MB for small models
+
+**AOT Format** (advanced):
+
+- Uses PyTorch `AOTCompiledArtifact.serialize()`
+- Environment: `VLLM_USE_MEGA_AOT_ARTIFACT=true`
+- More portable across PyTorch versions (requires 2.10+)
+- Includes bundled AOT autograd cache
+- Typical size: ~92MB for small models
+
+**Important**: From MCV's perspective, both formats are **structurally identical**
+and use the same detection and packaging logic.
+
+### The /tmp Cache Directory
+
+During compilation and execution, PyTorch creates temporary files:
+
+```text
+/tmp/torchinductor_root/
+├── triton/0/{hash}/
+│   ├── triton_.cubin    # Compiled GPU binary (ELF)
+│   ├── triton_.source   # Triton source code
+│   ├── triton_.ttir     # Triton IR
+│   └── triton_.ptx      # PTX assembly
+├── o7/, dp/, .../       # Python kernel cache
+└── aotautograd/         # AOT autograd cache
+```
+
+**Size**: ~16MB for small models
+
+**Lifecycle**:
+
+- **First run**: Created during compilation
+- **Cache hit**: Extracted from embedded artifacts
+- **Cleanup**: Cleared on reboot (tmpfs) or manual deletion
+- **Recreation**: Automatic on every vLLM start
+
+**Key Insight**: This directory is **NOT needed for cache portability**.
+The Triton kernels are already embedded in the binary artifacts (verified by
+finding 42 ELF headers in a 5.3MB artifact file).
+
+**MCV does NOT capture `/tmp`** - kernels auto-extract at runtime (~2 seconds).
 
 ## Binary Cache Format
 
@@ -438,6 +522,252 @@ To migrate from vLLM triton cache format to vLLM binary cache format:
 3. Run model warmup to generate new binary cache
 4. Package new cache with MCV (automatically detected)
 5. Both vLLM cache formats are supported, no breaking changes
+
+## Practical Guide
+
+### Generating a Cache
+
+**Environment Setup**:
+
+```bash
+export VLLM_TORCH_COMPILE_MODE=vllm-compile
+export VLLM_TORCH_COMPILE_LEVEL=1
+
+# For binary format (default):
+export VLLM_COMPILE_CACHE_SAVE_FORMAT=binary
+export VLLM_USE_MEGA_AOT_ARTIFACT=false  # or omit (default)
+
+# For AOT format (more portable):
+export VLLM_COMPILE_CACHE_SAVE_FORMAT=binary
+export VLLM_USE_MEGA_AOT_ARTIFACT=true  # requires PyTorch 2.10+
+```
+
+**Run vLLM Warmup**:
+
+```bash
+vllm serve my-model --tensor-parallel-size 1
+
+# Make sample requests to trigger compilation:
+curl http://localhost:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "my-model", "prompt": "Hello", "max_tokens": 100}'
+```
+
+**Verify Cache**:
+
+```bash
+ls -lh ~/.cache/vllm/torch_compile_cache/
+# Should show a 10-char hash directory (e.g., 8d0a361fbc)
+
+# Check cache contents:
+find ~/.cache/vllm/torch_compile_cache/ -type f | head
+```
+
+### Packaging with MCV
+
+**Create Container Image**:
+
+```bash
+mcv -c \
+  -d ~/.cache/vllm/torch_compile_cache/{hash} \
+  -i quay.io/myorg/my-model-cache:v1
+```
+
+**Verify Image Labels**:
+
+```bash
+skopeo inspect containers-storage:quay.io/myorg/my-model-cache:v1 \
+  | jq '.Labels'
+
+# Expected labels:
+# {
+#   "cache.vllm.image/cache-size-bytes": "95000000",
+#   "cache.vllm.image/entry-count": "1",
+#   "cache.vllm.image/format": "binary",
+#   "cache.vllm.image/summary": "{\"targets\":[{\"backend\":\"cuda\",...}]}"
+# }
+```
+
+### Using a Cached Image
+
+**Extract Cache**:
+
+```bash
+mcv -e -i quay.io/myorg/my-model-cache:v1
+
+# MCV extracts to: ~/.cache/vllm/torch_compile_cache/{hash}/
+```
+
+**Start vLLM**:
+
+```bash
+# vLLM automatically detects and uses the cache
+vllm serve my-model --tensor-parallel-size 1
+
+# Look for log message:
+# INFO: Directly load the compiled graph(s) from the cache, took X.X s
+```
+
+### Cache Compatibility
+
+A cache is compatible if:
+
+1. **GPU architecture** matches (check: `nvidia-smi --query-gpu=compute_cap`)
+2. **CUDA/ROCm version** compatible (check: `nvcc --version` or `rocm-smi`)
+3. **PyTorch version** compatible
+4. **Model code** unchanged (code hash must match)
+5. **vLLM configuration** matches (TP size, compile level, etc.)
+
+**Check Compatibility**:
+
+```bash
+# View cache metadata:
+cat ~/.cache/vllm/torch_compile_cache/*/rank_0_0/*/cache_key_factors.json \
+  | jq '{target: .env.VLLM_TARGET_DEVICE, cuda: .env.VLLM_MAIN_CUDA_VERSION}'
+
+# Compare with system:
+nvidia-smi
+# or
+rocm-smi
+```
+
+## Troubleshooting
+
+### Cache Not Being Used
+
+**Symptom**: vLLM recompiles on every start despite having a cache
+
+**Common Causes**:
+
+1. **Hash mismatch** - Configuration or environment changed
+2. **Incompatible GPU** - Different architecture (e.g., sm_75 vs sm_80)
+3. **PyTorch version** - Binary format sensitive to PyTorch version
+4. **Model code changed** - Code hash no longer matches
+
+**Debug Steps**:
+
+```bash
+# 1. Check if cache exists
+ls ~/.cache/vllm/torch_compile_cache/
+
+# 2. Enable debug logging
+export VLLM_LOGGING_LEVEL=DEBUG
+
+# 3. Check for hash mismatch in logs
+grep "cache" vllm.log | grep -i "hash\|miss"
+
+# 4. Verify GPU compatibility
+python -c "import torch; print(torch.cuda.get_device_capability())"
+```
+
+### Slow Startup with Cache
+
+**Symptom**: vLLM takes 20+ seconds to start with cache
+
+**Normal Behavior**: 10-20 seconds for kernel extraction from artifacts is expected
+
+**If Slower**:
+
+- Check disk I/O performance: `iostat -x 1`
+- Verify `/tmp` is not on slow storage (NFS, etc.)
+- Consider using `tmpfs` for `/tmp`: `df -h /tmp`
+
+### Missing Kernels Error
+
+**Symptom**: Runtime errors about missing Triton kernels
+
+**Causes**:
+
+1. Corrupted artifacts
+2. Incomplete cache (warmup didn't cover all batch sizes)
+3. Disk space issues during generation
+
+**Solutions**:
+
+```bash
+# 1. Delete and regenerate cache
+rm -rf ~/.cache/vllm/torch_compile_cache/*
+
+# 2. Verify disk space
+df -h ~/.cache/vllm/
+
+# 3. Check artifact integrity
+file ~/.cache/vllm/torch_compile_cache/*/rank_0_0/*/artifact_*
+# Should show: "data" (binary format)
+```
+
+### AOT Format Issues
+
+**Symptom**: AOT artifacts fail to load
+
+**Requirements**:
+
+- PyTorch 2.10.0 or later
+- `VLLM_USE_MEGA_AOT_ARTIFACT=true`
+- `VLLM_USE_STANDALONE_COMPILE=true`
+
+**Verify**:
+
+```bash
+# Check PyTorch version
+python -c "import torch; print(torch.__version__)"
+
+# Verify AOT flag in cache
+grep "VLLM_USE_MEGA_AOT_ARTIFACT" \
+  ~/.cache/vllm/torch_compile_cache/*/rank_0_0/*/cache_key_factors.json
+```
+
+## Advanced Topics
+
+### Multi-GPU Caching
+
+For tensor parallelism or pipeline parallelism:
+
+```text
+torch_compile_cache/{hash}/
+├── rank_0_0/    # First tensor parallel rank
+├── rank_0_1/    # Second tensor parallel rank
+├── rank_1_0/    # First pipeline parallel rank
+└── rank_1_1/    # Second pipeline + tensor parallel rank
+```
+
+MCV captures all rank directories. Extract the entire hash directory for
+multi-GPU deployments.
+
+### Multiple Model Components
+
+Models with speculative decoding have multiple components:
+
+```text
+rank_0_0/
+├── backbone/        # Main model
+│   └── artifact_*
+└── eagle_head/      # Draft model for speculation
+    └── artifact_*
+```
+
+MCV captures all prefix directories automatically.
+
+### Cache Size Optimization
+
+**Typical Sizes**:
+
+- Small models (< 1B params): 50-100 MB
+- Medium models (1-10B params): 100-500 MB
+- Large models (10B+ params): 500 MB - 2 GB
+
+**Factors Affecting Size**:
+
+- Number of compiled ranges (batch sizes)
+- Number of layers
+- Triton kernel count
+- Autotune configurations
+
+**Reduce Size**:
+
+- Use fewer compile ranges: `VLLM_COMPILE_RANGES=[128,512]` vs default
+- Binary format is smaller than unpacked
+- AOT format is similar to binary
 
 ## See Also
 
