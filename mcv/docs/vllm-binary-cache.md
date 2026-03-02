@@ -8,8 +8,11 @@ MCV supports three vLLM cache formats:
    `inductor_cache/` inside rank directories
 2. **vLLM Binary Cache Format** (default) - Stores compiled artifacts in prefix
    directories with embedded Triton kernels
-3. **vLLM AOT Cache Format** (advanced) - Uses `VLLM_USE_MEGA_AOT_ARTIFACT=true`
-   for fully self-contained portable artifacts
+3. **vLLM AOT Artifact Format** (advanced) - Uses `VLLM_USE_MEGA_AOT_ARTIFACT=true`
+   for AOTCompiledArtifact serialization (requires PyTorch 2.10+)
+
+**Not Supported**: MCV does **not** support `VLLM_USE_AOT_COMPILE=1` workflow,
+which uses the `torch_aot_compile/` directory instead of `torch_compile_cache/`.
 
 All formats share the same top-level structure:
 `torch_compile_cache/{hash}/rank_{rank}_{dp_rank}/`
@@ -21,20 +24,25 @@ The key differences are **inside the rank directory**:
 - **Binary format**: Contains prefix directories
   (e.g., `backbone/`, `eagle_head/`) with `cache_key_factors.json`
   and binary artifacts containing embedded Triton kernels
-- **AOT format**: Identical structure to binary format, but uses PyTorch's
-  `AOTCompiledArtifact` serialization (indicated by
-  `VLLM_USE_MEGA_AOT_ARTIFACT: true` in `cache_key_factors.json`)
+- **AOT artifact format**: Identical directory structure to binary format, but
+  uses PyTorch's `AOTCompiledArtifact` serialization for the artifact files
+  (indicated by `VLLM_USE_MEGA_AOT_ARTIFACT: true` in `cache_key_factors.json`)
 
-This document describes the **vLLM Binary and AOT Cache Formats** and how
+This document describes the **vLLM Binary and AOT Artifact Formats** and how
 torch.compile caching works with MCV.
+
+**Note**: This document covers compilation mode 3 (`VLLM_COMPILE`) which uses
+`~/.cache/vllm/torch_compile_cache/`. There is a separate vLLM feature called
+`VLLM_USE_AOT_COMPILE` that uses `torch_aot_compile/` directory, but MCV does
+not currently support that workflow.
 
 ## Torch Compile Architecture
 
 ### How vLLM Uses torch.compile
 
-When vLLM is configured with `VLLM_TORCH_COMPILE_LEVEL=1` (not set by default),
-it uses PyTorch's `torch.compile` with TorchInductor backend to optimize model
-execution:
+When vLLM is configured with compilation mode 3 via
+`--compilation-config '{"mode": 3}'` (not enabled by default), it uses PyTorch's
+`torch.compile` with TorchInductor backend to optimize model execution:
 
 ```text
 Model Code → torch.compile → TorchInductor → Triton/CUDA Kernels → GPU Execution
@@ -55,26 +63,33 @@ Model Code → torch.compile → TorchInductor → Triton/CUDA Kernels → GPU E
 2. **PyTorch extracts embedded Triton kernels → `/tmp/torchinductor_$USER`**
 3. Execution resumes using extracted kernels (~10-20s vs 3-5min compilation)
 
-### Binary vs AOT Formats
+### Binary vs AOT Artifact Serialization
 
-Both binary and AOT formats bundle Triton kernels in the artifacts, but differ
-in serialization:
+Both binary and AOT artifact formats bundle Triton kernels in the artifacts and
+use the same `torch_compile_cache/` directory structure. They only differ in
+how the artifact files are serialized:
 
-**Binary Format** (default):
+**Binary Artifact Serialization** (default):
 
 - Uses PyTorch `standalone_compile().save(format="binary")`
 - Environment: `VLLM_USE_MEGA_AOT_ARTIFACT=false` (default)
 - Good for same PyTorch version deployments
+- Typical artifact size: ~95MB for small models
 
-**AOT Format** (advanced):
+**AOT Artifact Serialization** (advanced):
 
 - Uses PyTorch `AOTCompiledArtifact.serialize()`
 - Environment: `VLLM_USE_MEGA_AOT_ARTIFACT=true`
 - More portable across PyTorch versions (requires 2.10+)
 - Includes bundled AOT autograd cache
+- Typical artifact size: ~92MB for small models
 
 **Important**: From MCV's perspective, both formats are **structurally identical**
-and use the same detection and packaging logic.
+and use the same detection and packaging logic. They both use:
+
+```text
+~/.cache/vllm/torch_compile_cache/{hash}/rank_{rank}_{dp_rank}/
+```
 
 ### The /tmp Cache Directory
 
@@ -527,9 +542,6 @@ To migrate from vLLM triton cache format to vLLM binary cache format:
 **Environment Setup**:
 
 ```bash
-export VLLM_TORCH_COMPILE_MODE=vllm-compile
-export VLLM_TORCH_COMPILE_LEVEL=1
-
 # For binary format (default):
 export VLLM_COMPILE_CACHE_SAVE_FORMAT=binary
 export VLLM_USE_MEGA_AOT_ARTIFACT=false  # or omit (default)
@@ -542,13 +554,25 @@ export VLLM_USE_MEGA_AOT_ARTIFACT=true  # requires PyTorch 2.10+
 **Run vLLM Warmup**:
 
 ```bash
-vllm serve my-model --tensor-parallel-size 1
+# Enable compilation with mode 3 (VLLM_COMPILE) for cache generation
+vllm serve my-model \
+  --compilation-config '{"mode": 3}' \
+  --tensor-parallel-size 1
+
+# Alternatively, use the named mode:
+# vllm serve my-model --compilation-config '{"mode": "VLLM_COMPILE"}' --tensor-parallel-size 1
 
 # Make sample requests to trigger compilation:
 curl http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "my-model", "prompt": "Hello", "max_tokens": 100}'
 ```
+
+**Note**: Mode 3 (VLLM_COMPILE) is required for cache generation. Other modes:
+
+- Mode 0: No compilation (default)
+- Mode 1: Standard torch.compile
+- Mode 2: Single Dynamo trace
 
 **Verify Cache**:
 
@@ -691,14 +715,15 @@ file ~/.cache/vllm/torch_compile_cache/*/rank_0_0/*/artifact_*
 # Should show: "data" (binary format)
 ```
 
-### AOT Format Issues
+### AOT Artifact Serialization Issues
 
-**Symptom**: AOT artifacts fail to load
+**Symptom**: AOT artifacts fail to load (when using `VLLM_USE_MEGA_AOT_ARTIFACT=true`)
 
 **Requirements**:
 
 - PyTorch 2.10.0 or later
 - `VLLM_USE_MEGA_AOT_ARTIFACT=true`
+- Compilation mode 3 (`--compilation-config '{"mode": 3}'`)
 
 **Verify**:
 
