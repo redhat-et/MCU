@@ -32,8 +32,9 @@ torch.compile caching works with MCV.
 
 ### How vLLM Uses torch.compile
 
-When vLLM is configured with `VLLM_TORCH_COMPILE_LEVEL=1`, it uses PyTorch's
-`torch.compile` with TorchInductor backend to optimize model execution:
+When vLLM is configured with `VLLM_TORCH_COMPILE_LEVEL=1` (not set by default),
+it uses PyTorch's `torch.compile` with TorchInductor backend to optimize model
+execution:
 
 ```text
 Model Code → torch.compile → TorchInductor → Triton/CUDA Kernels → GPU Execution
@@ -43,7 +44,7 @@ Model Code → torch.compile → TorchInductor → Triton/CUDA Kernels → GPU E
 
 1. vLLM traces the model with Dynamo
 2. TorchInductor compiles the graph
-3. Triton generates optimized GPU kernels → `/tmp/torchinductor_root/`
+3. Triton generates optimized GPU kernels → `/tmp/torchinductor_$USER`
 4. vLLM saves artifacts using `standalone_compile().save(format="binary")`
 5. **PyTorch bundles the Triton kernels into the artifacts**
 6. Complete cache saved to `~/.cache/vllm/torch_compile_cache/`
@@ -51,7 +52,7 @@ Model Code → torch.compile → TorchInductor → Triton/CUDA Kernels → GPU E
 **Subsequent Runs (Cache Hit)**:
 
 1. vLLM loads artifacts from `~/.cache/vllm/torch_compile_cache/`
-2. **PyTorch extracts embedded Triton kernels → `/tmp/torchinductor_root/`**
+2. **PyTorch extracts embedded Triton kernels → `/tmp/torchinductor_$USER`**
 3. Execution resumes using extracted kernels (~10-20s vs 3-5min compilation)
 
 ### Binary vs AOT Formats
@@ -64,7 +65,6 @@ in serialization:
 - Uses PyTorch `standalone_compile().save(format="binary")`
 - Environment: `VLLM_USE_MEGA_AOT_ARTIFACT=false` (default)
 - Good for same PyTorch version deployments
-- Typical size: ~95MB for small models
 
 **AOT Format** (advanced):
 
@@ -72,7 +72,6 @@ in serialization:
 - Environment: `VLLM_USE_MEGA_AOT_ARTIFACT=true`
 - More portable across PyTorch versions (requires 2.10+)
 - Includes bundled AOT autograd cache
-- Typical size: ~92MB for small models
 
 **Important**: From MCV's perspective, both formats are **structurally identical**
 and use the same detection and packaging logic.
@@ -82,7 +81,7 @@ and use the same detection and packaging logic.
 During compilation and execution, PyTorch creates temporary files:
 
 ```text
-/tmp/torchinductor_root/
+/tmp/torchinductor_$USER/
 ├── triton/0/{hash}/
 │   ├── triton_.cubin    # Compiled GPU binary (ELF)
 │   ├── triton_.source   # Triton source code
@@ -91,8 +90,6 @@ During compilation and execution, PyTorch creates temporary files:
 ├── o7/, dp/, .../       # Python kernel cache
 └── aotautograd/         # AOT autograd cache
 ```
-
-**Size**: ~16MB for small models
 
 **Lifecycle**:
 
@@ -617,6 +614,7 @@ A cache is compatible if:
 3. **PyTorch version** compatible
 4. **Model code** unchanged (code hash must match)
 5. **vLLM configuration** matches (TP size, compile level, etc.)
+6. **Environment variables** match (see `cache_key_factors.json`)
 
 **Check Compatibility**:
 
@@ -639,10 +637,7 @@ rocm-smi
 
 **Common Causes**:
 
-1. **Hash mismatch** - Configuration or environment changed
-2. **Incompatible GPU** - Different architecture (e.g., sm_75 vs sm_80)
-3. **PyTorch version** - Binary format sensitive to PyTorch version
-4. **Model code changed** - Code hash no longer matches
+See the [Cache Compatibility](#cache-compatibility) section above for requirements.
 
 **Debug Steps**:
 
@@ -704,7 +699,6 @@ file ~/.cache/vllm/torch_compile_cache/*/rank_0_0/*/artifact_*
 
 - PyTorch 2.10.0 or later
 - `VLLM_USE_MEGA_AOT_ARTIFACT=true`
-- `VLLM_USE_STANDALONE_COMPILE=true`
 
 **Verify**:
 
