@@ -5,4 +5,4 @@ pydantic-settings>=2.0.0
 structlog
 sqlalchemy>=2.0.40
 pytest>=7.0.0
-vllm==0.15.1
+vllm>=0.18.0
