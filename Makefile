@@ -21,18 +21,3 @@ help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Default
-mcv: ## Build mcv.
-	$(MAKE) -C mcv
-.PHONY: mcv
-
-mcv-install: ## Install mcv.
-	$(MAKE) -C mcv install
-.PHONY: mcv-install
-
-mcv-test: ## Run mcv unit tests.
-	$(MAKE) -C mcv test
-.PHONY: mcv-test
-
-mcv-image: ## Build mcv image.
-	$(CONTAINER_TOOL) build --progress=plain -t quay.io/gkm/mcv -f mcv/images/amd64.dockerfile .
-.PHONY: mcv-image
