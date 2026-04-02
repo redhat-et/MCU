@@ -17,12 +17,15 @@ provides detailed reports on cache usage, offering data-driven
 insights into compilation performance and cache effectiveness.
 For more information please see the MCM [readme](./mcm/README.md).
 
-### Model Cache Vault (MCV)
+### Model Cache Vault (MCV) - MOVED
 
-Package Model/GPU kernel caches into **OCI-compliant container images**.
-Secure your caches with cryptographic signing, enabling safe and
-efficient cache distribution and reuse across environments and teams.
-For more information please see the MCV [readme](./mcv/README.md).
+**MCV has been moved to its own repository**:
+[https://github.com/redhat-et/GKM](https://github.com/redhat-et/GKM)
+
+MCV (Model Cache Vault) packages Model/GPU kernel caches into
+**OCI-compliant container images** with cryptographic signing for
+secure cache distribution. Please refer to the new repository for
+the latest features and documentation.
 
 ### Triton Util
 
@@ -50,23 +53,14 @@ For more information please see the Triton Util [readme](./triton_util/README.md
 ```bash
 MCU/
 ├── mcm/           # Model Cache Manager
-├── mcv/           # OCI packaging and signing tool
 ├── triton_util/   # Triton Utilities
 └── README.md      # You're here!
 ```
 
-## Security & Distribution
-
-Model Cache Vault ensures that your cache packages are:
-
-- Packaged using OCI standards
-- Signed cryptographically for tamper-proof integrity
-- Easily distributable across environments and pipelines
-
 ## Use Cases
 
-- Improve Triton/vLLM kernel cache management
-- Package and share caches across machines or Kubernetes environments.
+- Improve Triton/vLLM kernel cache management with MCM
+- For packaging and sharing caches, see [GKM (formerly MCV)](https://github.com/redhat-et/GKM)
 
 ## Contributing
 
