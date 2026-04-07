@@ -27,16 +27,6 @@ MCV (Model Cache Vault) packages Model/GPU kernel caches into
 secure cache distribution. Please refer to the new repository for
 the latest features and documentation.
 
-### Triton Util
-
-Write cleaner, more intuitive Triton code with high-level abstractions
-and utilities for loading, storing, and debugging GPU memory.
-
-**Triton-util was developed by [Umer Adil](mailto:umer.hayat.adil@gmail.com)**
-and generously contributed to MCU.
-
-For more information please see the Triton Util [readme](./triton_util/README.md).
-
 ## Getting Started
 
 1. Clone this repository:
@@ -53,7 +43,6 @@ For more information please see the Triton Util [readme](./triton_util/README.md
 ```bash
 MCU/
 ├── mcm/           # Model Cache Manager
-├── triton_util/   # Triton Utilities
 └── README.md      # You're here!
 ```
 
