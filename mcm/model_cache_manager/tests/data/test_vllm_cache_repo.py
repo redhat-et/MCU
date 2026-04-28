@@ -85,7 +85,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         repo = VllmCacheRepository(self.cache_dir)
         # Testing protected method is ok in unit tests
         # pylint: disable=protected-access
-        artifact_kernels = list(repo._find_artifact_kernels(rank_dir, "rank_0_0", "test_vllm_hash"))
+        artifact_kernels = list(repo._find_artifact_kernels(rank_dir))
         # pylint: enable=protected-access
         self.assertEqual(len(artifact_kernels), 0)
 
@@ -123,7 +123,7 @@ class TestVllmCacheRepository(unittest.TestCase):
             mock_iter.return_value = [mock_kernel]
 
             artifact_kernels = list(
-                repo._find_artifact_kernels(rank_dir, "rank_0_0", "test_vllm_hash")
+                repo._find_artifact_kernels(rank_dir)
             )
         # pylint: enable=protected-access
 
@@ -143,7 +143,7 @@ class TestVllmCacheRepository(unittest.TestCase):
         repo = VllmCacheRepository(self.cache_dir)
         # Testing protected method is ok in unit tests
         # pylint: disable=protected-access
-        artifact_kernels = list(repo._find_artifact_kernels(rank_dir, "rank_0_0", "test_vllm_hash"))
+        artifact_kernels = list(repo._find_artifact_kernels(rank_dir))
         # pylint: enable=protected-access
 
         self.assertEqual(len(artifact_kernels), 0)
@@ -283,8 +283,8 @@ class TestVllmCacheRepository(unittest.TestCase):
         self.assertIn("hash456def", vllm_hashes)
 
 
-class TestVllmCacheRepositoryBinaryArtifacts(unittest.TestCase):
-    """Test suite for VllmCacheRepository with binary artifacts."""
+class TestVllmCacheRepositoryAotCompile(unittest.TestCase):
+    """Test suite for VllmCacheRepository with torch_aot_compile layout."""
 
     def setUp(self):
         """Set up test fixtures before each test method."""
@@ -296,174 +296,150 @@ class TestVllmCacheRepositoryBinaryArtifacts(unittest.TestCase):
         """Clean up after each test method."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _create_binary_artifact_structure(self) -> Path:
-        """Create binary artifact directory structure for testing."""
-        rank_dir = self.cache_dir / "rank_0_0"
-        rank_dir.mkdir()
-        backbone_dir = rank_dir / "backbone"
-        backbone_dir.mkdir()
-        artifact_dir = backbone_dir / "artifact_compile_range_0"
-        artifact_dir.mkdir()
-        binary_file = artifact_dir / "artifact_compile_range_0"
-        binary_file.touch()
-        return artifact_dir
+    def _create_aot_structure(self, vllm_hash="hash_aot_123", rank="rank_0_0"):
+        """Create torch_aot_compile directory structure."""
+        hash_dir = self.cache_dir / "torch_compile_cache" / "torch_aot_compile" / vllm_hash
+        inductor = hash_dir / "inductor_cache"
+        triton_dir = inductor / "triton" / "0"
+        triton_dir.mkdir(parents=True)
 
-    def _create_temp_extraction_dir(self) -> Path:
-        """Create temp extraction directory with triton structure."""
-        temp_extract_dir = self.temp_dir / "temp_extract"
-        temp_extract_dir.mkdir(exist_ok=True)
-        temp_triton_dir = temp_extract_dir / "triton"
-        temp_triton_dir.mkdir(exist_ok=True)
-        (temp_triton_dir / "kernel_hash").mkdir(exist_ok=True)
-        return temp_extract_dir
+        # Create rank directory
+        (hash_dir / rank).mkdir(parents=True, exist_ok=True)
 
-    def _create_vllm_structure(self) -> Path:
-        """Create vLLM directory structure and return backbone_dir."""
-        torch_compile_dir = self.cache_dir / "torch_compile_cache"
-        torch_compile_dir.mkdir(exist_ok=True)
-        hash_dir = torch_compile_dir / "hash123abc"
-        hash_dir.mkdir(exist_ok=True)
-        rank_dir = hash_dir / "rank_0_0"
-        rank_dir.mkdir(exist_ok=True)
-        backbone_dir = rank_dir / "backbone"
-        backbone_dir.mkdir(exist_ok=True)
-        return backbone_dir
+        # Create a kernel directory
+        kernel_dir = triton_dir / "KERNEL_HASH_XYZ"
+        kernel_dir.mkdir()
 
-    @patch("model_cache_manager.data.binary_artifact_extractor.TemporaryExtractedArtifact")
+        return hash_dir, inductor, triton_dir
+
+    def test_find_torch_aot_compile_dirs(self):
+        """Test finding torch_aot_compile directories."""
+        self._create_aot_structure("hash_a")
+        self._create_aot_structure("hash_b")
+
+        repo = VllmCacheRepository(self.cache_dir)
+        # pylint: disable=protected-access
+        aot_dirs = list(repo._find_torch_aot_compile_dirs())
+        # pylint: enable=protected-access
+
+        self.assertEqual(len(aot_dirs), 2)
+        names = sorted([h for h, _ in aot_dirs])
+        self.assertEqual(names, ["hash_a", "hash_b"])
+
+    def test_find_torch_aot_compile_dirs_empty(self):
+        """Test finding AOT dirs when none exist."""
+        repo = VllmCacheRepository(self.cache_dir)
+        # pylint: disable=protected-access
+        aot_dirs = list(repo._find_torch_aot_compile_dirs())
+        # pylint: enable=protected-access
+        self.assertEqual(len(aot_dirs), 0)
+
     @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
-    def test_process_artifact_dir_with_binary_artifact(
-        self, mock_iter_triton, mock_temp_extracted
-    ):
-        """Test _process_artifact_dir handles binary artifacts via extraction."""
-        # Create binary artifact structure
-        artifact_dir = self._create_binary_artifact_structure()
+    def test_kernels_from_aot_compile(self, mock_iter_triton):
+        """Test that kernels() yields kernels from torch_aot_compile."""
+        self._create_aot_structure("hash_aot_1", "rank_0_0")
 
-        # Create temp extraction directory that will be returned
-        temp_extract_dir = self._create_temp_extraction_dir()
-
-        # Mock the context manager to return temp directory
-        mock_context = MagicMock()
-        mock_context.__enter__ = MagicMock(return_value=temp_extract_dir)
-        mock_context.__exit__ = MagicMock(return_value=False)
-        mock_temp_extracted.return_value = mock_context
-
-        # Mock kernel iteration
         mock_kernel = MagicMock(spec=Kernel)
-        mock_kernel.hash = "binary_kernel_hash"
+        mock_kernel.hash = "aot_kernel_hash"
         mock_iter_triton.return_value = [mock_kernel]
-
-        repo = VllmCacheRepository(self.cache_dir)
-        # pylint: disable=protected-access
-        plugins = {}
-        kernels = list(repo._process_artifact_dir(
-            artifact_dir, plugins, "test_vllm_hash", "rank_0_0"
-        ))
-        # pylint: enable=protected-access
-
-        # Verify extraction context manager was called
-        mock_temp_extracted.assert_called_once_with(
-            artifact_dir, "test_vllm_hash", "rank_0_0"
-        )
-
-        # Verify we got the kernel
-        self.assertEqual(len(kernels), 1)
-        artifact_name, _best_config, triton_subpath, kernel = kernels[0]
-        self.assertEqual(artifact_name, "artifact_compile_range_0")
-        self.assertIsNone(triton_subpath)
-        self.assertEqual(kernel.hash, "binary_kernel_hash")
-
-    @patch("model_cache_manager.data.binary_artifact_extractor.TemporaryExtractedArtifact")
-    def test_process_artifact_dir_binary_extraction_fails(self, mock_temp_extracted):
-        """Test _process_artifact_dir handles extraction failures gracefully."""
-        artifact_dir = self._create_binary_artifact_structure()
-
-        # Mock extraction failure
-        # pylint: disable=import-outside-toplevel
-        from model_cache_manager.data.binary_artifact_extractor import (
-            BinaryArtifactExtractionError,
-        )
-        mock_temp_extracted.return_value.__enter__.side_effect = (
-            BinaryArtifactExtractionError("Extraction failed")
-        )
-
-        repo = VllmCacheRepository(self.cache_dir)
-        # pylint: disable=protected-access
-        plugins = {}
-        kernels = list(repo._process_artifact_dir(
-            artifact_dir, plugins, "test_vllm_hash", "rank_0_0"
-        ))
-        # pylint: enable=protected-access
-
-        # Should return empty list and not raise
-        self.assertEqual(len(kernels), 0)
-
-    @patch("model_cache_manager.data.binary_artifact_extractor.TemporaryExtractedArtifact")
-    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
-    def test_kernels_with_mixed_binary_and_unpacked_artifacts(
-        self, mock_iter_triton, mock_temp_extracted
-    ):  # pylint: disable=too-many-locals
-        """Test kernels method with mix of binary and unpacked artifacts."""
-        # Create vLLM structure with mixed artifact types
-        backbone_dir = self._create_vllm_structure()
-        temp_extract_dir = self._create_temp_extraction_dir()
-        # Add kernel2 directory for the binary artifact extraction
-        (temp_extract_dir / "triton" / "kernel2").mkdir(exist_ok=True)
-
-        # Create unpacked artifact (with triton/ dir)
-        unpacked_artifact = backbone_dir / "artifact_compile_range_0"
-        unpacked_artifact.mkdir()
-        unpacked_triton = unpacked_artifact / "triton"
-        unpacked_triton.mkdir()
-        (unpacked_triton / "kernel1").mkdir()
-
-        # Create binary artifact (no triton/ dir, has binary file)
-        binary_artifact = backbone_dir / "artifact_compile_range_1"
-        binary_artifact.mkdir()
-        (binary_artifact / "artifact_compile_range_1").touch()
-
-        # Mock context manager - returns original for unpacked, temp for binary
-        def context_side_effect(artifact_dir, _vllm_hash, _rank_name):
-            mock_context = MagicMock()
-            if "artifact_compile_range_0" in str(artifact_dir):
-                mock_context.__enter__ = MagicMock(return_value=artifact_dir)
-            else:
-                mock_context.__enter__ = MagicMock(return_value=temp_extract_dir)
-            mock_context.__exit__ = MagicMock(return_value=False)
-            return mock_context
-
-        mock_temp_extracted.side_effect = context_side_effect
-
-        # Mock kernels for each artifact
-        mock_kernel1, mock_kernel2 = MagicMock(spec=Kernel), MagicMock(spec=Kernel)
-        mock_kernel1.hash, mock_kernel2.hash = "unpacked_kernel", "binary_kernel"
-
-        def iter_side_effect(kernel_dir, _plugins):
-            if "kernel1" in str(kernel_dir):
-                return [mock_kernel1]
-            if "kernel2" in str(kernel_dir):
-                return [mock_kernel2]
-            return []
-
-        mock_iter_triton.side_effect = iter_side_effect
 
         repo = VllmCacheRepository(self.cache_dir)
         kernels = list(repo.kernels())
 
-        # Should have kernels from both artifacts
-        self.assertEqual(len(kernels), 2)
+        self.assertEqual(len(kernels), 1)
+        (vllm_hash, cache_dir, rank_x_y, artifact_compile_range,
+         best_config, triton_subpath, kernel) = kernels[0]
+        self.assertEqual(vllm_hash, "hash_aot_1")
+        self.assertEqual(cache_dir, str(self.cache_dir))
+        self.assertEqual(rank_x_y, "rank_0_0")
+        self.assertEqual(artifact_compile_range, "inductor_cache")
+        self.assertIsNone(best_config)
+        self.assertIsNone(triton_subpath)
+        self.assertEqual(kernel.hash, "aot_kernel_hash")
 
-        # Verify both artifacts were processed
-        artifact_names = [
-            artifact_compile_range
-            for _, _, _, artifact_compile_range, _, _, _ in kernels
-        ]
-        self.assertIn("artifact_compile_range_0", artifact_names)
-        self.assertIn("artifact_compile_range_1", artifact_names)
+    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
+    def test_kernels_aot_with_best_config(self, mock_iter_triton):
+        """Test AOT kernels with best_config file."""
+        _, inductor, _ = self._create_aot_structure("hash_cfg")
 
-        # Verify kernel hashes
-        kernel_hashes = [k.hash for _, _, _, _, _, _, k in kernels]
-        self.assertIn("unpacked_kernel", kernel_hashes)
-        self.assertIn("binary_kernel", kernel_hashes)
+        # Create best_config file in inductor_cache
+        config_file = inductor / "abc123.best_config"
+        config_file.write_text('{"triton_cache_hash": "XYZ"}')
+
+        mock_kernel = MagicMock(spec=Kernel)
+        mock_kernel.hash = "cfg_kernel"
+        mock_iter_triton.return_value = [mock_kernel]
+
+        repo = VllmCacheRepository(self.cache_dir)
+        kernels = list(repo.kernels())
+
+        self.assertEqual(len(kernels), 1)
+        _, _, _, _, best_config, _, _ = kernels[0]
+        self.assertIn("triton_cache_hash", best_config)
+
+    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
+    def test_aot_takes_precedence_over_compile_cache(self, mock_iter_triton):
+        """Test kernels() uses torch_aot_compile and skips torch_compile_cache."""
+        # Create torch_compile_cache structure (should be ignored)
+        tcc_dir = self.cache_dir / "torch_compile_cache" / "hash_tcc"
+        rank_dir = tcc_dir / "rank_0_0"
+        backbone = rank_dir / "backbone"
+        artifact = backbone / "artifact_compile_range_0"
+        triton = artifact / "triton" / "sub"
+        triton.mkdir(parents=True)
+
+        # Create torch_aot_compile structure (should be used)
+        self._create_aot_structure("hash_aot")
+
+        mock_aot_kernel = MagicMock(spec=Kernel)
+        mock_aot_kernel.hash = "aot_kernel"
+        mock_iter_triton.return_value = [mock_aot_kernel]
+
+        repo = VllmCacheRepository(self.cache_dir)
+        kernels = list(repo.kernels())
+
+        # Only AOT kernels — torch_compile_cache is skipped
+        self.assertEqual(len(kernels), 1)
+        self.assertEqual(kernels[0][6].hash, "aot_kernel")
+
+    @patch("model_cache_manager.data.cache_repo.iter_triton_kernels")
+    def test_fallback_to_compile_cache_when_no_aot(self, mock_iter_triton):
+        """Test kernels() falls back to torch_compile_cache when no AOT exists."""
+        # Create torch_compile_cache structure only
+        tcc_dir = self.cache_dir / "torch_compile_cache" / "hash_tcc"
+        rank_dir = tcc_dir / "rank_0_0"
+        backbone = rank_dir / "backbone"
+        artifact = backbone / "artifact_compile_range_0"
+        triton = artifact / "triton" / "sub"
+        triton.mkdir(parents=True)
+
+        mock_kernel = MagicMock(spec=Kernel)
+        mock_kernel.hash = "tcc_kernel"
+        mock_iter_triton.return_value = [mock_kernel]
+
+        repo = VllmCacheRepository(self.cache_dir)
+        kernels = list(repo.kernels())
+
+        self.assertEqual(len(kernels), 1)
+        self.assertEqual(kernels[0][6].hash, "tcc_kernel")
+
+    def test_aot_no_inductor_cache_skipped(self):
+        """Test AOT hash dir without inductor_cache/ is skipped."""
+        hash_dir = self.cache_dir / "torch_compile_cache" / "torch_aot_compile" / "hash_no_inductor"
+        (hash_dir / "rank_0_0").mkdir(parents=True)
+
+        repo = VllmCacheRepository(self.cache_dir)
+        kernels = list(repo.kernels())
+        self.assertEqual(len(kernels), 0)
+
+    def test_aot_no_triton_dir_skipped(self):
+        """Test AOT hash dir without triton/ inside inductor_cache is skipped."""
+        hash_dir = self.cache_dir / "torch_compile_cache" / "torch_aot_compile" / "hash_no_triton"
+        (hash_dir / "inductor_cache" / "fxgraph").mkdir(parents=True)
+
+        repo = VllmCacheRepository(self.cache_dir)
+        kernels = list(repo.kernels())
+        self.assertEqual(len(kernels), 0)
 
 
 if __name__ == "__main__":

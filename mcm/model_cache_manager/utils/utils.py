@@ -235,6 +235,27 @@ def _has_vllm_cache_structure(cache_dir: Path) -> bool:
     return False
 
 
+def _has_vllm_aot_cache_structure(cache_dir: Path) -> bool:
+    """Check if directory has vLLM AOT compile cache structure.
+
+    The torch_aot_compile layout stores triton kernels directly under
+    ``<hash>/inductor_cache/triton/`` instead of the backbone/artifact_compile_range
+    nesting used by torch_compile_cache.  torch_aot_compile lives inside
+    torch_compile_cache, not as a sibling.
+    """
+    torch_aot_dir = cache_dir / "torch_compile_cache" / "torch_aot_compile"
+    if not (torch_aot_dir.exists() and torch_aot_dir.is_dir()):
+        return False
+
+    for hash_dir in torch_aot_dir.iterdir():
+        if not hash_dir.is_dir():
+            continue
+        triton_dir = hash_dir / "inductor_cache" / "triton"
+        if triton_dir.is_dir():
+            return True
+    return False
+
+
 def detect_cache_mode(cache_dir: Path) -> str:
     """
     Auto-detect cache mode based on directory structure.
@@ -251,6 +272,10 @@ def detect_cache_mode(cache_dir: Path) -> str:
 
     # Check for new vLLM cache structure (with backbone/artifact_compile_range_* directories)
     if _has_vllm_cache_structure(cache_dir):
+        return MODE_VLLM
+
+    # Check for vLLM AOT compile structure (inductor_cache/triton/)
+    if _has_vllm_aot_cache_structure(cache_dir):
         return MODE_VLLM
 
     # Check for legacy vLLM cache structure (with direct triton_cache)
@@ -412,6 +437,17 @@ def _process_rank_directory(
     )
 
 
+def _find_kernel_dirs_in_aot_cache(
+    cache_dir: Path, vllm_hash: str, triton_cache_key: str
+) -> List[Path]:
+    """Find kernel directories inside a torch_aot_compile hash."""
+    aot_hash_dir = cache_dir / "torch_compile_cache" / "torch_aot_compile" / vllm_hash
+    triton_dir = aot_hash_dir / "inductor_cache" / "triton"
+    if not triton_dir.is_dir():
+        return []
+    return _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)
+
+
 def find_vllm_kernel_dirs(
     cache_dir: Path,
     vllm_hash: str,
@@ -421,6 +457,8 @@ def find_vllm_kernel_dirs(
 ) -> List[Path]:
     """Find kernel directories for new vLLM structure.
 
+    Searches both torch_compile_cache and torch_aot_compile layouts.
+
     Args:
         cache_dir: Root cache directory
         vllm_hash: vLLM hash identifier
@@ -429,17 +467,23 @@ def find_vllm_kernel_dirs(
         triton_subpath: Relative path from artifact_dir to triton's parent.
             None means triton is directly under artifact_dir.
     """
-    vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
-    if not vllm_root_dir.exists():
-        return []
+    kernel_dirs: List[Path] = []
 
-    kernel_dirs = []
-    for rank_dir in vllm_root_dir.iterdir():
-        kernel_dirs.extend(
-            _process_rank_directory(
-                rank_dir, triton_cache_key, artifact_compile_range, triton_subpath
+    # torch_compile_cache layout (backbone/artifact_compile_range_*)
+    vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
+    if vllm_root_dir.exists():
+        for rank_dir in vllm_root_dir.iterdir():
+            kernel_dirs.extend(
+                _process_rank_directory(
+                    rank_dir, triton_cache_key, artifact_compile_range, triton_subpath
+                )
             )
-        )
+
+    # torch_aot_compile layout (inductor_cache/triton/)
+    kernel_dirs.extend(
+        _find_kernel_dirs_in_aot_cache(cache_dir, vllm_hash, triton_cache_key)
+    )
+
     return kernel_dirs
 
 

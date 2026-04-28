@@ -390,116 +390,43 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
 
         return None, None
 
-    # pylint: disable=too-many-locals
     def _process_artifact_dir(
-        self, artifact_dir: Path, plugins: dict, vllm_hash: str, rank_name: str
+        self, artifact_dir: Path, plugins: dict
     ) -> Iterable[tuple[str, Optional[str], Optional[str], Kernel]]:
         """
-        Process a single artifact directory for kernels.
-
-        Handles both unpacked (triton/ subdirectory) and binary (single file) artifacts.
-        Binary artifacts are temporarily extracted to /tmp for processing.
+        Process a single unpacked artifact directory for kernels.
 
         Args:
-            artifact_dir: Path to the artifact directory
+            artifact_dir: Path to the artifact directory (must contain triton/)
             plugins: Dictionary of plugins for kernel processing
-            vllm_hash: vLLM hash identifier (for temp dir naming)
-            rank_name: Rank name (e.g., 'rank_0_0') (for temp dir naming)
 
         Yields:
             Tuples of (artifact_compile_range, best_config, triton_subpath, kernel)
         """
-        # Import here to avoid circular dependency
-        # pylint: disable=import-outside-toplevel
-        from .binary_artifact_extractor import (
-            TemporaryExtractedArtifact,
-            BinaryArtifactExtractionError,
-        )
-
-        log.debug(
-            "Processing artifact directory: %s (vllm_hash=%s, rank=%s)",
-            artifact_dir,
-            vllm_hash,
-            rank_name,
-        )
-
-        try:
-            # Context manager handles detection and extraction if needed
-            with TemporaryExtractedArtifact(
-                artifact_dir, vllm_hash, rank_name
-            ) as processing_dir:
-                log.debug(
-                    "Processing dir resolved to: %s (original: %s)",
-                    processing_dir,
-                    artifact_dir,
-                )
-                # Find best_config in processing_dir - for binary artifacts, best_config
-                # is embedded inside and only available after extraction to processing_dir
-                best_config = self._find_best_config(processing_dir)
-
-                # processing_dir is either:
-                # - Original artifact_dir (if unpacked)
-                # - Temp extracted dir (if binary)
-                triton_dir, triton_subpath = self._find_triton_dir(processing_dir)
-
-                if triton_dir is None:
-                    user = os.getenv("USER", "unknown")
-                    inductor_cache_dir = os.getenv("TORCHINDUCTOR_CACHE_DIR")
-                    searched_locations = [
-                        f"  - {processing_dir}/triton",
-                        f"  - {processing_dir}/torchinductor_{user}/triton",
-                    ]
-                    if inductor_cache_dir:
-                        searched_locations.insert(
-                            1, f"  - {processing_dir}/{inductor_cache_dir}/triton"
-                        )
-                    log.error(
-                        "No triton directory found in artifact '%s'.\n"
-                        "Searched locations:\n%s\n"
-                        "Ensure the artifact was created with a compatible "
-                        "vLLM/PyTorch version and the TORCHINDUCTOR_CACHE_DIR "
-                        "environment variable matches the one used during creation.",
-                        artifact_dir.name,
-                        "\n".join(searched_locations),
-                    )
-                    return
-
-                for sub_dir in triton_dir.iterdir():
-                    if not sub_dir.is_dir():
-                        continue
-                    for kernel in iter_triton_kernels(sub_dir, plugins):
-                        # Yield artifact_dir.name (original), not processing_dir
-                        yield artifact_dir.name, best_config, triton_subpath, kernel
-
-        except BinaryArtifactExtractionError as e:
-            log.warning(
-                "Failed to extract binary artifact %s: %s. Skipping.",
-                artifact_dir.name,
-                e,
-            )
+        if not artifact_dir.is_dir():
             return
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            log.error(
-                "Unexpected error processing artifact %s (vllm_hash=%s, rank=%s): "
-                "%s. Skipping.",
-                artifact_dir.name,
-                vllm_hash,
-                rank_name,
-                e,
-                exc_info=True,
-            )
+
+        best_config = self._find_best_config(artifact_dir)
+        triton_dir, triton_subpath = self._find_triton_dir(artifact_dir)
+
+        if triton_dir is None:
+            log.debug("No triton directory in artifact '%s', skipping.", artifact_dir.name)
             return
+
+        for sub_dir in triton_dir.iterdir():
+            if not sub_dir.is_dir():
+                continue
+            for kernel in iter_triton_kernels(sub_dir, plugins):
+                yield artifact_dir.name, best_config, triton_subpath, kernel
 
     def _find_artifact_kernels(
-        self, rank_dir: Path, rank_name: str, vllm_hash: str
+        self, rank_dir: Path
     ) -> Iterable[tuple[str, Optional[str], Optional[str], Kernel]]:
         """
         Find kernels within artifact_compile_range directories for a rank.
 
         Args:
             rank_dir: Path to the rank directory
-            rank_name: Name of the rank directory (e.g., 'rank_0_0')
-            vllm_hash: vLLM hash for this cache group
 
         Yields:
             Tuples of (artifact_compile_range, best_config, triton_subpath, kernel)
@@ -509,62 +436,87 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             log.debug("Backbone directory does not exist: %s", backbone_dir)
             return
 
-        log.debug("Finding artifacts in backbone: %s", backbone_dir)
         plugins = _get_plugins()
-        artifact_count = 0
         for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
-            artifact_count += 1
-            log.debug(
-                "Found artifact %d: %s (is_file=%s)",
-                artifact_count,
-                artifact_dir,
-                artifact_dir.is_file(),
-            )
-            # Pass vllm_hash and rank_name to support binary extraction
-            yield from self._process_artifact_dir(
-                artifact_dir, plugins, vllm_hash, rank_name
-            )
-        log.debug("Total artifacts found in %s: %d", backbone_dir, artifact_count)
+            yield from self._process_artifact_dir(artifact_dir, plugins)
 
-    def kernels(
-        self,
-    ) -> Iterable[tuple[str, str, str, str, Optional[str], Optional[str], Kernel]]:
+    def _find_torch_aot_compile_dirs(self) -> Iterable[tuple[str, Path]]:
         """
-        Iterate through all kernels in the new vLLM cache directory.
-
-        Handles both unpacked and binary artifacts transparently.
+        Find torch_aot_compile hash directories in the vLLM cache root.
 
         Yields:
-            Tuples of (vllm_hash, cache_root, rank_x_y, artifact_compile_range,
-                       best_config, triton_subpath, kernel)
-            where each kernel contains metadata parsed from cache files.
+            Tuples of (vllm_hash, path_to_hash_directory)
         """
-        log.info("Starting vLLM cache scan in: %s", self.root)
+        aot_dir = self.root / "torch_compile_cache" / "torch_aot_compile"
+        if not aot_dir.exists():
+            return
+
+        for hash_dir in aot_dir.iterdir():
+            if hash_dir.is_dir():
+                yield hash_dir.name, hash_dir
+
+    def _iter_aot_kernels(
+        self, hash_dir: Path, vllm_hash: str
+    ) -> Iterable[tuple[str, str, str, str, Optional[str], Optional[str], Kernel]]:
+        """
+        Iterate kernels from a torch_aot_compile hash directory.
+
+        The layout is ``<hash>/inductor_cache/triton/<sub>/<kernel_hash>/``.
+        Rank information comes from sibling directories of inductor_cache.
+        """
+        inductor_cache = hash_dir / "inductor_cache"
+        if not inductor_cache.is_dir():
+            log.debug("No inductor_cache/ in %s, skipping", hash_dir)
+            return
+
+        # Determine rank from sibling rank_* directories
+        rank_name = "rank_0_0"
+        for item in hash_dir.iterdir():
+            if item.is_dir() and item.name.startswith("rank"):
+                rank_name = item.name
+                break
+
+        best_config = self._find_best_config(inductor_cache)
+        triton_dir = inductor_cache / "triton"
+        if not triton_dir.is_dir():
+            log.debug("No triton/ in %s", inductor_cache)
+            return
+
+        plugins = _get_plugins()
+        for sub_dir in triton_dir.iterdir():
+            if not sub_dir.is_dir():
+                continue
+            for kernel in iter_triton_kernels(sub_dir, plugins):
+                yield (
+                    vllm_hash,
+                    str(self.root),
+                    rank_name,
+                    "inductor_cache",
+                    best_config,
+                    None,
+                    kernel,
+                )
+
+    def _iter_torch_compile_kernels(
+        self,
+    ) -> Iterable[tuple[str, str, str, str, Optional[str], Optional[str], Kernel]]:
+        """Iterate kernels from torch_compile_cache layout."""
         torch_compile_dirs = list(self._find_torch_compile_cache_dirs())
         log.debug("Found %d torch_compile_cache directories", len(torch_compile_dirs))
 
         for vllm_hash, hash_dir in torch_compile_dirs:
-            log.debug("Processing vllm_hash=%s at %s", vllm_hash, hash_dir)
             rank_dirs = [
                 d
                 for d in hash_dir.iterdir()
                 if d.is_dir() and d.name.startswith("rank")
             ]
-            log.debug(
-                "Found %d rank directories for vllm_hash=%s", len(rank_dirs), vllm_hash
-            )
-
             for rank_dir in rank_dirs:
-                log.debug("Processing rank directory: %s", rank_dir.name)
-                # Pass vllm_hash to support binary artifact extraction
-                kernel_count = 0
                 for (
                     artifact_compile_range,
                     best_config,
                     triton_subpath,
                     kernel,
-                ) in self._find_artifact_kernels(rank_dir, rank_dir.name, vllm_hash):
-                    kernel_count += 1
+                ) in self._find_artifact_kernels(rank_dir):
                     yield (
                         vllm_hash,
                         str(self.root),
@@ -574,4 +526,29 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
                         triton_subpath,
                         kernel,
                     )
-                log.debug("Yielded %d kernels from rank %s", kernel_count, rank_dir.name)
+
+    def kernels(
+        self,
+    ) -> Iterable[tuple[str, str, str, str, Optional[str], Optional[str], Kernel]]:
+        """
+        Iterate through all kernels in the vLLM cache directory.
+
+        Prefers torch_aot_compile (already-unpacked inductor cache) when present.
+        Falls back to torch_compile_cache for older caches that lack the AOT layout.
+
+        Yields:
+            Tuples of (vllm_hash, cache_root, rank_x_y, artifact_compile_range,
+                       best_config, triton_subpath, kernel)
+            where each kernel contains metadata parsed from cache files.
+        """
+        log.info("Starting vLLM cache scan in: %s", self.root)
+
+        aot_dirs = list(self._find_torch_aot_compile_dirs())
+        if aot_dirs:
+            log.debug("Found %d torch_aot_compile directories", len(aot_dirs))
+            for vllm_hash, hash_dir in aot_dirs:
+                yield from self._iter_aot_kernels(hash_dir, vllm_hash)
+            return
+
+        # Fallback: torch_compile_cache (older caches without torch_aot_compile)
+        yield from self._iter_torch_compile_kernels()
