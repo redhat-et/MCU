@@ -244,9 +244,12 @@ class TestCacheModeDetection(unittest.TestCase):  # pylint: disable=too-many-pub
         mode = detect_cache_mode(cache_dir)
         self.assertEqual(mode, MODE_TRITON)
 
-    def test_detect_vllm_binary_cache_structure(self):
-        """Test detection of new vLLM cache structure with binary artifacts."""
-        # Binary artifacts are files (not directories) named artifact_compile_range_*
+    def test_detect_vllm_binary_only_not_detected_as_vllm(self):
+        """Test that binary-only artifacts are not detected as vLLM.
+
+        Binary artifact files require the torch_aot_compile layout to be
+        present for the triton kernels to be accessible.
+        """
         vllm_dir = self.temp_dir / "vllm_binary"
         torch_compile = vllm_dir / "torch_compile_cache"
         hash_dir = torch_compile / "some_vllm_hash"
@@ -254,12 +257,11 @@ class TestCacheModeDetection(unittest.TestCase):  # pylint: disable=too-many-pub
         backbone_dir = rank_dir / "backbone"
         backbone_dir.mkdir(parents=True)
 
-        # Create a binary artifact file (not a directory)
         binary_artifact = backbone_dir / "artifact_compile_range_0"
         binary_artifact.write_bytes(b"\x00binary data")
 
         mode = detect_cache_mode(vllm_dir)
-        self.assertEqual(mode, MODE_VLLM)
+        self.assertEqual(mode, MODE_TRITON)
 
     def test_detect_mixed_legacy_and_triton_vllm_takes_precedence(self):
         """Test detection when both vllm-legacy and triton structures exist."""
