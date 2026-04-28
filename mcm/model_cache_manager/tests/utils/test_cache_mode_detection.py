@@ -11,7 +11,7 @@ from model_cache_manager.utils.utils import detect_cache_mode
 from model_cache_manager.utils.mcm_constants import MODE_TRITON, MODE_VLLM, MODE_VLLM_LEGACY
 
 
-class TestCacheModeDetection(unittest.TestCase):
+class TestCacheModeDetection(unittest.TestCase):  # pylint: disable=too-many-public-methods
     """Test suite for cache mode detection."""
 
     def setUp(self):
@@ -280,6 +280,53 @@ class TestCacheModeDetection(unittest.TestCase):
 
         mode = detect_cache_mode(cache_dir)
         self.assertEqual(mode, MODE_VLLM_LEGACY)
+
+    def test_detect_vllm_aot_compile_structure(self):
+        """Test detection of vLLM AOT compile structure."""
+        cache_dir = self.temp_dir / "vllm_aot"
+        hash_dir = cache_dir / "torch_compile_cache" / "torch_aot_compile" / "70e26b6ad448"
+        triton_dir = hash_dir / "inductor_cache" / "triton" / "0"
+        triton_dir.mkdir(parents=True)
+
+        kernel_dir = triton_dir / "KERNEL_HASH_ABC"
+        kernel_dir.mkdir()
+        (kernel_dir / "kernel.cubin").touch()
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_VLLM)
+
+    def test_detect_vllm_aot_compile_no_triton(self):
+        """Test AOT compile without triton/ defaults to triton mode."""
+        cache_dir = self.temp_dir / "vllm_aot_no_triton"
+        hash_dir = cache_dir / "torch_compile_cache" / "torch_aot_compile" / "somehash"
+        inductor = hash_dir / "inductor_cache" / "fxgraph"
+        inductor.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_vllm_aot_compile_empty(self):
+        """Test empty torch_aot_compile directory defaults to triton."""
+        cache_dir = self.temp_dir / "vllm_aot_empty"
+        (cache_dir / "torch_compile_cache" / "torch_aot_compile").mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_torch_compile_takes_precedence_over_aot(self):
+        """Test that torch_compile_cache is checked before torch_aot_compile."""
+        cache_dir = self.temp_dir / "mixed_compile_aot"
+
+        # torch_compile_cache structure
+        tcc = cache_dir / "torch_compile_cache" / "hash1" / "rank_0_0" / "backbone"
+        (tcc / "artifact_compile_range_0" / "triton").mkdir(parents=True)
+
+        # torch_aot_compile structure
+        aot_base = cache_dir / "torch_compile_cache" / "torch_aot_compile"
+        (aot_base / "hash2" / "inductor_cache" / "triton").mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_VLLM)
 
 
 if __name__ == "__main__":
