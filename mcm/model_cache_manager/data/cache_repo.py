@@ -403,9 +403,6 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
         Yields:
             Tuples of (artifact_compile_range, best_config, triton_subpath, kernel)
         """
-        if not artifact_dir.is_dir():
-            return
-
         best_config = self._find_best_config(artifact_dir)
         triton_dir, triton_subpath = self._find_triton_dir(artifact_dir)
 
@@ -442,7 +439,11 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
 
     def _find_torch_aot_compile_dirs(self) -> Iterable[tuple[str, Path]]:
         """
-        Find torch_aot_compile hash directories in the vLLM cache root.
+        Find torch_aot_compile hash directories that contain triton kernels.
+
+        Only yields directories that have inductor_cache/triton/ — incomplete
+        or stale hashes are skipped so that the caller can safely treat a
+        non-empty result as authoritative.
 
         Yields:
             Tuples of (vllm_hash, path_to_hash_directory)
@@ -452,7 +453,9 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
             return
 
         for hash_dir in aot_dir.iterdir():
-            if hash_dir.is_dir():
+            if hash_dir.is_dir() and (
+                hash_dir / "inductor_cache" / "triton"
+            ).is_dir():
                 yield hash_dir.name, hash_dir
 
     def _iter_aot_kernels(

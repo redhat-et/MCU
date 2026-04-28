@@ -192,10 +192,10 @@ class TestFindVllmKernelDirsAot(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].name, "KERNEL_XYZ")
 
-    def test_combines_both_layouts(self):
-        """Test finds kernels from both torch_compile_cache and AOT."""
+    def test_aot_takes_precedence_over_compile_cache(self):
+        """Test AOT results are used exclusively when present."""
         # AOT layout
-        aot_kernel = (
+        (
             self.temp_dir
             / "torch_compile_cache"
             / "torch_aot_compile"
@@ -204,11 +204,10 @@ class TestFindVllmKernelDirsAot(unittest.TestCase):
             / "triton"
             / "0"
             / "KERNEL_A"
-        )
-        aot_kernel.mkdir(parents=True)
+        ).mkdir(parents=True)
 
-        # torch_compile_cache layout
-        tcc_kernel = (
+        # torch_compile_cache layout — same hash, different kernel
+        (
             self.temp_dir
             / "torch_compile_cache"
             / "hash1"
@@ -218,17 +217,39 @@ class TestFindVllmKernelDirsAot(unittest.TestCase):
             / "triton"
             / "0"
             / "KERNEL_B"
-        )
-        tcc_kernel.mkdir(parents=True)
+        ).mkdir(parents=True)
 
+        # AOT kernel found
         result_a = find_vllm_kernel_dirs(
             self.temp_dir, "hash1", "KERNEL_A"
         )
+        self.assertEqual(len(result_a), 1)
+
+        # torch_compile_cache kernel NOT found — AOT returned results first
         result_b = find_vllm_kernel_dirs(
             self.temp_dir, "hash1", "KERNEL_B"
         )
-        self.assertEqual(len(result_a), 1)
-        self.assertEqual(len(result_b), 1)
+        self.assertEqual(len(result_b), 0)
+
+    def test_falls_back_to_compile_cache(self):
+        """Test falls back to torch_compile_cache when AOT has no results."""
+        (
+            self.temp_dir
+            / "torch_compile_cache"
+            / "hash1"
+            / "rank_0_0"
+            / "backbone"
+            / "artifact_compile_range_0"
+            / "triton"
+            / "0"
+            / "KERNEL_B"
+        ).mkdir(parents=True)
+
+        result = find_vllm_kernel_dirs(
+            self.temp_dir, "hash1", "KERNEL_B"
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].name, "KERNEL_B")
 
     def test_returns_empty_for_nonexistent_hash(self):
         """Test returns empty when neither layout has the hash."""

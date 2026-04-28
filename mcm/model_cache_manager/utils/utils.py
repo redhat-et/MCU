@@ -177,33 +177,22 @@ def _has_vllm_legacy_cache_structure(cache_dir: Path) -> bool:
 
 
 def iter_artifact_compile_range_dirs(backbone_dir: Path):
-    """Iterate through artifact_compile_range directories and binary files in backbone.
-
-    This function yields both unpacked artifacts (directories) and binary artifacts (files)
-    that match the artifact_compile_range naming pattern.
+    """Iterate through artifact_compile_range directories in backbone.
 
     Args:
         backbone_dir: Path to the backbone directory
 
     Yields:
-        Path objects for each artifact_compile_range directory or binary file
+        Path objects for each artifact_compile_range directory
     """
     for item in backbone_dir.iterdir():
-        # Yield both directories (unpacked) and files (binary) that match the pattern
-        # Explicitly check for dir or file to exclude symlinks and other special items
-        if item.name.startswith(ARTIFACT_COMPILE_RANGE_PREFIX) and (
-            item.is_dir() or item.is_file()
-        ):
+        if item.is_dir() and item.name.startswith(ARTIFACT_COMPILE_RANGE_PREFIX):
             yield item
 
 
 def _has_artifact_compile_range_with_triton(backbone_dir: Path) -> bool:
-    """Check if backbone directory has artifact_compile_range artifacts (unpacked or binary)."""
+    """Check if backbone directory has artifact_compile_range dirs with triton."""
     for artifact_dir in iter_artifact_compile_range_dirs(backbone_dir):
-        # Binary artifact (file) — contains packed triton data
-        if artifact_dir.is_file():
-            return True
-        # Unpacked artifact (directory) — check for triton subdirectory
         triton_dir = artifact_dir / "triton"
         if triton_dir.exists():
             return True
@@ -457,7 +446,7 @@ def find_vllm_kernel_dirs(
 ) -> List[Path]:
     """Find kernel directories for new vLLM structure.
 
-    Searches both torch_compile_cache and torch_aot_compile layouts.
+    Prefers torch_aot_compile; falls back to torch_compile_cache.
 
     Args:
         cache_dir: Root cache directory
@@ -467,23 +456,28 @@ def find_vllm_kernel_dirs(
         triton_subpath: Relative path from artifact_dir to triton's parent.
             None means triton is directly under artifact_dir.
     """
-    kernel_dirs: List[Path] = []
-
-    # torch_compile_cache layout (backbone/artifact_compile_range_*)
-    vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
-    if vllm_root_dir.exists():
-        for rank_dir in vllm_root_dir.iterdir():
-            kernel_dirs.extend(
-                _process_rank_directory(
-                    rank_dir, triton_cache_key, artifact_compile_range, triton_subpath
-                )
-            )
-
-    # torch_aot_compile layout (inductor_cache/triton/)
-    kernel_dirs.extend(
-        _find_kernel_dirs_in_aot_cache(cache_dir, vllm_hash, triton_cache_key)
+    # AOT-first: if this hash has an AOT layout, use it exclusively
+    aot_triton = (
+        cache_dir / "torch_compile_cache" / "torch_aot_compile"
+        / vllm_hash / "inductor_cache" / "triton"
     )
+    if aot_triton.is_dir():
+        return _find_kernel_dirs_in_aot_cache(
+            cache_dir, vllm_hash, triton_cache_key
+        )
 
+    # Fallback: torch_compile_cache layout (backbone/artifact_compile_range_*)
+    vllm_root_dir = cache_dir / "torch_compile_cache" / vllm_hash
+    if not vllm_root_dir.exists():
+        return []
+
+    kernel_dirs: List[Path] = []
+    for rank_dir in vllm_root_dir.iterdir():
+        kernel_dirs.extend(
+            _process_rank_directory(
+                rank_dir, triton_cache_key, artifact_compile_range, triton_subpath
+            )
+        )
     return kernel_dirs
 
 
