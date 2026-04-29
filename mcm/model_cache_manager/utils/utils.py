@@ -2,6 +2,7 @@
 Utilities.
 """
 
+import os
 import re
 import logging
 import shutil
@@ -16,6 +17,7 @@ from model_cache_manager.utils.mcm_constants import (
     MODE_TRITON,
     MODE_VLLM,
     MODE_VLLM_LEGACY,
+    MODE_HELION,
     ARTIFACT_COMPILE_RANGE_PREFIX,
 )
 
@@ -245,6 +247,29 @@ def _has_vllm_aot_cache_structure(cache_dir: Path) -> bool:
     return False
 
 
+def _has_helion_cache_structure(cache_dir: Path) -> bool:
+    """Check if directory has Helion cache structure.
+
+    Helion caches have ``*.best_config`` files alongside a ``triton/``
+    directory at the root level.
+    """
+    if not cache_dir.is_dir():
+        return False
+
+    has_best_config = False
+    has_triton = False
+
+    for item in cache_dir.iterdir():
+        if item.is_file() and item.name.endswith(".best_config"):
+            has_best_config = True
+        elif item.is_dir() and item.name == "triton":
+            has_triton = True
+        if has_best_config and has_triton:
+            return True
+
+    return False
+
+
 def detect_cache_mode(cache_dir: Path) -> str:
     """
     Auto-detect cache mode based on directory structure.
@@ -254,31 +279,24 @@ def detect_cache_mode(cache_dir: Path) -> str:
 
     Returns:
         'vllm' for new vLLM structure, 'vllm-legacy' for old vLLM structure,
-        'triton' otherwise
+        'helion' for Helion structure, 'triton' otherwise
     """
     if not cache_dir.exists():
         return MODE_TRITON
 
-    # Check for new vLLM cache structure (with backbone/artifact_compile_range_* directories)
-    if _has_vllm_cache_structure(cache_dir):
+    # Check for vLLM cache structures (new or AOT)
+    if _has_vllm_cache_structure(cache_dir) or _has_vllm_aot_cache_structure(cache_dir):
         return MODE_VLLM
 
-    # Check for vLLM AOT compile structure (inductor_cache/triton/)
-    if _has_vllm_aot_cache_structure(cache_dir):
-        return MODE_VLLM
+    # Check for Helion cache structure (*.best_config + triton/)
+    if _has_helion_cache_structure(cache_dir):
+        return MODE_HELION
 
     # Check for legacy vLLM cache structure (with direct triton_cache)
     if _has_vllm_legacy_cache_structure(cache_dir):
         return MODE_VLLM_LEGACY
 
-    # Check for direct triton cache structure
-    # Look for triton kernel files in the directory
-    for item in cache_dir.rglob("*.json"):
-        # Triton kernels typically have .json metadata files
-        if item.parent.name.startswith("triton_"):
-            return MODE_TRITON
-
-    return MODE_TRITON  # Default to triton mode
+    return MODE_TRITON
 
 
 # Kernel operations utilities
@@ -481,6 +499,33 @@ def find_vllm_kernel_dirs(
     return kernel_dirs
 
 
+def _resolve_helion_triton_dir(cache_dir: Path) -> Optional[Path]:
+    """Resolve the triton directory for a Helion cache.
+
+    When ``TRITON_CACHE_DIR`` is set the triton kernels live there directly;
+    otherwise they are under ``cache_dir/triton/``.
+    """
+    triton_cache_env = os.getenv("TRITON_CACHE_DIR")
+    if triton_cache_env:
+        candidate = Path(triton_cache_env)
+        if candidate.is_dir():
+            return candidate
+    candidate = cache_dir / "triton"
+    if candidate.is_dir():
+        return candidate
+    return None
+
+
+def find_helion_kernel_dirs(
+    cache_dir: Path, triton_cache_key: str
+) -> List[Path]:
+    """Find kernel directories for Helion cache structure."""
+    triton_dir = _resolve_helion_triton_dir(cache_dir)
+    if triton_dir is None:
+        return []
+    return _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)
+
+
 def get_kernel_directories(
     cache_dir: Path, mode: str, identifier: KernelIdentifier
 ) -> List[Path]:
@@ -494,7 +539,6 @@ def get_kernel_directories(
     if mode == MODE_VLLM:
         if identifier.vllm_hash is None:
             raise ValueError("vllm_hash cannot be None for VLLM mode")
-        # Use artifact_compile_range and triton_subpath if available for precise lookup
         return find_vllm_kernel_dirs(
             cache_dir,
             identifier.vllm_hash,
@@ -502,6 +546,8 @@ def get_kernel_directories(
             identifier.artifact_compile_range,
             identifier.triton_subpath,
         )
+    if mode == MODE_HELION:
+        return find_helion_kernel_dirs(cache_dir, identifier.hash_key)
     return [cache_dir / identifier.hash_key]
 
 
@@ -578,6 +624,11 @@ def extract_identifiers_from_groups(
                         mode=mode,
                         vllm_hash=kernel_dict["vllm_hash"],
                         triton_cache_key=kernel_dict["triton_cache_key"],
+                    )
+                elif mode == MODE_HELION:
+                    identifier = create_kernel_identifier(
+                        mode=mode,
+                        hash=kernel_dict["triton_cache_key"],
                     )
                 else:
                     identifier = create_kernel_identifier(

@@ -609,3 +609,131 @@ class VllmKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
     kernel: Mapped["VllmKernelOrm"] = relationship(
         "VllmKernelOrm", back_populates="files"
     )
+
+
+class HelionKernelOrm(Base, BaseKernelMixin):
+    """SQLAlchemy ORM model for a Helion Triton kernel."""
+
+    __tablename__ = "helion_kernels"
+
+    triton_cache_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    cache_dir: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    helion_hash: Mapped[Optional[str]] = mapped_column(String)
+    best_config: Mapped[Optional[str]] = mapped_column(String)
+    is_best: Mapped[Optional[bool]] = mapped_column(Boolean)
+
+    files: Mapped[List["HelionKernelFileOrm"]] = relationship(
+        "HelionKernelFileOrm",
+        back_populates="kernel",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Converts the ORM object to a dictionary."""
+        d = {c.key: getattr(self, c.key) for c in self.__table__.columns}
+        if "kernel_metadata_json" in d:
+            d["metadata"] = d.pop("kernel_metadata_json")
+        return d
+
+    @staticmethod
+    def get_helion_kernel_values(
+        k_data: Kernel,
+        cache_dir: str,
+        helion_hash: Optional[str],
+        best_config: Optional[str],
+        is_best: bool,
+    ) -> Dict[str, Any]:
+        """Get Helion-specific kernel values."""
+        kernel_values = HelionKernelOrm.get_common_kernel_values(k_data)
+        kernel_values.update(
+            {
+                "triton_cache_key": k_data.hash,
+                "cache_dir": cache_dir,
+                "helion_hash": helion_hash,
+                "best_config": best_config,
+                "is_best": is_best,
+            }
+        )
+        return kernel_values
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    @classmethod
+    def upsert_from_dto(
+        cls,
+        session: SqlaSession,
+        k_data: Kernel,
+        cache_dir: str,
+        helion_hash: Optional[str],
+        best_config: Optional[str],
+        is_best: bool,
+    ) -> None:
+        """Creates or updates a Helion kernel record from a Kernel DTO."""
+        kernel_values = cls.get_helion_kernel_values(
+            k_data, cache_dir, helion_hash, best_config, is_best
+        )
+
+        stmt = sqlite_insert(cls).values(kernel_values)
+        update_dict = {
+            col.name: getattr(stmt.excluded, col.name)
+            for col in cls.__table__.columns
+            if col.name not in ("triton_cache_key", "cache_dir")
+        }
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["triton_cache_key", "cache_dir"],
+            set_=update_dict,
+        )
+        session.execute(stmt)
+        log.debug(
+            "Upserted Helion kernel triton_cache_key %s cache_dir %s",
+            k_data.hash,
+            cache_dir,
+        )
+
+        session.query(HelionKernelFileOrm).filter(
+            HelionKernelFileOrm.triton_cache_key == k_data.hash,
+            HelionKernelFileOrm.cache_dir == cache_dir,
+        ).delete(synchronize_session="fetch")
+
+        for f_dto in k_data.files:
+            kernel_file_orm = HelionKernelFileOrm(
+                triton_cache_key=k_data.hash,
+                cache_dir=cache_dir,
+                type=f_dto.file_type,
+                rel_path=f_dto.path.name,
+                size=f_dto.size,
+            )
+            session.add(kernel_file_orm)
+        log.debug(
+            "Added %d files for Helion kernel %s",
+            len(k_data.files),
+            k_data.hash,
+        )
+
+
+class HelionKernelFileOrm(Base):  # pylint: disable=too-few-public-methods
+    """SQLAlchemy ORM model for a file associated with a Helion kernel."""
+
+    __tablename__ = "helion_files"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, autoincrement=True
+    )
+    triton_cache_key: Mapped[str] = mapped_column(String)
+    cache_dir: Mapped[str] = mapped_column(String)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["triton_cache_key", "cache_dir"],
+            ["helion_kernels.triton_cache_key", "helion_kernels.cache_dir"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    type: Mapped[Optional[str]] = mapped_column(String)
+    rel_path: Mapped[Optional[str]] = mapped_column(String)
+    size: Mapped[Optional[int]] = mapped_column(Integer)
+
+    kernel: Mapped["HelionKernelOrm"] = relationship(
+        "HelionKernelOrm", back_populates="files"
+    )

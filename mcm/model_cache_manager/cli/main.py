@@ -24,7 +24,7 @@ from ..services.prune import PruningService, PruneStats
 from ..services.warm import WarmupService
 from .cli_helpers import resolve_mode, ensure_db, service_ctx
 from .cli_options import get_common_search_options, CommonSearchOptions, WarmOptions
-from ..utils.mcm_constants import MODE_VLLM, MODE_TRITON
+from ..utils.mcm_constants import MODE_VLLM, MODE_TRITON, MODE_HELION
 
 
 log = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
     )
     table.add_column("Hash", style="dim", width=15, overflow="fold")
     table.add_column("Name", style="cyan", min_width=20, overflow="fold")
-    if mode == MODE_VLLM:
+    if mode in (MODE_VLLM, MODE_HELION):
         table.add_column("Best", style="bold yellow", width=4)
     table.add_column("Hits", style="green", min_width=5, overflow="fold")
     table.add_column("Last Access", style="magenta", width=18)
@@ -145,6 +145,7 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
         hash_display_strategies = {
             MODE_TRITON: lambda r: r.get("hash", "N/A")[:12] + "...",
             MODE_VLLM: lambda r: r.get("vllm_hash", "N/A"),
+            MODE_HELION: lambda r: r.get("triton_cache_key", "N/A")[:12] + "...",
         }
         hash_mode = hash_display_strategies.get(mode, lambda r: r.get("hash", "N/A"))(
             row_dict
@@ -153,8 +154,8 @@ def _display_kernels_table(rows: List[Dict[str, Any]], mode: str = MODE_TRITON):
         # Build row data based on mode
         row_data = [hash_mode, row_dict.get("name", "N/A")]
 
-        # Add BEST indicator for vLLM mode
-        if mode == MODE_VLLM:
+        # Add BEST indicator for vLLM and Helion modes
+        if mode in (MODE_VLLM, MODE_HELION):
             is_best = row_dict.get("is_best", False)
             row_data.append("Y" if is_best else "")
 

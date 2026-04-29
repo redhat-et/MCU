@@ -12,6 +12,7 @@ from model_cache_manager.utils.utils import (
     get_temp_extraction_dir,
     _find_kernel_dirs_in_aot_cache,
     find_vllm_kernel_dirs,
+    find_helion_kernel_dirs,
 )
 
 
@@ -257,6 +258,70 @@ class TestFindVllmKernelDirsAot(unittest.TestCase):
             self.temp_dir, "nonexistent", "KERNEL_A"
         )
         self.assertEqual(result, [])
+
+
+class TestFindHelionKernelDirs(unittest.TestCase):
+    """Tests for find_helion_kernel_dirs function."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_finds_kernel_in_helion_cache(self):
+        """Test finding a kernel in the helion triton layout."""
+        kernel_dir = self.temp_dir / "triton" / "0" / "KERNEL_ABC"
+        kernel_dir.mkdir(parents=True)
+
+        result = find_helion_kernel_dirs(self.temp_dir, "KERNEL_ABC")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].name, "KERNEL_ABC")
+
+    def test_returns_empty_when_no_triton_dir(self):
+        """Test returns empty list when triton/ doesn't exist."""
+        self.temp_dir.mkdir(exist_ok=True)
+        result = find_helion_kernel_dirs(self.temp_dir, "KERNEL_ABC")
+        self.assertEqual(result, [])
+
+    def test_returns_empty_when_kernel_missing(self):
+        """Test returns empty list when kernel hash doesn't exist."""
+        (self.temp_dir / "triton" / "0" / "OTHER").mkdir(parents=True)
+        result = find_helion_kernel_dirs(self.temp_dir, "NONEXISTENT")
+        self.assertEqual(result, [])
+
+    def test_finds_kernel_across_devices(self):
+        """Test finding a kernel under multiple device subdirs."""
+        (self.temp_dir / "triton" / "0" / "KERNEL_ABC").mkdir(parents=True)
+        (self.temp_dir / "triton" / "1" / "KERNEL_ABC").mkdir(parents=True)
+
+        result = find_helion_kernel_dirs(self.temp_dir, "KERNEL_ABC")
+        self.assertEqual(len(result), 2)
+
+    @patch.dict("os.environ", {"TRITON_CACHE_DIR": ""})
+    def test_ignores_empty_triton_cache_dir_env(self):
+        """Test that an empty TRITON_CACHE_DIR falls back to cache_dir/triton."""
+        (self.temp_dir / "triton" / "0" / "KERNEL_X").mkdir(parents=True)
+
+        result = find_helion_kernel_dirs(self.temp_dir, "KERNEL_X")
+        self.assertEqual(len(result), 1)
+
+    def test_triton_cache_dir_env_takes_precedence(self):
+        """Test that TRITON_CACHE_DIR is used when set."""
+        alt_triton = self.temp_dir / "alt_triton"
+        (alt_triton / "0" / "KERNEL_Y").mkdir(parents=True)
+
+        # Also create under cache_dir/triton — should NOT be found
+        (self.temp_dir / "triton" / "0" / "KERNEL_Z").mkdir(parents=True)
+
+        with patch.dict("os.environ", {"TRITON_CACHE_DIR": str(alt_triton)}):
+            result = find_helion_kernel_dirs(self.temp_dir, "KERNEL_Y")
+            self.assertEqual(len(result), 1)
+
+            result_z = find_helion_kernel_dirs(self.temp_dir, "KERNEL_Z")
+            self.assertEqual(len(result_z), 0)
 
 
 if __name__ == "__main__":

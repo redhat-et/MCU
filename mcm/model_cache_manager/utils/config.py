@@ -4,11 +4,23 @@ Configuration settings for the Model Cache Manager.
 This module provides configuration settings including paths and defaults.
 """
 
+import getpass
 import platform
 import os
 from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings
+
+
+def _default_helion_cache_dir() -> Path:
+    helion_env = os.getenv("HELION_CACHE_DIR")
+    if helion_env:
+        return Path(helion_env)
+    triton_env = os.getenv("TRITON_CACHE_DIR")
+    if triton_env:
+        return Path(triton_env)
+    user = getpass.getuser()
+    return Path("/tmp") / f"torchinductor_{user}" / "helion"
 
 
 class Settings(BaseSettings):
@@ -26,6 +38,9 @@ class Settings(BaseSettings):
     )
     model_cache_dir_vllm: Path = Field(
         default_factory=lambda: Path.home() / ".cache" / "vllm"
+    )
+    model_cache_dir_helion: Path = Field(
+        default_factory=_default_helion_cache_dir
     )
     data_dir: Path = Field(
         default_factory=lambda: Path.home() / (
