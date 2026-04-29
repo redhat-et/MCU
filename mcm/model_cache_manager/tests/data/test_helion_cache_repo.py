@@ -120,7 +120,7 @@ class TestHelionCacheRepository(unittest.TestCase):
             results = list(repo.kernels())
 
         self.assertEqual(len(results), 1)
-        _cache_dir, triton_key, helion_hash, best_config, is_best, kernel = results[0]
+        _cache_dir, triton_key, helion_hash, _best_config, is_best, kernel = results[0]
         self.assertEqual(kernel.name, "_helion_add")
         self.assertEqual(triton_key, "KERNEL_A")
         self.assertEqual(helion_hash, "hash1")
