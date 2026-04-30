@@ -499,7 +499,7 @@ def find_vllm_kernel_dirs(
     return kernel_dirs
 
 
-def _resolve_helion_triton_dir(cache_dir: Path) -> Optional[Path]:
+def resolve_helion_triton_dir(cache_dir: Path) -> Optional[Path]:
     """Resolve the triton directory for a Helion cache.
 
     When ``TRITON_CACHE_DIR`` is set the triton kernels live there directly;
@@ -520,7 +520,7 @@ def find_helion_kernel_dirs(
     cache_dir: Path, triton_cache_key: str
 ) -> List[Path]:
     """Find kernel directories for Helion cache structure."""
-    triton_dir = _resolve_helion_triton_dir(cache_dir)
+    triton_dir = resolve_helion_triton_dir(cache_dir)
     if triton_dir is None:
         return []
     return _find_kernel_dirs_in_triton(triton_dir, triton_cache_key)

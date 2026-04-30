@@ -27,7 +27,6 @@ from .db_models import (
 
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel, VllmKernelMetadata
-from ..utils.mcm_constants import IR_EXTS
 from ..utils.utils import build_common_search_filters
 from . import database_utils
 from .database_utils import create_file_orm_dict
@@ -297,7 +296,7 @@ class Database:
 
             if f_ext:
                 q = q.filter(
-                    or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
+                    or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in f_ext])
                 )
 
             size = q.scalar() or 0
@@ -335,7 +334,7 @@ class VllmDatabase:
             if f_ext:
                 q = q.filter(
                     or_(
-                        *[VllmKernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS]
+                        *[VllmKernelFileOrm.rel_path.like(f"%{ext}") for ext in f_ext]
                     )
                 )
 
@@ -714,9 +713,6 @@ class VllmDatabase:
             log.info("vLLM Database engine connection pool disposed.")
 
 
-HELION_BATCH_ITEM_LENGTH = 5  # (kernel, cache_dir, helion_hash, best_config, is_best)
-
-
 class HelionDatabase:
     """Manages database interactions for Helion kernel metadata."""
 
@@ -928,7 +924,7 @@ class HelionDatabase:
                 q = q.filter(
                     or_(
                         *[HelionKernelFileOrm.rel_path.like(f"%{ext}")
-                          for ext in IR_EXTS]
+                          for ext in f_ext]
                     )
                 )
             size = q.scalar() or 0

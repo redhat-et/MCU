@@ -180,10 +180,12 @@ class KernelOrm(Base, BaseKernelMixin):
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)
+        preserved_fields = {"runtime_hits", "last_access_time"}
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
             if col.name not in ("hash", "cache_dir")
+            and col.name not in preserved_fields
         }
         stmt = stmt.on_conflict_do_update(
             index_elements=["hash", "cache_dir"], set_=update_dict
@@ -295,11 +297,13 @@ class VllmLegacyKernelOrm(Base, BaseKernelMixin):
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)
+        preserved_fields = {"runtime_hits", "last_access_time"}
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
             if col.name
             not in ("cache_dir", "rank_x_y", "vllm_hash", "triton_cache_key")
+            and col.name not in preserved_fields
         }
         stmt = stmt.on_conflict_do_update(
             index_elements=[
@@ -442,6 +446,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)
+        preserved_fields = {"runtime_hits", "last_access_time"}
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
@@ -453,6 +458,7 @@ class VllmKernelOrm(Base, BaseKernelMixin):
                 "triton_cache_key",
                 "artifact_compile_range",
             )
+            and col.name not in preserved_fields
         }
         stmt = stmt.on_conflict_do_update(
             index_elements=[
@@ -674,10 +680,12 @@ class HelionKernelOrm(Base, BaseKernelMixin):
         )
 
         stmt = sqlite_insert(cls).values(kernel_values)
+        preserved_fields = {"runtime_hits", "last_access_time"}
         update_dict = {
             col.name: getattr(stmt.excluded, col.name)
             for col in cls.__table__.columns
             if col.name not in ("triton_cache_key", "cache_dir")
+            and col.name not in preserved_fields
         }
         stmt = stmt.on_conflict_do_update(
             index_elements=["triton_cache_key", "cache_dir"],

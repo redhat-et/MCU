@@ -12,7 +12,7 @@ import os
 import threading
 from typing import Iterable, Optional
 from ..utils.paths import get_cache_dir
-from ..utils.utils import iter_artifact_compile_range_dirs, _resolve_helion_triton_dir
+from ..utils.utils import iter_artifact_compile_range_dirs, resolve_helion_triton_dir
 from ..utils.mcm_constants import MODE_HELION
 from ..models.kernel import Kernel
 from ..plugins.discovery import discover_plugins
@@ -603,7 +603,7 @@ class HelionCacheRepository:  # pylint: disable=too-few-public-methods
             Tuples of (cache_dir, triton_cache_key, helion_hash,
                        best_config, is_best, kernel)
         """
-        triton_dir = _resolve_helion_triton_dir(self.root)
+        triton_dir = resolve_helion_triton_dir(self.root)
         if triton_dir is None:
             log.warning("No triton directory found in %s", self.root)
             return
