@@ -125,6 +125,12 @@ class TestHelionPruningService(unittest.TestCase):
         mock_delete_ir.return_value = (512, ["_helion_add.ttir", "_helion_add.llir"])
 
         mock_session = MagicMock()
+        mock_query = MagicMock()
+        mock_session.query.return_value = mock_query
+        mock_filter = MagicMock()
+        mock_query.filter.return_value = mock_filter
+        mock_filter.all.return_value = []
+
         mock_kernel_record = MagicMock()
         mock_kernel_record.files = []
         mock_session.get.return_value = mock_kernel_record
@@ -135,8 +141,8 @@ class TestHelionPruningService(unittest.TestCase):
         self.svc._delete_kernel_unified(identifier, mock_session, ir_only=True)
 
         mock_session.query.assert_called()
-        filter_call = mock_session.query.return_value.filter.call_args
-        filter_args = filter_call[0]
+        mock_query.filter.assert_called()
+        filter_args = mock_query.filter.call_args[0]
 
         found_triton_key_filter = False
         found_cache_dir_filter = False
