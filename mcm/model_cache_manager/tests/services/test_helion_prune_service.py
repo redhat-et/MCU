@@ -117,7 +117,7 @@ class TestHelionPruningService(unittest.TestCase):
 
     @patch("model_cache_manager.services.prune.delete_ir_files_from_dirs")
     @patch("model_cache_manager.services.prune.get_kernel_directories")
-    def test_delete_ir_file_records_uses_helion_fk(
+    def test_delete_ir_file_records_uses_helion_fk(  # pylint: disable=no-member
         self, mock_get_dirs, mock_delete_ir
     ):
         """Test that _delete_ir_file_records queries by triton_cache_key for helion."""
