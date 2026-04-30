@@ -3,6 +3,7 @@ Unit tests for the HelionCacheRepository.
 """
 
 import json
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -21,9 +22,14 @@ class TestHelionCacheRepository(unittest.TestCase):
         self.temp_dir = Path(tempfile.mkdtemp())
         self.cache_dir = self.temp_dir / "helion_cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._env_patch = patch.dict(
+            os.environ, {"TRITON_CACHE_DIR": ""}, clear=False
+        )
+        self._env_patch.start()
 
     def tearDown(self):
         """Clean up after each test method."""
+        self._env_patch.stop()
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_init_with_existing_directory(self):

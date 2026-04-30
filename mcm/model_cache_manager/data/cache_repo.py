@@ -579,13 +579,20 @@ class HelionCacheRepository:  # pylint: disable=too-few-public-methods
             ``(helion_hash, raw_json_content)`` for each best_config file.
         """
         configs: dict[str, tuple[str, str]] = {}
-        for path in self.root.glob("*.best_config"):
+        for path in sorted(self.root.glob("*.best_config")):
             helion_hash = path.stem
             try:
                 raw = path.read_text(encoding="utf-8")
                 data = json.loads(raw)
                 backend_key = data.get("backend_cache_key")
                 if backend_key:
+                    if backend_key in configs:
+                        log.warning(
+                            "Duplicate backend_cache_key '%s' in %s; keeping first occurrence",
+                            backend_key,
+                            path,
+                        )
+                        continue
                     configs[backend_key] = (helion_hash, raw)
             except (json.JSONDecodeError, OSError) as exc:
                 log.warning("Could not read best_config %s: %s", path, exc)
