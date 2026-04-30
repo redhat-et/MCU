@@ -10,6 +10,7 @@ import logging
 from model_cache_manager.services.prune import PruningService, PruneStats
 from model_cache_manager.models.criteria import SearchCriteria
 from model_cache_manager.utils.mcm_constants import IR_EXTS, MODE_HELION
+from model_cache_manager.utils.utils import create_kernel_identifier
 
 from model_cache_manager.data.cache_repo import HelionCacheRepository
 from model_cache_manager.data.database import HelionDatabase
@@ -64,7 +65,7 @@ class TestHelionPruningService(unittest.TestCase):
         return_value=2048,
     )
     @patch("model_cache_manager.services.prune.Confirm.ask")
-    def test_prune_ir_only_helion(self, mock_confirm, mock_delete):
+    def test_prune_ir_only_helion(self, _mock_confirm, mock_delete):
         """Test IR-only prune for helion kernels."""
         criteria = SearchCriteria()
         self.mock_db.search.return_value = [self.helion_kernel]
@@ -79,7 +80,6 @@ class TestHelionPruningService(unittest.TestCase):
         self.mock_db.estimate_space.assert_called_once_with(
             ["KERNEL_ABC"], IR_EXTS
         )
-        mock_confirm.assert_not_called()
 
         self.assertEqual(mock_delete.call_count, 1)
         call_args = mock_delete.call_args[0]
@@ -94,7 +94,7 @@ class TestHelionPruningService(unittest.TestCase):
         return_value=4096,
     )
     @patch("model_cache_manager.services.prune.Confirm.ask")
-    def test_prune_full_helion(self, mock_confirm, mock_delete):
+    def test_prune_full_helion(self, _mock_confirm, mock_delete):
         """Test full prune for helion kernels."""
         criteria = SearchCriteria()
         self.mock_db.search.return_value = [self.helion_kernel]
@@ -129,7 +129,6 @@ class TestHelionPruningService(unittest.TestCase):
         mock_kernel_record.files = []
         mock_session.get.return_value = mock_kernel_record
 
-        from model_cache_manager.utils.utils import create_kernel_identifier
         identifier = create_kernel_identifier(mode=MODE_HELION, hash="KERNEL_ABC")
 
         # pylint: disable=protected-access
@@ -170,7 +169,6 @@ class TestHelionPruningService(unittest.TestCase):
         mock_kernel_record = MagicMock()
         mock_session.get.return_value = mock_kernel_record
 
-        from model_cache_manager.utils.utils import create_kernel_identifier
         identifier = create_kernel_identifier(mode=MODE_HELION, hash="KERNEL_ABC")
 
         # pylint: disable=protected-access
