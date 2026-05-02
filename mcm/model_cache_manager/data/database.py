@@ -910,7 +910,8 @@ class HelionDatabase:
     def find_duplicates(self) -> List[List[Dict[str, Any]]]:
         """Finds groups of duplicate Helion kernels."""
         return database_utils.find_duplicates_generic(
-            self.SessionLocal, HelionKernelOrm, "triton_cache_key"
+            self.SessionLocal, HelionKernelOrm, "triton_cache_key",
+            ["cache_dir"],
         )
 
     def estimate_space(self, hashes: Iterable[str], f_ext: Set[str] | None) -> int:

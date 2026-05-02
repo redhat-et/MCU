@@ -19,7 +19,10 @@ def _default_helion_cache_dir() -> Path:
     triton_env = os.getenv("TRITON_CACHE_DIR")
     if triton_env:
         return Path(triton_env)
-    user = getpass.getuser()
+    try:
+        user = getpass.getuser()
+    except KeyError:
+        user = str(os.getuid())
     return Path("/tmp") / f"torchinductor_{user}" / "helion"
 
 
