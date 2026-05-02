@@ -1,17 +1,16 @@
+# pylint: disable=duplicate-code
 """
 Unit tests for the HelionDatabase and HelionKernelOrm.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch, Mock
-from pathlib import Path
-import time
+from unittest.mock import MagicMock, patch
 
 from model_cache_manager.data.database import HelionDatabase
 from model_cache_manager.data.db_models import HelionKernelOrm
-from model_cache_manager.models.kernel import Kernel, KernelFile
 from model_cache_manager.models.criteria import SearchCriteria
 from model_cache_manager.tests.test_utils import (
+    create_mock_kernel,
     setup_kernel_orm_mock,
     setup_sqlite_insert_mock,
     setup_query_mock,
@@ -20,72 +19,13 @@ from model_cache_manager.tests.test_utils import (
 )
 
 
-def create_mock_kernel(
-    hash_val="test_hash",
-    name="_helion_add",
-    backend="cuda",
-    arch="89",
-    files=None,
-):
-    """Helper to create a mock Kernel object."""
-    if files is None:
-        f1 = Mock(spec=KernelFile)
-        f1.path = Path("/test/_helion_add.ptx")
-        f1.file_type = "ptx"
-        f1.size = 1024
-
-        f2 = Mock(spec=KernelFile)
-        f2.path = Path("/test/_helion_add.json")
-        f2.file_type = "json"
-        f2.size = 512
-
-        files = [f1, f2]
-
-    kernel = Mock(spec=Kernel)
-    kernel.hash = hash_val
-    kernel.name = name
-    kernel.backend = backend
-    kernel.arch = arch
-    kernel.files = files
-    kernel.metadata = {"test": "metadata"}
-    kernel.modified_time = time.time()
-    kernel.warp_size = 32
-    kernel.num_warps = 2
-    kernel.num_stages = 1
-    kernel.num_ctas = 1
-    kernel.maxnreg = None
-    kernel.cluster_dims = None
-    kernel.ptx_version = None
-    kernel.enable_fp_fusion = True
-    kernel.launch_cooperative_grid = False
-    kernel.supported_fp8_dtypes = []
-    kernel.deprecated_fp8_dtypes = []
-    kernel.default_dot_input_precision = "tf32"
-    kernel.allowed_dot_input_precisions = ["tf32", "ieee"]
-    kernel.max_num_imprecise_acc_default = 0
-    kernel.extern_libs = []
-    kernel.debug = False
-    kernel.backend_name = "cuda"
-    kernel.sanitize_overflow = False
-    kernel.triton_version = "3.3.0"
-    kernel.shared = 0
-    kernel.tmem_size = None
-    kernel.global_scratch_size = None
-    kernel.global_scratch_align = None
-    kernel.waves_per_eu = None
-    kernel.kpack = None
-    kernel.matrix_instr_nonkdim = None
-
-    return kernel
-
-
 class TestHelionKernelOrm(unittest.TestCase):
     """Test suite for the HelionKernelOrm."""
 
     def setUp(self):
         """Set up test fixtures."""
         self.mock_session = MagicMock()
-        self.mock_kernel = create_mock_kernel()
+        self.mock_kernel = create_mock_kernel(name="_helion_add", arch="89")
 
     def test_upsert_from_dto(self):
         """Test upsert_from_dto method."""
@@ -156,7 +96,7 @@ class TestHelionDatabase(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.mock_kernel = create_mock_kernel()
+        self.mock_kernel = create_mock_kernel(name="_helion_add", arch="89")
 
     @patch("model_cache_manager.data.database.create_engine_and_session")
     def test_init(self, mock_create_engine_session):

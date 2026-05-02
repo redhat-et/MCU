@@ -158,6 +158,31 @@ def create_mock_kernel(
     mock_kernel.modified_time = modified_time
     mock_kernel.cache_dir = cache_dir
     mock_kernel.files = files
+    mock_kernel.warp_size = 32
+    mock_kernel.num_warps = 4
+    mock_kernel.num_stages = 2
+    mock_kernel.num_ctas = 1
+    mock_kernel.maxnreg = None
+    mock_kernel.cluster_dims = None
+    mock_kernel.ptx_version = None
+    mock_kernel.enable_fp_fusion = True
+    mock_kernel.launch_cooperative_grid = False
+    mock_kernel.supported_fp8_dtypes = []
+    mock_kernel.deprecated_fp8_dtypes = []
+    mock_kernel.default_dot_input_precision = "fp16"
+    mock_kernel.allowed_dot_input_precisions = ["fp16", "fp32"]
+    mock_kernel.max_num_imprecise_acc_default = None
+    mock_kernel.extern_libs = []
+    mock_kernel.debug = False
+    mock_kernel.backend_name = "cuda"
+    mock_kernel.sanitize_overflow = False
+    mock_kernel.shared = 0
+    mock_kernel.tmem_size = None
+    mock_kernel.global_scratch_size = None
+    mock_kernel.global_scratch_align = None
+    mock_kernel.waves_per_eu = None
+    mock_kernel.kpack = None
+    mock_kernel.matrix_instr_nonkdim = None
 
     for attr, value in kwargs.items():
         setattr(mock_kernel, attr, value)

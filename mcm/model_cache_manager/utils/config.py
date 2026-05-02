@@ -16,9 +16,6 @@ def _default_helion_cache_dir() -> Path:
     helion_env = os.getenv("HELION_CACHE_DIR")
     if helion_env:
         return Path(helion_env)
-    triton_env = os.getenv("TRITON_CACHE_DIR")
-    if triton_env:
-        return Path(triton_env)
     try:
         user = getpass.getuser()
     except KeyError:

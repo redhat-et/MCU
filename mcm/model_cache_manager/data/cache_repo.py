@@ -584,8 +584,11 @@ class HelionCacheRepository:  # pylint: disable=too-few-public-methods
             try:
                 raw = path.read_text(encoding="utf-8")
                 data = json.loads(raw)
+                if not isinstance(data, dict):
+                    log.warning("Invalid best_config payload in %s", path)
+                    continue
                 backend_key = data.get("backend_cache_key")
-                if backend_key:
+                if isinstance(backend_key, str) and backend_key:
                     if backend_key in configs:
                         log.warning(
                             "Duplicate backend_cache_key '%s' in %s; keeping first occurrence",

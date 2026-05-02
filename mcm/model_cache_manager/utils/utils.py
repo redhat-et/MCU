@@ -250,24 +250,21 @@ def _has_vllm_aot_cache_structure(cache_dir: Path) -> bool:
 def _has_helion_cache_structure(cache_dir: Path) -> bool:
     """Check if directory has Helion cache structure.
 
-    Helion caches have ``*.best_config`` files alongside a ``triton/``
-    directory at the root level.
+    Helion caches have ``*.best_config`` files in ``cache_dir`` and triton
+    kernels available either under ``cache_dir/triton/`` or via
+    ``TRITON_CACHE_DIR`` in a split-cache layout.
     """
     if not cache_dir.is_dir():
         return False
 
-    has_best_config = False
-    has_triton = False
+    has_best_config = any(
+        item.is_file() and item.name.endswith(".best_config")
+        for item in cache_dir.iterdir()
+    )
+    if not has_best_config:
+        return False
 
-    for item in cache_dir.iterdir():
-        if item.is_file() and item.name.endswith(".best_config"):
-            has_best_config = True
-        elif item.is_dir() and item.name == "triton":
-            has_triton = True
-        if has_best_config and has_triton:
-            return True
-
-    return False
+    return resolve_helion_triton_dir(cache_dir) is not None
 
 
 def detect_cache_mode(cache_dir: Path) -> str:
