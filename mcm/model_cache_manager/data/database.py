@@ -20,12 +20,13 @@ from .db_models import (
     KernelFileOrm,
     VllmKernelOrm,
     VllmKernelFileOrm,
+    HelionKernelOrm,
+    HelionKernelFileOrm,
     SqlaSession,
 )
 
 from ..models.criteria import SearchCriteria
 from ..models.kernel import Kernel, VllmKernelMetadata
-from ..utils.mcm_constants import IR_EXTS
 from ..utils.utils import build_common_search_filters
 from . import database_utils
 from .database_utils import create_file_orm_dict
@@ -295,7 +296,7 @@ class Database:
 
             if f_ext:
                 q = q.filter(
-                    or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS])
+                    or_(*[KernelFileOrm.rel_path.like(f"%{ext}") for ext in f_ext])
                 )
 
             size = q.scalar() or 0
@@ -333,7 +334,7 @@ class VllmDatabase:
             if f_ext:
                 q = q.filter(
                     or_(
-                        *[VllmKernelFileOrm.rel_path.like(f"%{ext}") for ext in IR_EXTS]
+                        *[VllmKernelFileOrm.rel_path.like(f"%{ext}") for ext in f_ext]
                     )
                 )
 
@@ -710,3 +711,228 @@ class VllmDatabase:
         if self.engine:
             self.engine.dispose()
             log.info("vLLM Database engine connection pool disposed.")
+
+
+class HelionDatabase:
+    """Manages database interactions for Helion kernel metadata."""
+
+    def __init__(self) -> None:
+        """Initializes DB engine, session factory, and ensures schema exists."""
+        self.engine, self.SessionLocal = create_engine_and_session(  # pylint: disable=invalid-name
+            "helion"
+        )
+        self._ensure_schema()
+        log.info("Helion Database service interface initialized successfully.")
+
+    def _ensure_schema(self) -> None:
+        """Ensures database schema (tables, indexes) exists."""
+        database_utils.ensure_schema(self.engine)
+
+    def get_session(self) -> SqlaSession:
+        """Returns a new database session."""
+        return self.SessionLocal()
+
+    def insert_kernel(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        k_data: Kernel,
+        cache_dir: str,
+        helion_hash: str | None,
+        best_config: str | None,
+        is_best: bool,
+    ) -> None:
+        """Upserts a Helion kernel and its associated files into the database."""
+        session = self.get_session()
+        try:
+            HelionKernelOrm.upsert_from_dto(
+                session, k_data, cache_dir, helion_hash, best_config, is_best
+            )
+            session.commit()
+            log.info(
+                "Helion kernel %s with cache_dir %s upserted into DB.",
+                k_data.hash,
+                cache_dir,
+            )
+        except exc.IntegrityError as e:
+            session.rollback()
+            log.error(
+                "Failed to upsert Helion kernel %s: %s",
+                k_data.hash, e, exc_info=True,
+            )
+            raise
+        except exc.OperationalError as e:
+            session.rollback()
+            log.error(
+                "Failed to upsert Helion kernel %s: %s",
+                k_data.hash, e, exc_info=True,
+            )
+            raise
+        except Exception:
+            session.rollback()
+            log.error(
+                "DB Error: Failed to upsert Helion kernel %s.",
+                k_data.hash, exc_info=True,
+            )
+            raise
+        finally:
+            session.close()
+
+    def _upsert_helion_kernel(
+        self, session: SqlaSession, kernel_info: tuple
+    ) -> None:
+        """Upsert a single Helion kernel."""
+        k_data, cache_dir, helion_hash, best_config, is_best = kernel_info
+        kernel_values = HelionKernelOrm.get_helion_kernel_values(
+            k_data, cache_dir, helion_hash, best_config, is_best
+        )
+
+        stmt = sqlite_insert(HelionKernelOrm).values(kernel_values)
+        preserved_fields = {"runtime_hits", "last_access_time"}
+        update_dict = {
+            col.name: getattr(stmt.excluded, col.name)
+            for col in HelionKernelOrm.__table__.columns
+            if col.name not in ("triton_cache_key", "cache_dir")
+            and col.name not in preserved_fields
+        }
+        session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["triton_cache_key", "cache_dir"],
+                set_=update_dict,
+            )
+        )
+
+    def bulk_insert_kernels(
+        self, kernels_data: List[Tuple], batch_size: int = 1000
+    ) -> int:
+        """Bulk insert multiple Helion kernels efficiently."""
+        if not kernels_data:
+            log.info("No Helion kernels to insert")
+            return 0
+
+        session = self.get_session()
+        inserted_count = 0
+
+        try:
+            for i in range(0, len(kernels_data), batch_size):
+                batch = kernels_data[i : i + batch_size]
+
+                kernel_ids_to_clear = []
+                file_values_list = []
+                for item in batch:
+                    k_data, cache_dir = item[0], item[1]
+                    kernel_ids_to_clear.append((k_data.hash, str(cache_dir)))
+                    for f_dto in k_data.files:
+                        file_values_list.append(
+                            {
+                                "triton_cache_key": k_data.hash,
+                                "cache_dir": str(cache_dir),
+                                "type": f_dto.file_type,
+                                "rel_path": f_dto.path.name,
+                                "size": f_dto.size,
+                            }
+                        )
+
+                if kernel_ids_to_clear:
+                    session.query(HelionKernelFileOrm).filter(
+                        tuple_(
+                            HelionKernelFileOrm.triton_cache_key,
+                            HelionKernelFileOrm.cache_dir,
+                        ).in_(kernel_ids_to_clear)
+                    ).delete(synchronize_session="evaluate")
+
+                for kernel_info in batch:
+                    self._upsert_helion_kernel(session, kernel_info)
+                    inserted_count += 1
+
+                if file_values_list:
+                    session.bulk_insert_mappings(
+                        HelionKernelFileOrm, file_values_list
+                    )
+
+                session.commit()
+                log.info(
+                    "Batch of %d Helion kernels committed (%d total so far)",
+                    len(batch),
+                    inserted_count,
+                )
+
+        except Exception as e:
+            session.rollback()
+            log.error("Helion bulk insert failed: %s", e, exc_info=True)
+            raise
+        finally:
+            session.close()
+        return inserted_count
+
+    def search(self, criteria: SearchCriteria) -> List[Dict[str, Any]]:
+        """Searches for Helion kernels matching criteria."""
+        session = self.get_session()
+        try:
+            query = session.query(HelionKernelOrm)
+            equality_filter_configs = [
+                ("cache_dir", HelionKernelOrm.cache_dir, str),
+                ("name", HelionKernelOrm.name, None),
+                ("backend", HelionKernelOrm.backend, None),
+                ("arch", HelionKernelOrm.arch, str),
+            ]
+
+            active_filters = build_common_search_filters(
+                criteria, HelionKernelOrm, equality_filter_configs
+            )
+
+            if active_filters:
+                query = query.filter(and_(*active_filters))
+            query = query.order_by(HelionKernelOrm.modified_time.desc())
+            results_orm = query.all()
+
+            results = []
+            for kernel_orm in results_orm:
+                kernel_dict = kernel_orm.to_dict()
+                is_best = kernel_orm.is_best or False
+
+                if criteria.only_best is True and not is_best:
+                    continue
+                if criteria.only_best is False and is_best:
+                    continue
+
+                kernel_dict[KERNEL_DICT_IS_BEST_KEY] = is_best
+                results.append(kernel_dict)
+
+            return results
+        except Exception:  # pylint: disable=broad-except
+            log.error(
+                "Helion DB Search: Failed for criteria %s.",
+                criteria, exc_info=True,
+            )
+            return []
+        finally:
+            session.close()
+
+    def find_duplicates(self) -> List[List[Dict[str, Any]]]:
+        """Finds groups of duplicate Helion kernels."""
+        return database_utils.find_duplicates_generic(
+            self.SessionLocal, HelionKernelOrm, "triton_cache_key",
+            ["cache_dir"],
+        )
+
+    def estimate_space(self, hashes: Iterable[str], f_ext: Set[str] | None) -> int:
+        """Sum the sizes of artefacts that would be deleted."""
+        size = 0
+        with self.get_session() as s:
+            q = s.query(func.sum(HelionKernelFileOrm.size)).filter(
+                HelionKernelFileOrm.triton_cache_key.in_(hashes)
+            )
+            if f_ext:
+                q = q.filter(
+                    or_(
+                        *[HelionKernelFileOrm.rel_path.like(f"%{ext}")
+                          for ext in f_ext]
+                    )
+                )
+            size = q.scalar() or 0
+        return size
+
+    def close(self) -> None:
+        """Closes the database engine's connection pool."""
+        if self.engine:
+            self.engine.dispose()
+            log.info("Helion Database engine connection pool disposed.")

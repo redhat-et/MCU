@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from rich.prompt import Confirm
 from .base import BaseService
 from ..models.criteria import SearchCriteria
-from ..utils.mcm_constants import IR_EXTS, MODE_VLLM
+from ..utils.mcm_constants import IR_EXTS, MODE_VLLM, MODE_HELION
 from ..utils.utils import (
     KernelIdentifier,
     extract_identifiers_from_groups,
@@ -316,6 +316,16 @@ class PruningService(BaseService):  # pylint: disable=too-few-public-methods
 
             ir_rows = (
                 session.query(config.file_orm_model).filter(*filter_conditions).all()
+            )
+        elif self.mode == MODE_HELION:
+            ir_rows = (
+                session.query(config.file_orm_model)
+                .filter(
+                    config.file_orm_model.triton_cache_key == identifier.hash_key,
+                    config.file_orm_model.cache_dir == str(self.cache_dir),
+                    config.file_orm_model.rel_path.in_(ir_file_names),
+                )
+                .all()
             )
         else:
             ir_rows = (

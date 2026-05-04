@@ -1,82 +1,23 @@
+# pylint: disable=duplicate-code
 """
 Unit tests for the VllmDatabase and VllmKernelOrm.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch, Mock
-from pathlib import Path
-import time
+from unittest.mock import MagicMock, patch
 
 from model_cache_manager.data.database import VllmDatabase
 from model_cache_manager.data.db_models import VllmKernelOrm, BaseKernelMixin
-from model_cache_manager.models.kernel import Kernel, KernelFile, VllmKernelMetadata
+from model_cache_manager.models.kernel import VllmKernelMetadata
 from model_cache_manager.models.criteria import SearchCriteria
 from model_cache_manager.tests.test_utils import (
+    create_mock_kernel,
     setup_kernel_orm_mock,
     setup_sqlite_insert_mock,
     setup_query_mock,
     setup_tuple_mock,
     setup_engine_and_session_mock,
 )
-
-
-def create_mock_kernel(
-    hash_val: str = "test_hash",
-    name: str = "test_kernel",
-    backend: str = "cuda",
-    arch: str = "80",
-    files: list = None,
-) -> Kernel:
-    """Helper to create a mock Kernel object."""
-    if files is None:
-        mock_file1 = Mock(spec=KernelFile)
-        mock_file1.path = Path("/test/kernel.ptx")
-        mock_file1.file_type = "ptx"
-        mock_file1.size = 1024
-
-        mock_file2 = Mock(spec=KernelFile)
-        mock_file2.path = Path("/test/kernel.json")
-        mock_file2.file_type = "json"
-        mock_file2.size = 512
-
-        files = [mock_file1, mock_file2]
-
-    kernel = Mock(spec=Kernel)
-    kernel.hash = hash_val
-    kernel.name = name
-    kernel.backend = backend
-    kernel.arch = arch
-    kernel.files = files
-    kernel.metadata = {"test": "metadata"}
-    kernel.modified_time = time.time()
-    kernel.warp_size = 32
-    kernel.num_warps = 4
-    kernel.num_stages = 2
-    kernel.num_ctas = 1
-    kernel.maxnreg = None
-    kernel.cluster_dims = None
-    kernel.ptx_version = "7.0"
-    kernel.enable_fp_fusion = True
-    kernel.launch_cooperative_grid = False
-    kernel.supported_fp8_dtypes = []
-    kernel.deprecated_fp8_dtypes = []
-    kernel.default_dot_input_precision = "fp16"
-    kernel.allowed_dot_input_precisions = ["fp16", "fp32"]
-    kernel.max_num_imprecise_acc_default = None
-    kernel.extern_libs = []
-    kernel.debug = False
-    kernel.backend_name = "cuda"
-    kernel.sanitize_overflow = False
-    kernel.triton_version = "3.3.0"
-    kernel.shared = 0
-    kernel.tmem_size = None
-    kernel.global_scratch_size = None
-    kernel.global_scratch_align = None
-    kernel.waves_per_eu = None
-    kernel.kpack = None
-    kernel.matrix_instr_nonkdim = None
-
-    return kernel
 
 
 class TestBaseKernelMixin(unittest.TestCase):
@@ -294,8 +235,8 @@ class TestVllmDatabase(unittest.TestCase):
                         "vllm_hash": "vllm_hash1",
                         "triton_cache_key": "test_hash",
                         "rank_x_y": "rank_0_0",
-                        "type": "json",
-                        "rel_path": "kernel.json",
+                        "type": "ttir",
+                        "rel_path": "kernel.ttir",
                         "size": 512,
                     },
                 ],

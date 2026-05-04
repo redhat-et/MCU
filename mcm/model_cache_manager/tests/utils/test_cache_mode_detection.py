@@ -8,7 +8,12 @@ import shutil
 from pathlib import Path
 
 from model_cache_manager.utils.utils import detect_cache_mode
-from model_cache_manager.utils.mcm_constants import MODE_TRITON, MODE_VLLM, MODE_VLLM_LEGACY
+from model_cache_manager.utils.mcm_constants import (
+    MODE_TRITON,
+    MODE_VLLM,
+    MODE_VLLM_LEGACY,
+    MODE_HELION,
+)
 
 
 class TestCacheModeDetection(unittest.TestCase):  # pylint: disable=too-many-public-methods
@@ -329,6 +334,48 @@ class TestCacheModeDetection(unittest.TestCase):  # pylint: disable=too-many-pub
 
         mode = detect_cache_mode(cache_dir)
         self.assertEqual(mode, MODE_VLLM)
+
+    def test_detect_helion_cache_structure(self):
+        """Test detection of Helion cache structure."""
+        cache_dir = self.temp_dir / "helion"
+        cache_dir.mkdir()
+
+        # best_config file
+        (cache_dir / "abc123.best_config").write_text('{"backend_cache_key": "KEY"}')
+
+        # triton directory with a device subdir and kernel
+        kernel_dir = cache_dir / "triton" / "0" / "KEY"
+        kernel_dir.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_HELION)
+
+    def test_detect_helion_no_best_config(self):
+        """Test that triton/ alone without best_config is not helion."""
+        cache_dir = self.temp_dir / "helion_no_cfg"
+        kernel_dir = cache_dir / "triton" / "0" / "KEY"
+        kernel_dir.mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_helion_no_triton_dir(self):
+        """Test that best_config alone without triton/ is not helion."""
+        cache_dir = self.temp_dir / "helion_no_triton"
+        cache_dir.mkdir()
+        (cache_dir / "abc123.best_config").write_text('{"backend_cache_key": "KEY"}')
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
+
+    def test_detect_helion_best_config_is_directory(self):
+        """Test that a directory ending in .best_config doesn't trigger helion."""
+        cache_dir = self.temp_dir / "helion_dir_cfg"
+        (cache_dir / "abc.best_config").mkdir(parents=True)
+        (cache_dir / "triton" / "0").mkdir(parents=True)
+
+        mode = detect_cache_mode(cache_dir)
+        self.assertEqual(mode, MODE_TRITON)
 
 
 if __name__ == "__main__":

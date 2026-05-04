@@ -12,7 +12,8 @@ import os
 import threading
 from typing import Iterable, Optional
 from ..utils.paths import get_cache_dir
-from ..utils.utils import iter_artifact_compile_range_dirs
+from ..utils.utils import iter_artifact_compile_range_dirs, resolve_helion_triton_dir
+from ..utils.mcm_constants import MODE_HELION
 from ..models.kernel import Kernel
 from ..plugins.discovery import discover_plugins
 from .kernel_validator import deserialize_kernel
@@ -555,3 +556,89 @@ class VllmCacheRepository:  # pylint: disable=too-few-public-methods
 
         # Fallback: torch_compile_cache (older caches without torch_aot_compile)
         yield from self._iter_torch_compile_kernels()
+
+
+HELION_KERNEL_PREFIX = "_helion_"
+
+
+class HelionCacheRepository:  # pylint: disable=too-few-public-methods
+    """Repository for accessing and managing Helion kernel cache files."""
+
+    def __init__(self, root: Path | None = None):
+        self.root = root or get_cache_dir(MODE_HELION)
+        if not self.root.exists():
+            raise FileNotFoundError(
+                f"Helion cache directory not found: {self.root}"
+            )
+
+    def _read_best_configs(self) -> dict[str, tuple[str, str]]:
+        """Read all ``*.best_config`` files and build a lookup.
+
+        Returns:
+            Mapping of ``backend_cache_key`` to
+            ``(helion_hash, raw_json_content)`` for each best_config file.
+        """
+        configs: dict[str, tuple[str, str]] = {}
+        for path in sorted(self.root.glob("*.best_config")):
+            helion_hash = path.stem
+            try:
+                raw = path.read_text(encoding="utf-8")
+                data = json.loads(raw)
+                if not isinstance(data, dict):
+                    log.warning("Invalid best_config payload in %s", path)
+                    continue
+                backend_key = data.get("backend_cache_key")
+                if isinstance(backend_key, str) and backend_key:
+                    if backend_key in configs:
+                        log.warning(
+                            "Duplicate backend_cache_key '%s' in %s; keeping first occurrence",
+                            backend_key,
+                            path,
+                        )
+                        continue
+                    configs[backend_key] = (helion_hash, raw)
+            except (json.JSONDecodeError, OSError) as exc:
+                log.warning("Could not read best_config %s: %s", path, exc)
+        return configs
+
+    def kernels(
+        self,
+    ) -> Iterable[tuple[str, str, Optional[str], Optional[str], bool, Kernel]]:
+        """Iterate through Helion kernels in the cache directory.
+
+        Only kernels whose name starts with ``_helion_`` are yielded;
+        regular triton kernels that may share the same directory are skipped.
+
+        Yields:
+            Tuples of (cache_dir, triton_cache_key, helion_hash,
+                       best_config, is_best, kernel)
+        """
+        triton_dir = resolve_helion_triton_dir(self.root)
+        if triton_dir is None:
+            log.warning("No triton directory found in %s", self.root)
+            return
+
+        best_configs = self._read_best_configs()
+        plugins = _get_plugins()
+
+        for sub_dir in triton_dir.iterdir():
+            if not sub_dir.is_dir():
+                continue
+            for kernel in iter_triton_kernels(sub_dir, plugins):
+                if not kernel.name or not kernel.name.startswith(HELION_KERNEL_PREFIX):
+                    continue
+                match = best_configs.get(kernel.hash)
+                if match:
+                    helion_hash, best_config = match
+                    is_best = True
+                else:
+                    helion_hash, best_config = None, None
+                    is_best = False
+                yield (
+                    str(self.root),
+                    kernel.hash,
+                    helion_hash,
+                    best_config,
+                    is_best,
+                    kernel,
+                )

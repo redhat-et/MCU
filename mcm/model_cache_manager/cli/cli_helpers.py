@@ -11,9 +11,9 @@ import typer
 import rich
 from ..utils.paths import get_cache_dir, get_db_path
 from ..utils.utils import detect_cache_mode
-from ..utils.mcm_constants import MODE_TRITON, MODE_VLLM
+from ..utils.mcm_constants import MODE_TRITON, MODE_VLLM, MODE_VLLM_LEGACY, MODE_HELION
 
-VALID_MODES = (MODE_TRITON, MODE_VLLM)
+VALID_MODES = (MODE_TRITON, MODE_VLLM, MODE_VLLM_LEGACY, MODE_HELION)
 
 
 def resolve_mode(explicit: Optional[str], cache_dir: Optional[Path]) -> str:
